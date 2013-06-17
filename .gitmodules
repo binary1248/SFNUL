@@ -1,0 +1,3 @@
+[submodule "extlibs/asio"]
+	path = extlibs/asio
+	url = git://github.com/chriskohlhoff/asio.git

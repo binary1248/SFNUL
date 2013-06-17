@@ -1,0 +1,58 @@
+SFNUL
+Network Utility library for SFML 2
+
+© binary1248
+LGPL license (see LICENSE for details)
+
+1. INSTALLING
+
+SFNUL requires a compiler with C++11 support. Not all features are used, however
+many newer features are used that might not be supported by all compilers even
+though they claim C++11 support. Your mileage may vary.
+
+Dependencies:
+  - SFML 2.0 (http://sfml-dev.org/)
+  - ASIO (standalone C++11 version) provided in extlibs as a submodule
+    Initialize all submodules with
+    git submodule update --init --recursive
+    in the root directory.
+
+The build system in use is CMake (http://cmake.org/). It's available for all
+major platforms.
+
+To build, perform the following steps:
+
+  - cmake .
+  - make install (as root)
+  - On Linux: ldconfig (as root)
+
+2. USING SFNUL IN OWN PROJECTS
+
+To use SFNUL in your projects, you have to link to the SFNUL library (see 1.
+for building). Also make sure that your compiler is able to find SFNUL's
+include directory.
+
+If you're using CMake for your project and you've properly installed SFNUL (see
+1.), you can automate the process of finding SFNUL. At first copy the file
+cmake/FindSFNUL.cmake to your CMake's module directory. Then add the following
+to your project's CMakeLists.txt file:
+
+  find_package( SFNUL REQUIRED )
+  include_directories( ${SFNUL_INCLUDE_DIR} )
+  add_executable( my_program ... )
+  target_link_libraries( my_program ... ${SFNUL_LIBRARY} )
+
+In case CMake can't find your SFNUL installation, you can still specify the
+path manually by setting the SFNUL_ROOT CMake variable.
+
+Keep in mind that you still have to link to SFML 2.0 (at least system and
+network).
+
+3. DOCUMENTATION
+
+You can find the API documentation in the doc sub-directory. Create it with
+Doxygen (http://www.stack.nl/~dimitri/doxygen/).
+
+4. CONTACT
+
+The AUTHORS file lists contributors with contact information.
