@@ -43,6 +43,16 @@ public:
 	 */
 	operator std::string() const;
 
+	/** Check if the address is an IPv4 address.
+	 * @return true if the address is an IPv4 address.
+	 */
+	bool IsIPv4() const;
+
+	/** Check if the address is an IPv6 address.
+	 * @return true if the address is an IPv6 address.
+	 */
+	bool IsIPv6() const;
+
 	/** Resolves a hostname to a std::deque<IpAddress> containing all addresses the hostname identifies.
 	 * @param hostname Hostname to resolve.
 	 * @return std::deque<IpAddress> containing all addresses the hostname identifies.

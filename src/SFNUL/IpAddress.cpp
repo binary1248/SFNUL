@@ -42,6 +42,14 @@ IpAddress::operator std::string() const {
 	return address_string;
 }
 
+bool IpAddress::IsIPv4() const {
+	return is_v4();
+}
+
+bool IpAddress::IsIPv6() const {
+	return is_v6();
+}
+
 std::deque<IpAddress> IpAddress::Resolve( std::string hostname ) {
 	NetworkResource resource;
 

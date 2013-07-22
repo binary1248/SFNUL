@@ -16,6 +16,7 @@ Dependencies:
     Initialize all submodules with
     git submodule update --init --recursive
     in the root directory.
+    ASIO is provided under the Boost Software License.
 
 The build system in use is CMake (http://cmake.org/). It's available for all
 major platforms.

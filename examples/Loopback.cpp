@@ -8,8 +8,23 @@ int main() {
 	// Create our TCP listener socket.
 	auto listener = sfn::TcpListener::Create();
 
-	// Listen on 0.0.0.0:1337
-	listener->Listen( sfn::Endpoint{ sfn::IpAddress{ "0.0.0.0" }, 1337 } );
+	// Get our localhost address (if possible IPv6 address).
+	sfn::IpAddress address;
+
+	auto addresses = sfn::IpAddress::Resolve( "localhost" );
+
+	for( auto a : addresses ) {
+		address = a;
+
+		if( address.IsIPv6() ) {
+			// Congratulate the user for running a IPv6 capable system.
+			std::cout << "Wow! This host supports IPv6 too!\n";
+			break;
+		}
+	}
+
+	// Listen on localhost:1337
+	listener->Listen( sfn::Endpoint{ address, 1337 } );
 
 	// Start a network processing threads.
 	sfn::Start();
@@ -21,7 +36,7 @@ int main() {
 	sfn::TcpSocket::Ptr destination_socket;
 
 	// Connect our source socket so the listener will be able to accept its connection request.
-	source_socket->Connect( sfn::Endpoint{ sfn::IpAddress::Resolve( "localhost" ).front(), 1337 } );
+	source_socket->Connect( sfn::Endpoint{ address, 1337 } );
 
 	// Construct our packet to send.
 	sf::Packet send_packet;
@@ -70,7 +85,10 @@ int main() {
 	// Close all sockets.
 	listener->Close();
 	source_socket->Close();
-	destination_socket->Close();
+
+	if( destination_socket ) {
+		destination_socket->Close();
+	}
 
 	// Stop all network processing threads.
 	sfn::Stop();

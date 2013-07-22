@@ -170,6 +170,12 @@ install(
 )
 
 install(
-	FILES README AUTHORS LICENSE
+	DIRECTORY extlibs/asio/asio/include
+	DESTINATION .
+	REGEX "^.*(\\.gitignore|\\.am)$" EXCLUDE
+)
+
+install(
+	FILES README AUTHORS CHANGELOG LICENSE COPYING COPYING.LESSER extlibs/asio/asio/LICENSE_1_0.txt
 	DESTINATION ${SHARE_TARGET_DIR}
 )
