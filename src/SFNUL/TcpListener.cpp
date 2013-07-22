@@ -5,7 +5,7 @@
 
 namespace sfn {
 namespace {
-struct SFNUL_API TcpListenerMaker: public TcpListener {};
+struct TcpListenerMaker: public TcpListener {};
 }
 
 TcpListener::TcpListener() :

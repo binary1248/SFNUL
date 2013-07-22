@@ -8,9 +8,9 @@
 
 namespace sfn {
 namespace {
-struct SFNUL_API TcpSocketMaker : public TcpSocket {};
+struct TcpSocketMaker : public TcpSocket {};
 
-struct SFNUL_API PacketAccessor : public sf::Packet {
+struct PacketAccessor : public sf::Packet {
 	const void* Send( std::size_t& size ) { return onSend( size ); }
 	void Receive( const void* data, std::size_t size ) { onReceive( data, size ); }
 };
