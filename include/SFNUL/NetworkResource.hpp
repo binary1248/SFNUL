@@ -48,10 +48,10 @@ private:
 /** Starts n threads that handle asynchronous network IO.
  * @param threads Number of threads to start. Default: 1
  */
-void Start( std::size_t threads = 1 );
+SFNUL_API void Start( std::size_t threads = 1 );
 
 /** Stops and waits for all network threads to end.
  */
-void Stop();
+SFNUL_API void Stop();
 
 }

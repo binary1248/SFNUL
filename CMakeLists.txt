@@ -68,7 +68,7 @@ set( SRC_DIR "${PROJECT_SOURCE_DIR}/src/" )
 set( INC_DIR "${PROJECT_SOURCE_DIR}/include/" )
 
 set(
-	SOURCES
+	HEADERS
 	${INC_DIR}/SFNUL.hpp
 	${INC_DIR}/SFNUL/Config.hpp
 	${INC_DIR}/SFNUL/Endpoint.hpp
@@ -79,6 +79,10 @@ set(
 	${INC_DIR}/SFNUL/TcpListener.hpp
 	${INC_DIR}/SFNUL/TcpSocket.hpp
 	${INC_DIR}/SFNUL/UdpSocket.hpp
+)
+
+set(
+	SOURCES
 	${SRC_DIR}/SFNUL/Endpoint.cpp
 	${SRC_DIR}/SFNUL/IpAddress.cpp
 	${SRC_DIR}/SFNUL/NetworkResource.cpp
@@ -86,7 +90,12 @@ set(
 	${SRC_DIR}/SFNUL/TcpListener.cpp
 	${SRC_DIR}/SFNUL/TcpSocket.cpp
 	${SRC_DIR}/SFNUL/UdpSocket.cpp
-	
+)
+
+set(
+	ALL_FILES
+	${HEADERS}
+	${SOURCES}
 )
 
 include_directories( ${INC_DIR} )
@@ -106,7 +115,7 @@ endif()
 
 # Add the library.
 if( BUILD_SHARED_LIBS )
-	add_library( sfnul SHARED ${SOURCES} )
+	add_library( sfnul SHARED ${ALL_FILES} )
 
 	set_target_properties( sfnul PROPERTIES DEBUG_POSTFIX -d )
 
@@ -117,7 +126,7 @@ if( BUILD_SHARED_LIBS )
 else()
 	add_definitions( -DSFNUL_STATIC )
 	
-	add_library( sfnul ${SOURCES} )
+	add_library( sfnul ${ALL_FILES} )
 
 	set_target_properties( sfnul PROPERTIES DEBUG_POSTFIX -s-d )
 	set_target_properties( sfnul PROPERTIES RELEASE_POSTFIX -s )
@@ -138,7 +147,7 @@ set_target_properties( sfnul PROPERTIES DEFINE_SYMBOL SFNUL_EXPORTS )
 
 # Link to dependencies.
 if( WIN32 )
-	target_link_libraries( sfnul ${SFML_NETWORK_LIBRARY} ${SFML_SYSTEM_LIBRARY} )
+	target_link_libraries( sfnul ${SFML_NETWORK_LIBRARY} ${SFML_SYSTEM_LIBRARY} ws2_32 mswsock )
 elseif( APPLE )
 	target_link_libraries( sfnul ${COREFOUNDATION_LIBRARY} )
 endif()
