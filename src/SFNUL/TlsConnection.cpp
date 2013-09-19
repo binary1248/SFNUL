@@ -33,7 +33,7 @@ TlsCertificate::~TlsCertificate() {
 }
 
 void TlsCertificate::LoadCertificate( const std::string& certificate ) {
-	auto result = x509parse_crt( &m_cert, reinterpret_cast<const unsigned char*>( certificate.c_str() ), certificate.length() );
+	auto result = x509parse_crt( &m_cert, reinterpret_cast<const unsigned char*>( certificate.c_str() ), static_cast<int>( certificate.length() ) );
 
 	if( result < 0 ) {
 		std::cerr << "TlsCertificate::Create() Error: x509parse_crt returned: " << result << "\n";
@@ -57,7 +57,7 @@ TlsKey::~TlsKey() {
 }
 
 void TlsKey::LoadKey( const std::string& key, const std::string& password ) {
-	auto result = x509parse_key( &m_key, reinterpret_cast<const unsigned char*>( key.c_str() ), key.length(), password.empty() ? nullptr : reinterpret_cast<const unsigned char*>( password.c_str() ), password.length() );
+	auto result = x509parse_key( &m_key, reinterpret_cast<const unsigned char*>( key.c_str() ), static_cast<int>( key.length() ), password.empty() ? nullptr : reinterpret_cast<const unsigned char*>( password.c_str() ), static_cast<int>( password.length() ) );
 
 	if( result < 0 ) {
 		std::cerr << "SetCertificateKeyPair() Error: x509parse_key returned: " << result << "\n";
