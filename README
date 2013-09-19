@@ -13,10 +13,12 @@ though they claim C++11 support. Your mileage may vary.
 Dependencies:
   - SFML 2.0 (http://sfml-dev.org/)
   - ASIO (standalone C++11 version) provided in extlibs as a submodule
+  - TropicSSL (last BSD licensed release of PolarSSL/XySSL
     Initialize all submodules with
     git submodule update --init --recursive
     in the root directory.
     ASIO is provided under the Boost Software License.
+    TropicSSL is provided under the Modified BSD License.
 
 The build system in use is CMake (http://cmake.org/). It's available for all
 major platforms.

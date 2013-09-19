@@ -5,3 +5,4 @@
 #include <SFNUL/TcpSocket.hpp>
 #include <SFNUL/UdpSocket.hpp>
 #include <SFNUL/TcpListener.hpp>
+#include <SFNUL/TlsConnection.hpp>

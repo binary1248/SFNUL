@@ -57,7 +57,8 @@ public:
 	/** Gets the next pending connection in queue.
 	 * @return TcpSocket::Ptr of the next pending connection in queue.
 	 */
-	TcpSocket::Ptr GetPendingConnection();
+	template<class T = TcpSocket>
+	std::shared_ptr<T> GetPendingConnection();
 
 	/** Sets/Gets warning threshold above which the user is warned that there is a high number of pending connections.
 	 * @param limit New threshold value. Default: 0 which means don't change
@@ -77,11 +78,11 @@ protected:
 	TcpListener();
 
 private:
-	void AcceptHandler( const asio::error_code& error, TcpSocket::Ptr socket );
+	void AcceptHandler( const asio::error_code& error, std::shared_ptr<asio::ip::tcp::socket> socket );
 
 	asio::ip::tcp::acceptor m_acceptor;
 
-	std::deque<TcpSocket::Ptr> m_new_connections = {};
+	std::deque<asio::ip::tcp::socket> m_new_connections = {};
 
 	std::size_t m_connection_limit_soft = 1024;
 	std::size_t m_connection_limit_hard = 1024 * 2;
@@ -90,3 +91,5 @@ private:
 };
 
 }
+
+#include <SFNUL/TcpListener.inl>

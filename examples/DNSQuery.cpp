@@ -4,7 +4,7 @@
 #include <SFNUL.hpp>
 
 int main() {
-	sf::Window window( sf::VideoMode( 300, 100 ), "SFNUL DNS Query" );
+	sf::Window window{ sf::VideoMode{ 300, 100 }, "SFNUL DNS Query" };
 
 	// Create our UDP socket.
 	auto socket = sfn::UdpSocket::Create();
@@ -59,10 +59,10 @@ int main() {
 			}
 		}
 
-		char reply[1024];
+		std::array<char, 1024> reply;
 
 		// Dequeue any data we receive from the Google DNS server.
-		std::size_t reply_size = socket->ReceiveFrom( reply, sizeof( reply ), google_dns );
+		std::size_t reply_size = socket->ReceiveFrom( reply.data(), reply.size(), google_dns );
 
 		// Display the IP address so everybody believes this works.
 		if( reply_size >= 4 ) {

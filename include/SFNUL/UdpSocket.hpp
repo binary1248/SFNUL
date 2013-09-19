@@ -6,6 +6,7 @@
 #include <asio/ip/udp.hpp>
 #include <SFNUL/Config.hpp>
 #include <SFNUL/Socket.hpp>
+#include <SFNUL/Transport.hpp>
 
 namespace sfn {
 
@@ -18,7 +19,7 @@ class Endpoint;
 
 /** UDP socket class.
  */
-class SFNUL_API UdpSocket : public Socket, public std::enable_shared_from_this<UdpSocket> {
+class SFNUL_API UdpSocket : public Socket, public Transport, public std::enable_shared_from_this<UdpSocket> {
 
 #if defined( __GNUG__ )
 #pragma GCC diagnostic pop
@@ -121,6 +122,10 @@ protected:
 	/** Constructor.
 	 */
 	UdpSocket();
+
+	/// @cond
+	virtual void SetInternalSocket( void* internal_socket ) override;
+	/// @endcond
 
 private:
 	void SendHandler( const asio::error_code& error, std::size_t bytes_sent, asio::ip::udp::endpoint endpoint, std::shared_ptr<std::vector<char>> buffer );

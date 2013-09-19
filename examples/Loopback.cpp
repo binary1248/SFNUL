@@ -3,7 +3,7 @@
 #include <SFNUL.hpp>
 
 int main() {
-	sf::Window window( sf::VideoMode( 300, 100 ), "SFNUL Loopback Example" );
+	sf::Window window{ sf::VideoMode{ 300, 100 }, "SFNUL Loopback Example" };
 
 	// Create our TCP listener socket.
 	auto listener = sfn::TcpListener::Create();

@@ -3,7 +3,7 @@
 #include <SFNUL.hpp>
 
 int main() {
-	sf::Window window( sf::VideoMode( 300, 100 ), "SFNUL HTTP Query" );
+	sf::Window window{ sf::VideoMode{ 300, 100 }, "SFNUL HTTP Query" };
 
 	// Resolve our hostname to an address.
 	auto addresses = sfn::IpAddress::Resolve( "sfgui.sfml-dev.de" );
@@ -38,10 +38,10 @@ int main() {
 			}
 		}
 
-		char reply[1024];
+		std::array<char, 1024> reply;
 
 		// Dequeue any data we receive from the remote host.
-		std::size_t reply_size = socket->Receive( reply, sizeof( reply ) );
+		std::size_t reply_size = socket->Receive( reply.data(), reply.size() );
 
 		// Print out the data.
 		for( std::size_t index = 0; index < reply_size; index++ ) {

@@ -58,12 +58,10 @@ void TcpListener::Listen( const Endpoint& endpoint, int backlog ) {
 
 	m_listening = true;
 
-	auto new_socket = TcpSocket::Create();
-
 	AcceptHandler( asio::error_code{}, nullptr );
 }
 
-void TcpListener::AcceptHandler( const asio::error_code& error, TcpSocket::Ptr socket ) {
+void TcpListener::AcceptHandler( const asio::error_code& error, std::shared_ptr<asio::ip::tcp::socket> socket ) {
 	sf::Lock lock{ m_mutex };
 
 	if( !socket ) {
@@ -71,11 +69,6 @@ void TcpListener::AcceptHandler( const asio::error_code& error, TcpSocket::Ptr s
 	else if( error == asio::error::operation_aborted ) {
 	}
 	else if( ( error == asio::error::connection_aborted ) || ( error == asio::error::connection_reset ) ) {
-		socket->m_fin_received = true;
-		socket->m_fin_sent = true;
-
-		socket->Close();
-
 		socket.reset();
 	}
 	else if( error ) {
@@ -85,19 +78,14 @@ void TcpListener::AcceptHandler( const asio::error_code& error, TcpSocket::Ptr s
 
 	if( socket ) {
 		if( m_new_connections.size() < m_connection_limit_hard ) {
-			socket->m_connected = true;
-
-			socket->ReceiveHandler( asio::error_code{}, 0 );
-			socket->SendHandler( asio::error_code{}, 0 );
-
-			m_new_connections.push_back( socket );
+			m_new_connections.push_back( std::move( *socket ) );
 		}
 		else {
 			asio::error_code shutdown_error;
 
-			socket->m_socket.shutdown( asio::ip::tcp::socket::shutdown_both, shutdown_error );
+			socket->shutdown( asio::ip::tcp::socket::shutdown_both, shutdown_error );
 
-			socket->m_socket.close();
+			socket->close();
 
 			std::cerr << "Async Accept Warning: Pending connection count (" << m_new_connections.size() << ") exceeds hard limit of " << m_connection_limit_hard << ". Dropping connection.\n";
 		}
@@ -111,12 +99,12 @@ void TcpListener::AcceptHandler( const asio::error_code& error, TcpSocket::Ptr s
 		return;
 	}
 
-	auto new_socket = TcpSocket::Create();
+	auto new_socket = std::make_shared<asio::ip::tcp::socket>( GetIOService() );
 
-	m_acceptor.async_accept( new_socket->m_socket,
+	m_acceptor.async_accept( *new_socket,
 		m_strand.wrap(
 			std::bind(
-				[]( std::weak_ptr<TcpListener> listener, const asio::error_code& handler_error, TcpSocket::Ptr handler_socket ) {
+				[]( std::weak_ptr<TcpListener> listener, const asio::error_code& handler_error, std::shared_ptr<asio::ip::tcp::socket> handler_socket ) {
 					if( listener.expired() ) {
 						return;
 					}
@@ -148,19 +136,6 @@ Endpoint TcpListener::GetEndpoint() const {
 	sf::Lock lock{ m_mutex };
 
 	return m_acceptor.local_endpoint();
-}
-
-TcpSocket::Ptr TcpListener::GetPendingConnection() {
-	sf::Lock lock{ m_mutex };
-
-	if( m_new_connections.empty() ) {
-		return TcpSocket::Ptr();
-	}
-
-	auto socket = m_new_connections.front();
-	m_new_connections.pop_front();
-
-	return socket;
 }
 
 std::size_t TcpListener::ConnectionSoftLimit( std::size_t limit ) {

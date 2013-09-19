@@ -5,6 +5,7 @@
 #include <asio/ip/tcp.hpp>
 #include <SFNUL/Config.hpp>
 #include <SFNUL/Socket.hpp>
+#include <SFNUL/ReliableTransport.hpp>
 
 namespace sfn {
 
@@ -17,7 +18,7 @@ class Endpoint;
 
 /** TCP socket class.
  */
-class SFNUL_API TcpSocket : public Socket, public std::enable_shared_from_this<TcpSocket> {
+class SFNUL_API TcpSocket : public Socket, public ReliableTransport, public std::enable_shared_from_this<TcpSocket> {
 
 #if defined( __GNUG__ )
 #pragma GCC diagnostic pop
@@ -38,64 +39,64 @@ public:
 	/** Asynchronously connect this TCP socket to a remote endpoint.
 	 * @param endpoint Remote endpoint.
 	 */
-	void Connect( const Endpoint& endpoint );
+	virtual void Connect( const Endpoint& endpoint ) override;
 
 	/** Shutdown the socket for sending. This is required for graceful connection termination.
 	 */
-	void Shutdown();
+	virtual void Shutdown() override;
 
 	/** Check if the local system has shut the socket down for sending.
 	 * @return true if the local system has shut the socket down for sending.
 	 */
-	bool LocalHasShutdown() const;
+	virtual bool LocalHasShutdown() const override;
 
 	/** Check if the remote system has shut the socket down for sending.
 	 * @return true if the remote system has shut the socket down for sending.
 	 */
-	bool RemoteHasShutdown() const;
+	virtual bool RemoteHasShutdown() const override;
 
 	/** Check if the socket is part of an established TCP connection.
 	 * @return true if the socket is part of an established TCP connection.
 	 */
-	bool IsConnected() const;
+	virtual bool IsConnected() const override;
 
 	/** Close the socket. This frees up the operating system resources assigned to the socket.
 	 */
-	void Close();
+	virtual void Close() override;
 
 	/** Get the local endpoint of the established TCP connection this socket is part of.
 	 * @return Local endpoint of the established TCP connection this socket is part of.
 	 */
-	Endpoint GetLocalEndpoint() const;
+	virtual Endpoint GetLocalEndpoint() const override;
 
 	/** Get the remote endpoint of the established TCP connection this socket is part of.
 	 * @return Remote endpoint of the established TCP connection this socket is part of.
 	 */
-	Endpoint GetRemoteEndpoint() const;
+	virtual Endpoint GetRemoteEndpoint() const override;
 
 	/** Queue data up for asynchronous sending over the established TCP connection this socket is part of.
 	 * @param data Pointer to a block of memory containing the data to queue.
 	 * @param size Size of the block of memory containing the data to queue.
 	 */
-	void Send( const void* data, std::size_t size );
+	virtual void Send( const void* data, std::size_t size ) override;
 
 	/** Dequeue data that was asynchronously received over the established TCP connection this socket is part of.
 	 * @param data Pointer to a block of memory that will contain the data to dequeue.
 	 * @param size Size of the block of memory that will contain the data to dequeue.
 	 * @return Number of bytes of data that was actually dequeued.
 	 */
-	std::size_t Receive( void* data, std::size_t size );
+	virtual std::size_t Receive( void* data, std::size_t size ) override;
 
 	/** Queue an sf::Packet up for asynchronous sending over the established TCP connection this socket is part of.
 	 * @param packet sf::Packet to queue.
 	 */
-	void Send( sf::Packet& packet );
+	virtual void Send( sf::Packet& packet ) override;
 
 	/** Dequeue an sf::Packet that was asynchronously received over the established TCP connection this socket is part of.
 	 * @param packet sf::Packet to dequeue into.
 	 * @return Size of the sf::Packet that was dequeued. This includes the size field of the packet. If no packet could be dequeued, this method will return 0.
 	 */
-	std::size_t Receive( sf::Packet& packet );
+	virtual std::size_t Receive( sf::Packet& packet ) override;
 
 	/** Clear the send and receive queues of this socket.
 	 */
@@ -159,6 +160,10 @@ protected:
 	/** Constructor.
 	 */
 	TcpSocket();
+
+	/// @cond
+	virtual void SetInternalSocket( void* internal_socket ) override;
+	/// @endcond
 
 private:
 	void SendHandler( const asio::error_code& error, std::size_t bytes_sent );

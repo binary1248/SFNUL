@@ -3,7 +3,7 @@
 #include <SFNUL.hpp>
 
 int main() {
-	sf::Window window( sf::VideoMode( 300, 100 ), "SFNUL Echo Server" );
+	sf::Window window{ sf::VideoMode{ 300, 100 }, "SFNUL Echo Server" };
 
 	// Create our UDP socket.
 	auto socket = sfn::UdpSocket::Create();
@@ -23,17 +23,17 @@ int main() {
 			}
 		}
 
-		char reply[1024];
+		std::array<char, 1024> reply;
 
 		// Get the endpoints with data pending in their receive queue.
 		auto pending_endpoints = socket->PendingEndpoints();
 
 		for( auto pe : pending_endpoints ) {
 			// Dequeue any data the endpoint sent ...
-			std::size_t reply_size = socket->ReceiveFrom( reply, sizeof( reply ), pe );
+			std::size_t reply_size = socket->ReceiveFrom( reply.data(), reply.size(), pe );
 
 			// ... and send it right back to them.
-			socket->SendTo( reply, reply_size, pe );
+			socket->SendTo( reply.data(), reply_size, pe );
 		}
 
 		sf::sleep( sf::milliseconds( 20 ) );
