@@ -223,10 +223,16 @@ install(
 install(
 	DIRECTORY extlibs/asio/asio/include
 	DESTINATION .
-	REGEX "^.*(\\.gitignore|\\.am)$" EXCLUDE
+	REGEX "^.*(\\.git|\\.gitignore|\\.am)$" EXCLUDE
 )
 
 install(
-	FILES README AUTHORS CHANGELOG LICENSE COPYING COPYING.LESSER extlibs/asio/asio/LICENSE_1_0.txt
+	DIRECTORY extlibs/tropicssl/include
+	DESTINATION .
+	REGEX "^.*(\\.git|\\.gitignore|\\.am)$" EXCLUDE
+)
+
+install(
+	FILES README AUTHORS CHANGELOG LICENSE COPYING COPYING.LESSER
 	DESTINATION ${SHARE_TARGET_DIR}
 )
