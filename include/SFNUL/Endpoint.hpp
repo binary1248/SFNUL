@@ -1,9 +1,9 @@
 #pragma once
 
+#include <SFNUL/Config.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/ip/udp.hpp>
 #include <asio/ip/basic_endpoint.hpp>
-#include <SFNUL/Config.hpp>
 #include <SFNUL/IpAddress.hpp>
 
 namespace sfn {

@@ -27,3 +27,7 @@
 #if !defined( NDEBUG )
 	#define SFNUL_DEBUG
 #endif
+
+// Use asio in standalone header-only mode
+#define ASIO_STANDALONE
+#define ASIO_HEADER_ONLY

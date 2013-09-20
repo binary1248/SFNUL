@@ -2,8 +2,8 @@
 
 #include <deque>
 #include <string>
-#include <asio/ip/address.hpp>
 #include <SFNUL/Config.hpp>
+#include <asio/ip/address.hpp>
 
 namespace sfn {
 

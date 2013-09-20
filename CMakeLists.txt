@@ -174,10 +174,6 @@ else()
 	set_target_properties( sfnul PROPERTIES MINSIZEREL_POSTFIX -s )
 endif()
 
-# Use asio in standalone header-only mode
-add_definitions( -DASIO_STANDALONE )
-add_definitions( -DASIO_HEADER_ONLY )
-
 # Set default compile flags for GCC
 if( CMAKE_COMPILER_IS_GNUCXX )
 	set_source_files_properties( ${SOURCES} PROPERTIES COMPILE_FLAGS "-std=c++11 -Weffc++ -Wall -Wextra -Wshadow -Wconversion -Wunreachable-code -Wredundant-decls -pedantic" )

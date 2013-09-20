@@ -1,4 +1,5 @@
 #include <iostream>
+#include <SFNUL/Config.hpp>
 #include <asio/ip/icmp.hpp>
 #include <SFNUL/NetworkResource.hpp>
 #include <SFNUL/IpAddress.hpp>

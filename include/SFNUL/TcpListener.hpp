@@ -2,8 +2,8 @@
 
 #include <memory>
 #include <deque>
-#include <asio/ip/tcp.hpp>
 #include <SFNUL/Config.hpp>
+#include <asio/ip/tcp.hpp>
 #include <SFNUL/TcpSocket.hpp>
 
 namespace sfn {

@@ -3,8 +3,8 @@
 #include <memory>
 #include <map>
 #include <SFML/Network.hpp>
-#include <asio/ip/udp.hpp>
 #include <SFNUL/Config.hpp>
+#include <asio/ip/udp.hpp>
 #include <SFNUL/Socket.hpp>
 #include <SFNUL/Transport.hpp>
 

@@ -2,8 +2,8 @@
 
 #include <memory>
 #include <SFML/Network.hpp>
-#include <asio/ip/tcp.hpp>
 #include <SFNUL/Config.hpp>
+#include <asio/ip/tcp.hpp>
 #include <SFNUL/Socket.hpp>
 #include <SFNUL/ReliableTransport.hpp>
 

@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <iostream>
 #include <SFML/Network.hpp>
+#include <SFNUL/Config.hpp>
 #include <asio/buffer.hpp>
 #include <SFNUL/Endpoint.hpp>
 #include <SFNUL/TcpSocket.hpp>
