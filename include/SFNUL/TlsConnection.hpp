@@ -24,6 +24,33 @@
 
 namespace sfn {
 
+/// @cond
+namespace detail {
+// Declarations of TropicSSL API we use for declspec
+SFNUL_API int ssl_init(ssl_context * ssl);
+SFNUL_API void ssl_set_endpoint(ssl_context * ssl, int endpoint);
+SFNUL_API void ssl_set_authmode(ssl_context * ssl, int authmode);
+SFNUL_API void ssl_set_rng(ssl_context * ssl, int (*f_rng) (void *), void *p_rng);
+SFNUL_API void ssl_set_dbg(ssl_context * ssl, void (*f_dbg) (void *, int, const char *), void *p_dbg);
+SFNUL_API void ssl_set_bio(ssl_context * ssl, int (*f_recv) (void *, unsigned char *, int), void *p_recv, int (*f_send) (void *, const unsigned char *, int), void *p_send);
+SFNUL_API void ssl_set_scb(ssl_context * ssl, int (*s_get) (ssl_context *), int (*s_set) (ssl_context *));
+SFNUL_API void ssl_set_session(ssl_context * ssl, int resume, int timeout, ssl_session * session);
+SFNUL_API void ssl_set_ciphers(ssl_context * ssl, const int *ciphers);
+SFNUL_API void ssl_set_ca_chain(ssl_context * ssl, x509_cert * ca_chain, const char *peer_cn);
+SFNUL_API void ssl_set_own_cert(ssl_context * ssl, x509_cert * own_cert, rsa_context * rsa_key);
+SFNUL_API int ssl_set_dh_param(ssl_context * ssl, const char *dhm_P, const char *dhm_G);
+SFNUL_API int ssl_get_verify_result(const ssl_context * ssl);
+SFNUL_API int ssl_handshake(ssl_context * ssl);
+SFNUL_API int ssl_read(ssl_context * ssl, unsigned char *buf, int len);
+SFNUL_API int ssl_write(ssl_context * ssl, const unsigned char *buf, int len);
+SFNUL_API int ssl_close_notify(ssl_context * ssl);
+SFNUL_API void ssl_free(ssl_context * ssl);
+
+SFNUL_API void havege_init(havege_state * hs);
+SFNUL_API int havege_rand(void *p_rng);
+}
+/// @endcond
+
 enum class TlsEndpointType : unsigned char {
 	CLIENT = 0,
 	SERVER
@@ -118,6 +145,25 @@ private:
 	friend class TlsConnection;
 };
 
+/** TLS connection base.
+ */
+class SFNUL_API TlsConnectionBase {
+public:
+
+	/** Set the Diffie-Hellman generator parameters.
+	 * P is set to a pre-computed 1024-value.
+	 * G is set to 4.
+	 * If you know how to set them yourself, go ahead, you can only gain security if you set them right...
+	 * @param p p value as a hexadecimal std::string.
+	 * @param g g value as a hexadecimal std::string.
+	 */
+	static void SetDiffieHellmanParameters( const std::string& p, const std::string& g );
+
+protected:
+	static std::string m_diffie_hellman_p;
+	static std::string m_diffie_hellman_g;
+};
+
 #if defined( __GNUG__ )
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Weffc++"
@@ -126,7 +172,7 @@ private:
 /** TLS connection class.
  */
 template<class T, TlsEndpointType U, TlsVerificationType V>
-class SFNUL_API TlsConnection : public T {
+class TlsConnection : public T, public TlsConnectionBase {
 
 #if defined( __GNUG__ )
 #pragma GCC diagnostic pop
@@ -169,15 +215,6 @@ public:
 	 * @param key TlsKey containing the X.509 key.
 	 */
 	void SetCertificateKeyPair( TlsCertificate::Ptr certificate, TlsKey::Ptr key );
-
-	/** Set the Diffie-Hellman generator parameters.
-	 * P is set to a pre-computed 1024-value.
-	 * G is set to 4.
-	 * If you know how to set them yourself, go ahead, you can only gain security if you set them right...
-	 * @param p p value as a hexadecimal std::string.
-	 * @param g g value as a hexadecimal std::string.
-	 */
-	static void SetDiffieHellmanParameters( const std::string& p, const std::string& g );
 
 	/** Get the result of the certificate verification.
 	 * @return Bitwise ORed verification flags.
@@ -261,9 +298,6 @@ protected:
 private:
 	int SendInterface( void* /*unused*/, const unsigned char* buffer, int length );
 	int RecvInterface( void* /*unused*/, unsigned char* buffer, int length );
-
-	static std::string m_diffie_hellman_p;
-	static std::string m_diffie_hellman_g;
 
 	static bool havege_initialized;
 	static havege_state m_havege_state;

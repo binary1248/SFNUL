@@ -33,29 +33,10 @@ struct PacketAccessor : public sf::Packet {
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
-std::string TlsConnection<T, U, V>::m_diffie_hellman_p =
-"9272A172ADD2399D00BAE09B93FF020099D79C481561F9F1003DEADF17F58C93"
-"85A3F21F01B6617A69D0FB1EF0F778F7B9E88A19EFC6453CFC29D61E5A7589A7"
-"F11BB853EA1FB25769693F703BA720198BEA1C79EB7A718215E88391FAF5B1E5"
-"AC0D60080C0C65C3534903119B845B2EE75F322D98EBB7A660C6A9EAB633D02B";
-
-template<class T, TlsEndpointType U, TlsVerificationType V>
-std::string TlsConnection<T, U, V>::m_diffie_hellman_g =
-"04";
-
-template<class T, TlsEndpointType U, TlsVerificationType V>
 havege_state TlsConnection<T, U, V>::m_havege_state;
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 bool TlsConnection<T, U, V>::havege_initialized = false;
-
-
-
-template<class T, TlsEndpointType U, TlsVerificationType V>
-void TlsConnection<T, U, V>::SetDiffieHellmanParameters( const std::string& p, const std::string& g ) {
-	m_diffie_hellman_p = p;
-	m_diffie_hellman_g = g;
-}
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 TlsConnection<T, U, V>::TlsConnection() :
@@ -71,69 +52,64 @@ TlsConnection<T, U, V>::TlsConnection() :
 {
 	if( !havege_initialized ) {
 		havege_initialized = true;
-		havege_init( &m_havege_state );
+		sfn::detail::havege_init( &m_havege_state );
 	}
 
 	std::memset( &m_ssl_context, 0, sizeof( ssl_context ) );
 	std::memset( &m_ssl_session, 0, sizeof( ssl_session ) );
 
-	auto result = ssl_init( &m_ssl_context );
+	auto result = sfn::detail::ssl_init( &m_ssl_context );
 
 	if( result ) {
 		std::cerr << "TlsConnection() Error: ssl_init returned: " << result << "\n";
 		return;
 	}
 
-	ssl_set_endpoint( &m_ssl_context, ( m_type == TlsEndpointType::CLIENT ? SSL_IS_CLIENT : SSL_IS_SERVER ) );
+	sfn::detail::ssl_set_endpoint( &m_ssl_context, ( m_type == TlsEndpointType::CLIENT ? SSL_IS_CLIENT : SSL_IS_SERVER ) );
 
 	if( m_verify == TlsVerificationType::NONE ) {
-		ssl_set_authmode( &m_ssl_context, SSL_VERIFY_NONE );
+		sfn::detail::ssl_set_authmode( &m_ssl_context, SSL_VERIFY_NONE );
 	}
 	else if( m_verify == TlsVerificationType::OPTIONAL ) {
-		ssl_set_authmode( &m_ssl_context, SSL_VERIFY_OPTIONAL );
+		sfn::detail::ssl_set_authmode( &m_ssl_context, SSL_VERIFY_OPTIONAL );
 	}
 	else if( m_verify == TlsVerificationType::REQUIRED ) {
-		ssl_set_authmode( &m_ssl_context, SSL_VERIFY_REQUIRED );
+		sfn::detail::ssl_set_authmode( &m_ssl_context, SSL_VERIFY_REQUIRED );
 	}
 
-	ssl_set_rng(
+	sfn::detail::ssl_set_rng(
 		&m_ssl_context,
 		[]( void* state ) {
 			static sf::Mutex mutex;
 
 			sf::Lock lock{ mutex };
 
-			return havege_rand( state );
+			return sfn::detail::havege_rand( state );
 		},
 		&m_havege_state
 	);
 
-	if( m_type == TlsEndpointType::SERVER ) {
-		static const int ciphers[] = {
-			SSL_EDH_RSA_AES_256_SHA,
-			SSL_EDH_RSA_CAMELLIA_256_SHA,
-			SSL_EDH_RSA_DES_168_SHA,
-			SSL_RSA_AES_256_SHA,
-			SSL_RSA_CAMELLIA_256_SHA,
-			SSL_RSA_AES_128_SHA,
-			SSL_RSA_CAMELLIA_128_SHA,
-			SSL_RSA_DES_168_SHA,
-			SSL_RSA_RC4_128_SHA,
-			SSL_RSA_RC4_128_MD5,
-			0
-		};
+	static const int ciphers[] = {
+		SSL_EDH_RSA_AES_256_SHA,
+		SSL_EDH_RSA_CAMELLIA_256_SHA,
+		SSL_EDH_RSA_DES_168_SHA,
+		SSL_RSA_AES_256_SHA,
+		SSL_RSA_CAMELLIA_256_SHA,
+		SSL_RSA_AES_128_SHA,
+		SSL_RSA_CAMELLIA_128_SHA,
+		SSL_RSA_DES_168_SHA,
+		SSL_RSA_RC4_128_SHA,
+		SSL_RSA_RC4_128_MD5,
+		0
+	};
 
-		ssl_set_ciphers( &m_ssl_context, ciphers );
-	}
-	else if( m_type == TlsEndpointType::CLIENT ) {
-		ssl_set_ciphers( &m_ssl_context, ssl_default_ciphers );
-	}
+	sfn::detail::ssl_set_ciphers( &m_ssl_context, ciphers );
 
-	ssl_set_session( &m_ssl_context, 1, 0, &m_ssl_session );
+	sfn::detail::ssl_set_session( &m_ssl_context, 1, 0, &m_ssl_session );
 
-	ssl_set_dh_param( &m_ssl_context, m_diffie_hellman_p.c_str(), m_diffie_hellman_g.c_str() );
+	sfn::detail::ssl_set_dh_param( &m_ssl_context, m_diffie_hellman_p.c_str(), m_diffie_hellman_g.c_str() );
 
-	ssl_set_bio(
+	sfn::detail::ssl_set_bio(
 		&m_ssl_context,
 		[]( void* context, unsigned char* buffer, int length ) {
 			return static_cast<TlsConnection<T, U, V>*>( context )->RecvInterface( nullptr, buffer, length );
@@ -147,9 +123,9 @@ TlsConnection<T, U, V>::TlsConnection() :
 
 	// Disable session resumption for the time being.
 	// TODO: Add session resumption support.
-	ssl_set_scb( &m_ssl_context, []( ssl_context* ) { return 1; }, []( ssl_context* ) { return 1; } );
+	sfn::detail::ssl_set_scb( &m_ssl_context, []( ssl_context* ) { return 1; }, []( ssl_context* ) { return 1; } );
 
-	ssl_set_dbg(
+	sfn::detail::ssl_set_dbg(
 		&m_ssl_context,
 		[]( void* context, int message_level, const char* debug_message ) {
 			if( message_level <= *static_cast<int*>( context ) ) {
@@ -188,7 +164,7 @@ template<class T, TlsEndpointType U, TlsVerificationType V>
 TlsConnection<T, U, V>::~TlsConnection() {
 	Close();
 
-	ssl_free( &m_ssl_context );
+	sfn::detail::ssl_free( &m_ssl_context );
 
 	memset( &m_ssl_context, 0, sizeof( ssl_context ) );
 }
@@ -213,7 +189,7 @@ void TlsConnection<T, U, V>::AddTrustedCertificate( TlsCertificate::Ptr certific
 
 	// We don't support client certificate authentication yet.
 	// TODO: Add client certificate authentication.
-	ssl_set_ca_chain( &m_ssl_context, &( m_ca_cert->m_cert ), nullptr );
+	sfn::detail::ssl_set_ca_chain( &m_ssl_context, &( m_ca_cert->m_cert ), nullptr );
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
@@ -230,11 +206,11 @@ void TlsConnection<T, U, V>::SetCertificateKeyPair( TlsCertificate::Ptr certific
 	m_server_cert = certificate;
 	m_key = key;
 
-	ssl_set_own_cert( &m_ssl_context, &( m_server_cert->m_cert ), &( m_key->m_key ) );
+	sfn::detail::ssl_set_own_cert( &m_ssl_context, &( m_server_cert->m_cert ), &( m_key->m_key ) );
 
 	// For now we only support self-signed certificates.
 	// TODO: Add proper certificate chain support for servers.
-	ssl_set_ca_chain( &m_ssl_context, &( m_server_cert->m_cert ), nullptr );
+	sfn::detail::ssl_set_ca_chain( &m_ssl_context, &( m_server_cert->m_cert ), nullptr );
 
 	if( require_certificate_key ) {
 		require_certificate_key = false;
@@ -248,7 +224,7 @@ template<class T, TlsEndpointType U, TlsVerificationType V>
 TlsVerificationResult TlsConnection<T, U, V>::GetVerificationResult() const {
 	sf::Lock lock{ m_mutex };
 
-	auto verify_result = ssl_get_verify_result( &m_ssl_context );
+	auto verify_result = sfn::detail::ssl_get_verify_result( &m_ssl_context );
 
 	TlsVerificationResult result = TlsVerificationResult::PASSED;
 
@@ -310,7 +286,7 @@ void TlsConnection<T, U, V>::Shutdown() {
 		return;
 	}
 
-	int result = ssl_close_notify( &m_ssl_context );
+	int result = sfn::detail::ssl_close_notify( &m_ssl_context );
 
 	if( result ) {
 		std::cerr << "TlsConnection::Shutdown() Error: ssl_close_notify returned: " << result << "\n";
@@ -458,7 +434,7 @@ void TlsConnection<T, U, V>::OnSent() {
 	do {
 		auto state_before = m_ssl_context.state;
 
-		length = ssl_write( &m_ssl_context, reinterpret_cast<const unsigned char*>( m_send_memory.data() + current_location ), send_size );
+		length = sfn::detail::ssl_write( &m_ssl_context, reinterpret_cast<const unsigned char*>( m_send_memory.data() + current_location ), send_size );
 
 		if( !start ) {
 			start = ( state_before != SSL_HANDSHAKE_OVER ) && ( m_ssl_context.state == SSL_HANDSHAKE_OVER );
@@ -505,7 +481,7 @@ void TlsConnection<T, U, V>::OnReceived() {
 	do {
 		auto state_before = m_ssl_context.state;
 
-		length = ssl_read( &m_ssl_context, reinterpret_cast<unsigned char*>( m_receive_memory.data() ), m_receive_memory.size() );
+		length = sfn::detail::ssl_read( &m_ssl_context, reinterpret_cast<unsigned char*>( m_receive_memory.data() ), m_receive_memory.size() );
 
 		if( !start ) {
 			start = ( state_before != SSL_HANDSHAKE_OVER ) && ( m_ssl_context.state == SSL_HANDSHAKE_OVER );
@@ -544,7 +520,7 @@ template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::OnConnected() {
 	sf::Lock lock{ m_mutex };
 
-	auto result = ssl_handshake( &m_ssl_context );
+	auto result = sfn::detail::ssl_handshake( &m_ssl_context );
 
 	if( result && ( result != TROPICSSL_ERR_NET_TRY_AGAIN ) ) {
 		std::cerr << "TlsConnection::OnConnected() Error: ssl_handshake returned: " << result << "\n";
