@@ -51,6 +51,9 @@ path manually by setting the SFNUL_ROOT CMake variable.
 Keep in mind that you still have to link to SFML 2.0 (at least system and
 network).
 
+Because SFNUL makes use of the operating system's networking subsystem, be sure
+to link the necessary networking libraries to your final application as well.
+
 3. DOCUMENTATION
 
 You can find the API documentation in the doc sub-directory. Create it with

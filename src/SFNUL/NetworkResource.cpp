@@ -32,7 +32,8 @@ void Start( std::size_t threads ) {
 	auto io_service = NetworkResource::m_shared_io_service.lock();
 
 	if( !io_service ) {
-		return;
+		io_service = std::make_shared<asio::io_service>();
+		NetworkResource::m_shared_io_service = io_service;
 	}
 
 	asio_work = std::make_shared<asio::io_service::work>( *io_service );

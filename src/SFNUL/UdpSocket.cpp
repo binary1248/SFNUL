@@ -67,7 +67,8 @@ void UdpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_se
 	{
 		sf::Lock lock{ m_mutex };
 
-		if( error == asio::error::operation_aborted ) {
+		if( ( error == asio::error::operation_aborted ) || ( error == asio::error::connection_aborted ) || ( error == asio::error::connection_reset ) ) {
+			return;
 		}
 		else if( error ) {
 			std::cerr << "Async Send Error: " << error.message() << "\n";
@@ -108,7 +109,8 @@ void UdpSocket::ReceiveHandler( const asio::error_code& error, std::size_t bytes
 	{
 		sf::Lock lock{ m_mutex };
 
-		if( error == asio::error::operation_aborted ) {
+		if( ( error == asio::error::operation_aborted ) || ( error == asio::error::connection_aborted ) || ( error == asio::error::connection_reset ) ) {
+			return;
 		}
 		else if( error ) {
 			std::cerr << "Async Receive Error: " << error.message() << "\n";

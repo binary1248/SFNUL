@@ -56,8 +56,15 @@ void TcpSocket::Connect( const Endpoint& endpoint ) {
 			ReceiveHandler( asio::error_code{}, 0 );
 			SendHandler( asio::error_code{}, 0 );
 		}
+		else if( ( error == asio::error::operation_aborted ) || ( error == asio::error::connection_aborted ) || ( error == asio::error::connection_reset ) ) {
+			m_fin_sent = true;
+			m_fin_received = true;
+			m_connected = false;
+		}
 		else {
 			m_connected = false;
+
+
 
 			std::cerr << "Connect() Error: " << error.message() << "\n";
 		}
@@ -93,9 +100,9 @@ void TcpSocket::Shutdown() {
 			m_fin_received = true;
 			m_fin_sent = true;
 
-			Close();
-
 			return;
+		}
+		else if( error == asio::error::not_connected ) {
 		}
 		else if( error ) {
 			std::cerr << "Shutdown() Error: " << error.message() << "\n";
@@ -103,10 +110,6 @@ void TcpSocket::Shutdown() {
 		}
 
 		m_fin_sent = true;
-
-		if( m_fin_received ) {
-			Close();
-		}
 	}
 }
 
@@ -126,6 +129,8 @@ void TcpSocket::Close() {
 
 			if( ( error == asio::error::connection_aborted ) || ( error == asio::error::connection_reset ) ) {
 				m_fin_received = true;
+			}
+			else if( error == asio::error::not_connected ) {
 			}
 			else if( error ) {
 				std::cerr << "Shutdown() Error: " << error.message() << "\n";
@@ -149,7 +154,9 @@ void TcpSocket::Close() {
 
 		m_socket.shutdown( asio::ip::tcp::socket::shutdown_both, error );
 
-		if( error ) {
+		if( error == asio::error::not_connected ) {
+		}
+		else if( error ) {
 			std::cerr << "Close() Error: " << error.message() << "\n";
 		}
 
@@ -163,7 +170,8 @@ void TcpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_se
 	{
 		sf::Lock lock{ m_mutex };
 
-		if( error == asio::error::operation_aborted ) {
+		if( ( error == asio::error::operation_aborted ) || ( error == asio::error::connection_aborted ) || ( error == asio::error::connection_reset ) ) {
+			return;
 		}
 		else if( error ) {
 			std::cerr << "Async Send Error: " << error.message() << "\n";
@@ -183,6 +191,8 @@ void TcpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_se
 					m_fin_sent = true;
 
 					Close();
+				}
+				else if( error == asio::error::not_connected ) {
 				}
 				else if( shutdown_error ) {
 					std::cerr << "Shutdown() Error: " << shutdown_error.message() << "\n";
@@ -225,6 +235,7 @@ void TcpSocket::ReceiveHandler( const asio::error_code& error, std::size_t bytes
 		sf::Lock lock{ m_mutex };
 
 		if( error == asio::error::operation_aborted ) {
+			return;
 		}
 		else if( ( error == asio::error::connection_aborted ) || ( error == asio::error::connection_reset ) ) {
 			m_fin_received = true;
@@ -236,10 +247,6 @@ void TcpSocket::ReceiveHandler( const asio::error_code& error, std::size_t bytes
 		}
 		else if( error == asio::error::eof ) {
 			m_fin_received = true;
-
-			if( m_fin_sent ) {
-				//Close();
-			}
 		}
 		else if( error ) {
 			std::cerr << "Async Receive Error: " << error.message() << "\n";

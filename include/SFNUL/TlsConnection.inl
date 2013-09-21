@@ -305,7 +305,7 @@ bool TlsConnection<T, U, V>::LocalHasShutdown() const {
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 bool TlsConnection<T, U, V>::RemoteHasShutdown() const {
-	return m_remote_closed && T::RemoteHasShutdown();
+	return T::RemoteHasShutdown() || m_remote_closed;
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
@@ -318,10 +318,6 @@ void TlsConnection<T, U, V>::Close() {
 	sf::Lock lock{ m_mutex };
 
 	if( !m_local_closed ) {
-		Shutdown();
-
-		m_local_closed = true;
-
 		if( !m_send_buffer.empty() ) {
 			std::cerr << "TlsConnection::Close(): Warning, did not send all data before shutdown, possible data loss might occur.\n";
 		}
@@ -330,26 +326,30 @@ void TlsConnection<T, U, V>::Close() {
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::Send( const void* data, std::size_t size ) {
-	sf::Lock lock{ m_mutex };
-
 	if( !data || !size ) {
 		return;
 	}
 
-	bool start = m_send_buffer.empty();
+	{
+		sf::Lock lock{ m_mutex };
 
-	m_send_buffer.insert( m_send_buffer.end(), static_cast<const char*>( data ), static_cast<const char*>( data ) + size );
+		bool start = m_send_buffer.empty();
+
+		m_send_buffer.insert( m_send_buffer.end(), static_cast<const char*>( data ), static_cast<const char*>( data ) + size );
+	}
 
 	OnSent();
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 std::size_t TlsConnection<T, U, V>::Receive( void* data, std::size_t size ) {
-	sf::Lock lock{ m_mutex };
+	OnReceived();
 
 	if( !data || !size ) {
 		return 0;
 	}
+
+	sf::Lock lock{ m_mutex };
 
 	auto receive_size = std::min( size, m_receive_buffer.size() );
 
@@ -419,6 +419,10 @@ template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::OnSent() {
 	sf::Lock lock{ m_mutex };
 
+	if( m_local_closed ) {
+		return;
+	}
+
 	auto send_size = std::min( m_send_memory.size(), m_send_buffer.size() );
 
 	if( !send_size && ( m_ssl_context.state == SSL_HANDSHAKE_OVER ) ) {
@@ -474,6 +478,10 @@ void TlsConnection<T, U, V>::OnSent() {
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::OnReceived() {
 	sf::Lock lock{ m_mutex };
+
+	if( m_remote_closed ) {
+		return;
+	}
 
 	int length = 0;
 	auto start = false;
