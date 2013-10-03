@@ -4,3 +4,6 @@
 [submodule "extlibs/tropicssl"]
 	path = extlibs/tropicssl
 	url = https://github.com/binary1248/tropicssl.git
+[submodule "extlibs/http-parser"]
+	path = extlibs/http-parser
+	url = https://github.com/joyent/http-parser.git

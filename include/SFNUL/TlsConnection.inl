@@ -38,18 +38,18 @@ havege_state TlsConnection<T, U, V>::m_havege_state;
 template<class T, TlsEndpointType U, TlsVerificationType V>
 bool TlsConnection<T, U, V>::havege_initialized = false;
 
+#if defined( __GNUG__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
+
 template<class T, TlsEndpointType U, TlsVerificationType V>
-TlsConnection<T, U, V>::TlsConnection() :
-	m_ssl_context{},
-	m_ssl_session{},
-	m_ca_cert{},
-	m_server_cert{},
-	m_key{},
-	m_debug_level{ 0 },
-	m_send_memory{ {} },
-	m_receive_memory{ {} },
-	m_mutex{}
-{
+TlsConnection<T, U, V>::TlsConnection() {
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic pop
+#endif
+
 	if( !havege_initialized ) {
 		havege_initialized = true;
 		sfn::detail::havege_init( &m_havege_state );
@@ -332,8 +332,6 @@ void TlsConnection<T, U, V>::Send( const void* data, std::size_t size ) {
 
 	{
 		sf::Lock lock{ m_mutex };
-
-		bool start = m_send_buffer.empty();
 
 		m_send_buffer.insert( m_send_buffer.end(), static_cast<const char*>( data ), static_cast<const char*>( data ) + size );
 	}

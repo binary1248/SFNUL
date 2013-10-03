@@ -41,4 +41,8 @@ void Endpoint::SetPort( unsigned short port ) {
 	m_port = port;
 }
 
+bool operator==( const Endpoint& left, const Endpoint& right ) {
+	return ( left.GetPort() == right.GetPort() ) && ( left.GetAddress() == right.GetAddress() );
+}
+
 }

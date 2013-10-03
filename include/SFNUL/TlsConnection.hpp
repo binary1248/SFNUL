@@ -302,13 +302,13 @@ private:
 	static bool havege_initialized;
 	static havege_state m_havege_state;
 
-	ssl_context m_ssl_context;
-	ssl_session m_ssl_session;
-	TlsCertificate::Ptr m_ca_cert;
-	TlsCertificate::Ptr m_server_cert;
-	TlsKey::Ptr m_key;
+	ssl_context m_ssl_context{};
+	ssl_session m_ssl_session{};
+	TlsCertificate::Ptr m_ca_cert{};
+	TlsCertificate::Ptr m_server_cert{};
+	TlsKey::Ptr m_key{};
 
-	int m_debug_level;
+	int m_debug_level{ 0 };
 
 	const static TlsEndpointType m_type = U;
 	const static TlsVerificationType m_verify = V;
@@ -316,13 +316,13 @@ private:
 	std::vector<char> m_send_buffer = {};
 	std::vector<char> m_receive_buffer = {};
 
-	std::array<char, 2048> m_send_memory;
-	std::array<char, 2048> m_receive_memory;
+	std::array<char, 2048> m_send_memory{ {} };
+	std::array<char, 2048> m_receive_memory{ {} };
 
 	std::string m_common_name = {};
 
 	/// @cond
-	mutable sf::Mutex m_mutex;
+	mutable sf::Mutex m_mutex{};
 	/// @endcond
 
 	bool m_request_close = false;

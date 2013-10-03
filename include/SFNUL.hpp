@@ -6,3 +6,5 @@
 #include <SFNUL/UdpSocket.hpp>
 #include <SFNUL/TcpListener.hpp>
 #include <SFNUL/TlsConnection.hpp>
+#include <SFNUL/HTTP.hpp>
+#include <SFNUL/HTTPClient.hpp>

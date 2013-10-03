@@ -85,4 +85,6 @@ asio::ip::basic_endpoint<T> Endpoint::GetInternalEndpoint() const {
 	return asio::ip::basic_endpoint<T>{ m_address, m_port };
 }
 
+bool operator==( const Endpoint& left, const Endpoint& right );
+
 }

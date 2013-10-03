@@ -57,7 +57,7 @@ public:
 	 * @param hostname Hostname to resolve.
 	 * @return std::deque<IpAddress> containing all addresses the hostname identifies.
 	 */
-	static std::deque<IpAddress> Resolve( std::string hostname );
+	static std::deque<IpAddress> Resolve( const std::string& hostname );
 };
 
 }

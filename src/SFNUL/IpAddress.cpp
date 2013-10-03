@@ -51,7 +51,7 @@ bool IpAddress::IsIPv6() const {
 	return is_v6();
 }
 
-std::deque<IpAddress> IpAddress::Resolve( std::string hostname ) {
+std::deque<IpAddress> IpAddress::Resolve( const std::string& hostname ) {
 	NetworkResource resource;
 
 	asio::ip::icmp::resolver resolver{ resource.GetIOService() };

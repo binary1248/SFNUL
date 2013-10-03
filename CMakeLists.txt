@@ -67,12 +67,15 @@ set( LIBRARY_OUTPUT_PATH "${PROJECT_BINARY_DIR}/lib" )
 set( SRC_DIR "${PROJECT_SOURCE_DIR}/src/" )
 set( INC_DIR "${PROJECT_SOURCE_DIR}/include/" )
 set( TROPICSSL_SRC_DIR "${PROJECT_SOURCE_DIR}/extlibs/tropicssl/library/" )
+set( HTTP_PARSER_SRC_DIR "${PROJECT_SOURCE_DIR}/extlibs/http-parser/" )
 
 set(
 	HEADERS
 	${INC_DIR}/SFNUL.hpp
 	${INC_DIR}/SFNUL/Config.hpp
 	${INC_DIR}/SFNUL/Endpoint.hpp
+	${INC_DIR}/SFNUL/HTTP.hpp
+	${INC_DIR}/SFNUL/HTTPClient.hpp
 	${INC_DIR}/SFNUL/IpAddress.hpp
 	${INC_DIR}/SFNUL/NetworkResource.hpp
 	${INC_DIR}/SFNUL/NonCopyable.hpp
@@ -90,6 +93,8 @@ set(
 set(
 	SOURCES
 	${SRC_DIR}/SFNUL/Endpoint.cpp
+	${SRC_DIR}/SFNUL/HTTP.cpp
+	${SRC_DIR}/SFNUL/HTTPClient.cpp
 	${SRC_DIR}/SFNUL/IpAddress.cpp
 	${SRC_DIR}/SFNUL/NetworkResource.cpp
 	${SRC_DIR}/SFNUL/ReliableTransport.cpp
@@ -131,7 +136,13 @@ set(
 )
 
 set(
+	HTTP_PARSER_SOURCES
+	${HTTP_PARSER_SRC_DIR}/http_parser.c
+)
+
+set(
 	ALL_FILES
+	${HTTP_PARSER_SOURCES}
 	${TROPICSSL_SOURCES}
 	${HEADERS}
 	${SOURCES}
@@ -141,9 +152,11 @@ include_directories( ${INC_DIR} )
 include_directories( SYSTEM ${SFML_INCLUDE_DIR} )
 include_directories( SYSTEM "${PROJECT_SOURCE_DIR}/extlibs/asio/asio/include" )
 include_directories( SYSTEM "${PROJECT_SOURCE_DIR}/extlibs/tropicssl/include" )
+include_directories( SYSTEM "${PROJECT_SOURCE_DIR}/extlibs/http-parser" )
 
 set_source_files_properties( ${SOURCES} PROPERTIES LANGUAGE "CXX" )
 set_source_files_properties( ${TROPICSSL_SOURCES} PROPERTIES LANGUAGE "C" )
+set_source_files_properties( ${HTTP_PARSER_SOURCES} PROPERTIES LANGUAGE "C" )
 
 # Static runtime linkage for our favorite compiler.
 if( MSVC AND SFNUL_USE_STATIC_STD_LIBS )
@@ -178,6 +191,7 @@ endif()
 if( CMAKE_COMPILER_IS_GNUCXX )
 	set_source_files_properties( ${SOURCES} PROPERTIES COMPILE_FLAGS "-std=c++11 -Weffc++ -Wall -Wextra -Wshadow -Wconversion -Wunreachable-code -Wredundant-decls -pedantic" )
 	set_source_files_properties( ${TROPICSSL_SOURCES} PROPERTIES COMPILE_FLAGS "-D_FILE_OFFSET_BITS=64 -Wall -Wextra -Wformat=2 -fstrict-aliasing -Wstrict-aliasing -Wfloat-equal -Wundef -Wpointer-arith -Wbad-function-cast -Wcast-align -Wwrite-strings -Waddress -Waggregate-return -Wstrict-prototypes  -Wold-style-declaration -Wold-style-definition -Wmissing-parameter-type -Wmissing-field-initializers -Wmissing-noreturn -Wmissing-format-attribute -Wpacked -Wredundant-decls -Wnested-externs" )
+	set_source_files_properties( ${HTTP_PARSER_SOURCES} PROPERTIES COMPILE_FLAGS "-Wall -Wextra -Wformat=2 -fstrict-aliasing -Wstrict-aliasing -Wfloat-equal -Wundef -Wpointer-arith -Wbad-function-cast -Wcast-align -Wwrite-strings -Waddress -Waggregate-return -Wstrict-prototypes  -Wold-style-declaration -Wold-style-definition -Wmissing-parameter-type -Wmissing-field-initializers -Wmissing-noreturn -Wmissing-format-attribute -Wpacked -Wredundant-decls -Wnested-externs" )
 endif()
 
 # Tell the compiler to export when necessary.

@@ -5,59 +5,68 @@
 int main() {
 	sf::Window window{ sf::VideoMode{ 300, 100 }, "SFNUL HTTP Query" };
 
-	// Resolve our hostname to an address.
-	auto addresses = sfn::IpAddress::Resolve( "sfgui.sfml-dev.de" );
-
-	// Check if the name resolution was unsuccessful.
-	if( addresses.empty() ) {
-		std::cout << "Could not resolve hostname \"sfgui.sfml-dev.de\" to an address.\n";
-		return 1;
-	}
-
-	// Create our TCP socket.
-	auto socket = sfn::TcpSocket::Create();
-
-	// Connect the TCP socket to the endpoint.
-	socket->Connect( sfn::Endpoint{ addresses.front(), 80 } );
-
-	// Construct our HTTP request.
-	std::string request( "GET / HTTP/1.0\r\nHost: sfgui.sfml-dev.de\r\n\r\n" );
-
-	// Send our HTTP request.
-	socket->Send( request.c_str(), request.size() );
-
 	// Start a network processing thread.
 	sfn::Start();
 
-	while( window.isOpen() ) {
-		sf::Event event;
+	// We enclose the HTTPClient in a sub-scope so that it can get destroyed
+	// before sfn::Stop() is called and thereby clean up its connections properly.
+	{
+		// Construct our HTTP request.
+		sfn::HTTPRequest request{};
+		request.SetMethod( "GET" );
+		request.SetHeaderValue( "Host", "sfgui.sfml-dev.de" );
 
-		if( window.pollEvent( event ) ) {
-			if( event.type == sf::Event::Closed ) {
-				window.close();
+		// Construct our HTTP client.
+		sfn::HTTPClient client;
+
+		// Our sender lambda for convenience.
+		auto send_request = [&] ( std::string uri ) {
+			request.SetURI( uri );
+			client.SendRequest( request, "sfgui.sfml-dev.de", 80, false );
+		};
+
+		// Send a few pipelined requests.
+		send_request( "/" );
+		send_request( "/download/" );
+		send_request( "/p/docs" );
+		send_request( "/p/contributing" );
+		send_request( "/p/contact" );
+
+		while( window.isOpen() ) {
+			sf::Event event;
+
+			if( window.pollEvent( event ) ) {
+				if( event.type == sf::Event::Closed ) {
+					window.close();
+				}
 			}
+
+			// Update our client.
+			client.Update();
+
+			// Our getter lambda for convenience.
+			auto get_response = [&]( std::string uri ) {
+				// Check if the responses to our requests have arrived.
+				request.SetURI( uri );
+				auto response = client.GetResponse( request, "sfgui.sfml-dev.de", 80 );
+
+				// Check if the response is complete and valid. Do not use it otherwise.
+				if( response.IsComplete() ) {
+					// Print the body of the response.
+					std::cout << response.GetBody();
+				}
+			};
+
+			// Get responses with the help of our lambda.
+			get_response( "/" );
+			get_response( "/download/" );
+			get_response( "/p/docs" );
+			get_response( "/p/contributing" );
+			get_response( "/p/contact" );
+
+			sf::sleep( sf::milliseconds( 20 ) );
 		}
-
-		std::array<char, 1024> reply;
-
-		// Dequeue any data we receive from the remote host.
-		std::size_t reply_size = socket->Receive( reply.data(), reply.size() );
-
-		// Print out the data.
-		for( std::size_t index = 0; index < reply_size; index++ ) {
-			std::cout << reply[index];
-		}
-
-		// Shutdown our side if the remote side has shutdown already.
-		if( socket->RemoteHasShutdown() ) {
-			socket->Shutdown();
-		}
-
-		sf::sleep( sf::milliseconds( 20 ) );
 	}
-
-	// Close the socket.
-	socket->Close();
 
 	// Stop all network processing threads.
 	sfn::Stop();

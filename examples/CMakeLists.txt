@@ -23,6 +23,7 @@ function( build_example SAMPLE_NAME SOURCES )
 	)
 endfunction()
 
+build_example( "HelloWorld" "HelloWorld.cpp" )
 build_example( "HTTPServer" "HTTPServer.cpp" )
 build_example( "HTTPQuery" "HTTPQuery.cpp" )
 build_example( "DNSQuery" "DNSQuery.cpp" )
