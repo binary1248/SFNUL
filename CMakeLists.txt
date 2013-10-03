@@ -247,6 +247,11 @@ install(
 )
 
 install(
+	FILES extlibs/http-parser/http_parser.h
+	DESTINATION ./include
+)
+
+install(
 	FILES README AUTHORS CHANGELOG LICENSE
 	DESTINATION ${SHARE_TARGET_DIR}
 )
