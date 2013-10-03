@@ -180,14 +180,14 @@ typename TlsConnection<T, U, V>::Ptr TlsConnection<T, U, V>::Create() {
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::SetDebugLevel( int level ) {
-	sf::Lock lock{ m_mutex };
+	sf::Lock lock{ T::m_mutex };
 
 	m_debug_level = level;
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::AddTrustedCertificate( TlsCertificate::Ptr certificate ) {
-	sf::Lock lock{ m_mutex };
+	sf::Lock lock{ T::m_mutex };
 
 	m_ca_cert = certificate;
 
@@ -198,14 +198,14 @@ void TlsConnection<T, U, V>::AddTrustedCertificate( TlsCertificate::Ptr certific
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::SetPeerCommonName( const std::string& name ) {
-	sf::Lock lock{ m_mutex };
+	sf::Lock lock{ T::m_mutex };
 
 	m_common_name = name;
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::SetCertificateKeyPair( TlsCertificate::Ptr certificate, TlsKey::Ptr key ) {
-	sf::Lock lock{ m_mutex };
+	sf::Lock lock{ T::m_mutex };
 
 	m_server_cert = certificate;
 	m_key = key;
@@ -226,7 +226,7 @@ void TlsConnection<T, U, V>::SetCertificateKeyPair( TlsCertificate::Ptr certific
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 TlsVerificationResult TlsConnection<T, U, V>::GetVerificationResult() const {
-	sf::Lock lock{ m_mutex };
+	sf::Lock lock{ T::m_mutex };
 
 	auto verify_result = sfn::detail::ssl_get_verify_result( &m_ssl_context );
 
@@ -278,7 +278,7 @@ void TlsConnection<T, U, V>::Connect( const Endpoint& endpoint ) {
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::Shutdown() {
-	sf::Lock lock{ m_mutex };
+	sf::Lock lock{ T::m_mutex };
 
 	if( m_local_closed || T::LocalHasShutdown() || !T::IsConnected() ) {
 		return;
@@ -319,7 +319,7 @@ bool TlsConnection<T, U, V>::IsConnected() const {
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::Close() {
-	sf::Lock lock{ m_mutex };
+	sf::Lock lock{ T::m_mutex };
 
 	if( !m_local_closed ) {
 		if( !m_send_buffer.empty() ) {
@@ -335,7 +335,7 @@ void TlsConnection<T, U, V>::Send( const void* data, std::size_t size ) {
 	}
 
 	{
-		sf::Lock lock{ m_mutex };
+		sf::Lock lock{ T::m_mutex };
 
 		m_send_buffer.insert( m_send_buffer.end(), static_cast<const char*>( data ), static_cast<const char*>( data ) + size );
 	}
@@ -351,7 +351,7 @@ std::size_t TlsConnection<T, U, V>::Receive( void* data, std::size_t size ) {
 		return 0;
 	}
 
-	sf::Lock lock{ m_mutex };
+	sf::Lock lock{ T::m_mutex };
 
 	auto receive_size = std::min( size, m_receive_buffer.size() );
 
@@ -366,7 +366,7 @@ std::size_t TlsConnection<T, U, V>::Receive( void* data, std::size_t size ) {
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::Send( sf::Packet& packet ) {
-	sf::Lock lock{ m_mutex };
+	sf::Lock lock{ T::m_mutex };
 
 	std::size_t size = 0;
 	const void* data = static_cast<PacketAccessor*>( &packet )->Send( size );
@@ -386,7 +386,7 @@ void TlsConnection<T, U, V>::Send( sf::Packet& packet ) {
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 std::size_t TlsConnection<T, U, V>::Receive( sf::Packet& packet ) {
-	sf::Lock lock{ m_mutex };
+	sf::Lock lock{ T::m_mutex };
 
 	packet.clear();
 
@@ -419,7 +419,7 @@ std::size_t TlsConnection<T, U, V>::Receive( sf::Packet& packet ) {
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::OnSent() {
-	sf::Lock lock{ m_mutex };
+	sf::Lock lock{ T::m_mutex };
 
 	if( m_local_closed ) {
 		return;
@@ -479,7 +479,7 @@ void TlsConnection<T, U, V>::OnSent() {
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::OnReceived() {
-	sf::Lock lock{ m_mutex };
+	sf::Lock lock{ T::m_mutex };
 
 	if( m_remote_closed ) {
 		return;
@@ -528,7 +528,7 @@ void TlsConnection<T, U, V>::OnReceived() {
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::OnConnected() {
-	sf::Lock lock{ m_mutex };
+	sf::Lock lock{ T::m_mutex };
 
 	auto result = sfn::detail::ssl_handshake( &m_ssl_context );
 

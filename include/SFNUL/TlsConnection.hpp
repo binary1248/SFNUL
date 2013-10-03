@@ -325,10 +325,6 @@ private:
 
 	std::string m_common_name = {};
 
-	/// @cond
-	mutable sf::Mutex m_mutex{};
-	/// @endcond
-
 	bool m_request_close = false;
 	bool m_remote_closed = true;
 	bool m_local_closed = true;
