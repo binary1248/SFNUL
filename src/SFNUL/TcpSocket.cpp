@@ -170,6 +170,10 @@ void TcpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_se
 	{
 		sf::Lock lock{ m_mutex };
 
+		if( m_sending ) {
+			return;
+		}
+
 		if( ( error == asio::error::operation_aborted ) || ( error == asio::error::connection_aborted ) || ( error == asio::error::connection_reset ) ) {
 			return;
 		}
@@ -207,15 +211,21 @@ void TcpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_se
 			std::copy_n( m_send_buffer.begin(), send_size, m_send_memory.begin() );
 
 			if( m_connected && !m_fin_sent ) {
+				m_sending = true;
+
 				m_socket.async_send( asio::buffer( m_send_memory, send_size ),
 					m_strand.wrap(
 						std::bind(
 							[]( std::weak_ptr<TcpSocket> socket, const asio::error_code& handler_error, std::size_t handler_bytes_received ) {
-								if( socket.expired() ) {
+								auto shared_socket = socket.lock();
+
+								if( !shared_socket ) {
 									return;
 								}
 
-								socket.lock()->SendHandler( handler_error, handler_bytes_received );
+								sf::Lock handler_lock{ shared_socket->m_mutex };
+								shared_socket->m_sending = false;
+								shared_socket->SendHandler( handler_error, handler_bytes_received );
 							},
 							std::weak_ptr<TcpSocket>( shared_from_this() ), std::placeholders::_1, std::placeholders::_2
 						)
@@ -233,6 +243,10 @@ void TcpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_se
 void TcpSocket::ReceiveHandler( const asio::error_code& error, std::size_t bytes_received ) {
 	{
 		sf::Lock lock{ m_mutex };
+
+		if( m_receiving ) {
+			return;
+		}
 
 		if( error == asio::error::operation_aborted ) {
 			return;
@@ -266,15 +280,21 @@ void TcpSocket::ReceiveHandler( const asio::error_code& error, std::size_t bytes
 		}
 
 		if( m_connected && !m_fin_received ) {
+			m_receiving = true;
+
 			m_socket.async_receive( asio::buffer( m_receive_memory ),
 				m_strand.wrap(
 					std::bind(
 						[]( std::weak_ptr<TcpSocket> socket, const asio::error_code& handler_error, std::size_t handler_bytes_received ) {
-							if( socket.expired() ) {
+							auto shared_socket = socket.lock();
+
+							if( !shared_socket ) {
 								return;
 							}
 
-							socket.lock()->ReceiveHandler( handler_error, handler_bytes_received );
+							sf::Lock handler_lock{ shared_socket->m_mutex };
+							shared_socket->m_receiving = false;
+							shared_socket->ReceiveHandler( handler_error, handler_bytes_received );
 						},
 						std::weak_ptr<TcpSocket>( shared_from_this() ), std::placeholders::_1, std::placeholders::_2
 					)

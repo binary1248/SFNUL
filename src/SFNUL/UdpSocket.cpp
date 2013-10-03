@@ -109,6 +109,10 @@ void UdpSocket::ReceiveHandler( const asio::error_code& error, std::size_t bytes
 	{
 		sf::Lock lock{ m_mutex };
 
+		if( m_receiving ) {
+			return;
+		}
+
 		if( ( error == asio::error::operation_aborted ) || ( error == asio::error::connection_aborted ) || ( error == asio::error::connection_reset ) ) {
 			return;
 		}
@@ -144,15 +148,21 @@ void UdpSocket::ReceiveHandler( const asio::error_code& error, std::size_t bytes
 
 		std::shared_ptr<asio::ip::udp::endpoint> receive_endpoint_ptr = std::make_shared<asio::ip::udp::endpoint>();
 
+		m_receiving = true;
+
 		m_socket.async_receive_from( asio::buffer( m_receive_memory ), *receive_endpoint_ptr,
 			m_strand.wrap(
 				std::bind(
 					[]( std::weak_ptr<UdpSocket> socket, const asio::error_code& handler_error, std::size_t handler_bytes_received, std::shared_ptr<asio::ip::udp::endpoint> handler_endpoint_ptr ) {
-						if( socket.expired() ) {
+						auto shared_socket = socket.lock();
+
+						if( !shared_socket ) {
 							return;
 						}
 
-						socket.lock()->ReceiveHandler( handler_error, handler_bytes_received, handler_endpoint_ptr );
+						sf::Lock handler_lock{ shared_socket->m_mutex };
+						shared_socket->m_receiving = false;
+						shared_socket->ReceiveHandler( handler_error, handler_bytes_received, handler_endpoint_ptr );
 					},
 					std::weak_ptr<UdpSocket>( shared_from_this() ), std::placeholders::_1, std::placeholders::_2, receive_endpoint_ptr
 				)

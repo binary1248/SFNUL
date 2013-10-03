@@ -188,6 +188,9 @@ private:
 	bool m_fin_sent = false;
 	bool m_fin_received = false;
 
+	bool m_receiving = false;
+	bool m_sending = false;
+
 	friend class TcpListener;
 };
 

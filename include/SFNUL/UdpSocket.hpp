@@ -142,6 +142,8 @@ private:
 
 	std::size_t m_endpoint_limit_soft = 1024;
 	std::size_t m_endpoint_limit_hard = 1024 * 2;
+
+	bool m_receiving = false;
 };
 
 }
