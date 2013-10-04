@@ -287,6 +287,7 @@ void TlsConnection<T, U, V>::Shutdown() {
 	m_request_close = true;
 
 	if( !m_send_buffer.empty() ) {
+		OnSent();
 		return;
 	}
 
@@ -326,6 +327,8 @@ void TlsConnection<T, U, V>::Close() {
 			std::cerr << "TlsConnection::Close(): Warning, did not send all data before shutdown, possible data loss might occur.\n";
 		}
 	}
+
+	T::Close();
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
@@ -415,6 +418,28 @@ std::size_t TlsConnection<T, U, V>::Receive( sf::Packet& packet ) {
 	static_cast<PacketAccessor*>( &packet )->Receive( &data_block[0], packet_size );
 
 	return sizeof( packet_size ) + packet_size;
+}
+
+template<class T, TlsEndpointType U, TlsVerificationType V>
+void TlsConnection<T, U, V>::ClearBuffers() {
+	sf::Lock lock{ T::m_mutex };
+
+	m_send_buffer.clear();
+	m_receive_buffer.clear();
+}
+
+template<class T, TlsEndpointType U, TlsVerificationType V>
+std::size_t TlsConnection<T, U, V>::BytesToSend() const {
+	sf::Lock lock{ T::m_mutex };
+
+	return m_send_buffer.size();
+}
+
+template<class T, TlsEndpointType U, TlsVerificationType V>
+std::size_t TlsConnection<T, U, V>::BytesToReceive() const {
+	sf::Lock lock{ T::m_mutex };
+
+	return m_receive_buffer.size();
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>

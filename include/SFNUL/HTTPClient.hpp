@@ -34,6 +34,8 @@ public:
 	void Update();
 
 	bool TimedOut() const;
+
+	bool HasRequests() const;
 private:
 	friend int OnMessageBegin( http_parser* parser );
 	friend int OnUrl( http_parser* parser, const char* data, std::size_t length );
@@ -51,6 +53,9 @@ private:
 
 	Endpoint m_endpoint{};
 	TcpSocket::Ptr m_socket{};
+
+	bool m_secure{ false };
+	Endpoint m_remote_endpoint{};
 
 #if defined( __GNUG__ )
 #pragma GCC diagnostic push

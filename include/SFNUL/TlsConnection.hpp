@@ -277,6 +277,20 @@ public:
 	 */
 	virtual std::size_t Receive( sf::Packet& packet );
 
+	/** Clear the send and receive queues of this socket.
+	 */
+	void ClearBuffers();
+
+	/** Get the number of bytes queued for sending.
+	 * @return Number of bytes queued for sending.
+	 */
+	std::size_t BytesToSend() const;
+
+	/** Get the number of bytes queued for receiving.
+	 * @return Number of bytes queued for receiving.
+	 */
+	std::size_t BytesToReceive() const;
+
 	/** Used to inform subclasses that the transport has connected.
 	 */
 	virtual void OnConnected() override;
@@ -326,8 +340,8 @@ private:
 	std::string m_common_name = {};
 
 	bool m_request_close = false;
-	bool m_remote_closed = true;
-	bool m_local_closed = true;
+	bool m_remote_closed = false;
+	bool m_local_closed = false;
 
 	bool require_certificate_key = false;
 };

@@ -145,6 +145,9 @@ HTTPClientPipeline::HTTPClientPipeline( Endpoint endpoint, bool secure ) {
 		m_socket = TlsConnection<TcpSocket, TlsEndpointType::CLIENT, TlsVerificationType::NONE>::Create();
 	}
 
+	m_secure = secure;
+	m_remote_endpoint = endpoint;
+
 	m_socket->Connect( endpoint );
 
 	http_parser_init( &m_parser, HTTP_RESPONSE );
@@ -210,17 +213,27 @@ HTTPResponse HTTPClientPipeline::GetResponse( const HTTPRequest& request ) {
 }
 
 void HTTPClientPipeline::Update() {
-	if( !m_socket->BytesToReceive() ) {
+	if( TimedOut() ) {
+		if( HasRequests() ) {
+			m_timeout_timer.restart();
+			Reconnect();
+		}
+
 		return;
 	}
-
-	m_timeout_timer.restart();
 
 	std::array<char, 4096> data;
 
 	std::size_t received = 0;
 
 	while( ( received = m_socket->Receive( data.data(), data.size() ) ) ) {
+		if( received ) {
+			m_timeout_timer.restart();
+		}
+		else {
+			return;
+		}
+
 		m_parser.data = this;
 
 		auto parsed = http_parser_execute( &m_parser, &m_parser_settings, data.data(), received );
@@ -239,12 +252,27 @@ void HTTPClientPipeline::Update() {
 }
 
 void HTTPClientPipeline::Reconnect() {
-	auto endpoint = m_socket->GetRemoteEndpoint();
-
 	m_socket->Shutdown();
+
+	sf::Clock send_timer;
+
+	while( m_socket->BytesToSend() && !m_socket->RemoteHasShutdown() && ( send_timer.getElapsedTime() < sf::seconds( 1 ) ) ) {
+	}
+
+	m_socket->ClearBuffers();
 	m_socket->Close();
 
-	m_socket->Connect( endpoint );
+	if( !m_secure ) {
+		m_socket = TcpSocket::Create();
+	}
+	else {
+		m_socket = TlsConnection<TcpSocket, TlsEndpointType::CLIENT, TlsVerificationType::NONE>::Create();
+	}
+
+	m_socket->Connect( m_remote_endpoint );
+
+	std::memset( &m_parser, 0, sizeof( http_parser ) );
+	http_parser_init( &m_parser, HTTP_RESPONSE );
 
 	bool current_set = false;
 
@@ -264,6 +292,10 @@ void HTTPClientPipeline::Reconnect() {
 
 bool HTTPClientPipeline::TimedOut() const {
 	return m_timeout_timer.getElapsedTime() > m_timeout_value;
+}
+
+bool HTTPClientPipeline::HasRequests() const {
+	return !m_pipeline.empty();
 }
 
 /// @endcond
@@ -315,7 +347,9 @@ void HTTPClient::Update() {
 		std::get<0>( *iter ).Update();
 
 		if( std::get<0>( *iter ).TimedOut() ) {
-			iter = m_pipelines.erase( iter );
+			if( !std::get<0>( *iter ).HasRequests() ) {
+				iter = m_pipelines.erase( iter );
+			}
 		}
 		else {
 			++iter;

@@ -32,7 +32,7 @@ void HTTPMessage::SetBody( std::string body ) {
 std::string HTTPMessage::ToString() const {
 	std::string str;
 
-	for( const auto h : m_header ) {
+	for( auto h : m_header ) {
 		str += h.first + ": " + h.second + "\r\n";
 	}
 

@@ -229,7 +229,10 @@ void TcpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_se
 
 								sf::Lock handler_lock{ shared_socket->m_mutex };
 								shared_socket->m_sending = false;
-								shared_socket->SendHandler( handler_error, handler_bytes_received );
+
+								if( !shared_socket->m_send_buffer.empty() ) {
+									shared_socket->SendHandler( handler_error, handler_bytes_received );
+								}
 							},
 							std::weak_ptr<TcpSocket>( shared_from_this() ), std::placeholders::_1, std::placeholders::_2
 						)
