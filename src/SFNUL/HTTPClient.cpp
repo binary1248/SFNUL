@@ -140,15 +140,14 @@ int OnMessageComplete( http_parser* parser ) {
 HTTPClientPipeline::HTTPClientPipeline( Endpoint endpoint, bool secure ) {
 	if( !secure ) {
 		m_socket = TcpSocket::Create();
+		m_socket->Connect( endpoint );
 	}
 	else {
-		m_socket = TlsConnection<TcpSocket, TlsEndpointType::CLIENT, TlsVerificationType::NONE>::Create();
+		m_socket = TlsConnection<TcpSocket, TlsEndpointType::CLIENT, TlsVerificationType::REQUIRED>::Create();
 	}
 
 	m_secure = secure;
 	m_remote_endpoint = endpoint;
-
-	m_socket->Connect( endpoint );
 
 	http_parser_init( &m_parser, HTTP_RESPONSE );
 
@@ -176,6 +175,21 @@ HTTPClientPipeline::~HTTPClientPipeline() {
 
 	if( shutdown_clock.getElapsedTime() >= sf::seconds( 2 ) ) {
 		std::cerr << "HTTP Connection shutdown timed out.\n";
+	}
+}
+
+void HTTPClientPipeline::LoadCertificate( TlsCertificate::Ptr certificate ) {
+	if( !m_secure ) {
+		return;
+	}
+
+	m_certificate = certificate;
+
+	if( m_socket ) {
+		auto socket = std::static_pointer_cast<TlsConnection<TcpSocket, TlsEndpointType::CLIENT, TlsVerificationType::REQUIRED>>( m_socket );
+
+		socket->AddTrustedCertificate( std::move( certificate ) );
+		socket->Connect( m_remote_endpoint );
 	}
 }
 
@@ -266,7 +280,11 @@ void HTTPClientPipeline::Reconnect() {
 		m_socket = TcpSocket::Create();
 	}
 	else {
-		m_socket = TlsConnection<TcpSocket, TlsEndpointType::CLIENT, TlsVerificationType::NONE>::Create();
+		m_socket = TlsConnection<TcpSocket, TlsEndpointType::CLIENT, TlsVerificationType::REQUIRED>::Create();
+
+		auto socket = std::static_pointer_cast<TlsConnection<TcpSocket, TlsEndpointType::CLIENT, TlsVerificationType::REQUIRED>>( m_socket );
+
+		socket->AddTrustedCertificate( m_certificate );
 	}
 
 	m_socket->Connect( m_remote_endpoint );
@@ -317,10 +335,16 @@ void HTTPClient::SendRequest( HTTPRequest request, const std::string& address, u
 	);
 
 	if( iter == std::end( m_pipelines ) ) {
-		m_pipelines.emplace_back( HTTPClientPipeline{ std::move( endpoint ), secure }, std::move( address ), port );
+		m_pipelines.emplace_back( HTTPClientPipeline{ std::move( endpoint ), secure }, address, port );
 
 		iter = std::end( m_pipelines );
 		--iter;
+
+		auto certificate_iter = m_certificates.find( address );
+
+		if( certificate_iter != std::end( m_certificates ) ) {
+			std::get<0>( *iter ).LoadCertificate( certificate_iter->second );
+		}
 	}
 
 	auto str = request.ToString();
@@ -340,6 +364,22 @@ HTTPResponse HTTPClient::GetResponse( const HTTPRequest& request, const std::str
 	}
 
 	return std::get<0>( *pipeline_iter ).GetResponse( request );
+}
+
+void HTTPClient::LoadCertificate( const std::string& address, TlsCertificate::Ptr certificate ) {
+	m_certificates[address] = certificate;
+
+	auto pipeline_iter = std::find_if( std::begin( m_pipelines ), std::end( m_pipelines ),
+		[&]( Pipeline& p ) {
+			return ( address == std::get<1>( p ) );
+		}
+	);
+
+	if( pipeline_iter == std::end( m_pipelines ) ) {
+		return;
+	}
+
+	std::get<0>( *pipeline_iter ).LoadCertificate( std::move( certificate ) );
 }
 
 void HTTPClient::Update() {

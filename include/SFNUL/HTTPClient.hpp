@@ -14,6 +14,7 @@
 #include <SFNUL/HTTP.hpp>
 #include <SFNUL/TcpSocket.hpp>
 #include <SFNUL/Endpoint.hpp>
+#include <SFNUL/TlsConnection.hpp>
 
 namespace sfn {
 
@@ -26,6 +27,8 @@ public:
 	HTTPClientPipeline( HTTPClientPipeline&& ) = default;
 
 	~HTTPClientPipeline();
+
+	void LoadCertificate( TlsCertificate::Ptr certificate );
 
 	void SendRequest( HTTPRequest request );
 
@@ -51,11 +54,11 @@ private:
 
 	void Reconnect();
 
-	Endpoint m_endpoint{};
 	TcpSocket::Ptr m_socket{};
 
 	bool m_secure{ false };
 	Endpoint m_remote_endpoint{};
+	TlsCertificate::Ptr m_certificate{};
 
 #if defined( __GNUG__ )
 #pragma GCC diagnostic push
@@ -103,6 +106,12 @@ public:
 	 */
 	HTTPResponse GetResponse( const HTTPRequest& request, const std::string& address, unsigned short port = 80 );
 
+	/** Load a certificate to use for a certain host.
+	 * @param address Address of the host.
+	 * @param certificate Certificate to use.
+	 */
+	void LoadCertificate( const std::string& address, TlsCertificate::Ptr certificate );
+
 	/** Update the client and handle any pending data/operations.
 	 */
 	void Update();
@@ -110,6 +119,7 @@ private:
 	typedef std::tuple<HTTPClientPipeline, std::string, unsigned short> Pipeline;
 
 	std::list<Pipeline> m_pipelines{};
+	std::map<std::string, TlsCertificate::Ptr> m_certificates{};
 };
 
 }
