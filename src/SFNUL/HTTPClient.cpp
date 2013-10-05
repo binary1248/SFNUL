@@ -137,7 +137,11 @@ int OnMessageComplete( http_parser* parser ) {
 	return 0;
 }
 
-HTTPClientPipeline::HTTPClientPipeline( Endpoint endpoint, bool secure ) {
+HTTPClientPipeline::HTTPClientPipeline( Endpoint endpoint, bool secure, const sf::Time& timeout ) :
+	m_secure{ secure },
+	m_remote_endpoint{ endpoint },
+	m_timeout_value{ timeout }
+{
 	if( !secure ) {
 		m_socket = TcpSocket::Create();
 		m_socket->Connect( endpoint );
@@ -145,9 +149,6 @@ HTTPClientPipeline::HTTPClientPipeline( Endpoint endpoint, bool secure ) {
 	else {
 		m_socket = TlsConnection<TcpSocket, TlsEndpointType::CLIENT, TlsVerificationType::REQUIRED>::Create();
 	}
-
-	m_secure = secure;
-	m_remote_endpoint = endpoint;
 
 	http_parser_init( &m_parser, HTTP_RESPONSE );
 
@@ -309,7 +310,7 @@ void HTTPClientPipeline::Reconnect() {
 }
 
 bool HTTPClientPipeline::TimedOut() const {
-	return m_timeout_timer.getElapsedTime() > m_timeout_value;
+	return ( m_timeout_value != sf::seconds( 0 ) ) && ( m_timeout_timer.getElapsedTime() > m_timeout_value );
 }
 
 bool HTTPClientPipeline::HasRequests() const {
@@ -335,7 +336,7 @@ void HTTPClient::SendRequest( HTTPRequest request, const std::string& address, u
 	);
 
 	if( iter == std::end( m_pipelines ) ) {
-		m_pipelines.emplace_back( HTTPClientPipeline{ std::move( endpoint ), secure }, address, port );
+		m_pipelines.emplace_back( HTTPClientPipeline{ std::move( endpoint ), secure, m_timeout_value }, address, port );
 
 		iter = std::end( m_pipelines );
 		--iter;
@@ -380,6 +381,10 @@ void HTTPClient::LoadCertificate( const std::string& address, TlsCertificate::Pt
 	}
 
 	std::get<0>( *pipeline_iter ).LoadCertificate( std::move( certificate ) );
+}
+
+void HTTPClient::SetTimeoutValue( const sf::Time& timeout ) {
+	m_timeout_value = timeout;
 }
 
 void HTTPClient::Update() {

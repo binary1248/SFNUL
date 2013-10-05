@@ -22,7 +22,7 @@ namespace sfn {
 
 class SFNUL_API HTTPClientPipeline {
 public:
-	HTTPClientPipeline( Endpoint endpoint, bool secure = false );
+	HTTPClientPipeline( Endpoint endpoint, bool secure, const sf::Time& timeout );
 
 	HTTPClientPipeline( HTTPClientPipeline&& ) = default;
 
@@ -56,8 +56,8 @@ private:
 
 	TcpSocket::Ptr m_socket{};
 
-	bool m_secure{ false };
-	Endpoint m_remote_endpoint{};
+	bool m_secure;
+	Endpoint m_remote_endpoint;
 	TlsCertificate::Ptr m_certificate{};
 
 #if defined( __GNUG__ )
@@ -81,7 +81,7 @@ private:
 
 	sf::Clock m_timeout_timer{};
 
-	sf::Time m_timeout_value{ sf::seconds( 15 ) };
+	sf::Time m_timeout_value;
 };
 
 /// @endcond
@@ -112,6 +112,12 @@ public:
 	 */
 	void LoadCertificate( const std::string& address, TlsCertificate::Ptr certificate );
 
+	/** Set the timeout value a connection is allowed to be idle for before being closed. Default: 15 seconds. 0 to disable.
+	 * This will only have effect on new connections, so set before issuing any requests.
+	 * @param timeout Timeout value.
+	 */
+	void SetTimeoutValue( const sf::Time& timeout );
+
 	/** Update the client and handle any pending data/operations.
 	 */
 	void Update();
@@ -120,6 +126,8 @@ private:
 
 	std::list<Pipeline> m_pipelines{};
 	std::map<std::string, TlsCertificate::Ptr> m_certificates{};
+
+	sf::Time m_timeout_value{ sf::seconds( 15 ) };
 };
 
 }
