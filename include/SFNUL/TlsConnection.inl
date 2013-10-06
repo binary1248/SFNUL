@@ -331,6 +331,13 @@ void TlsConnection<T, U, V>::Close() {
 	T::Close();
 }
 
+/// @cond
+template<class T, TlsEndpointType U, TlsVerificationType V>
+void TlsConnection<T, U, V>::Reset() {
+	T::Reset();
+}
+/// @endcond
+
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::Send( const void* data, std::size_t size ) {
 	if( !data || !size ) {

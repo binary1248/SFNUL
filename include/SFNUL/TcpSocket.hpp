@@ -68,6 +68,10 @@ public:
 	 */
 	virtual void Close() override;
 
+	/// @cond
+	virtual void Reset() override;
+	/// @endcond
+
 	/** Get the local endpoint of the established TCP connection this socket is part of.
 	 * @return Local endpoint of the established TCP connection this socket is part of.
 	 */

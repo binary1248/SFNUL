@@ -171,12 +171,16 @@ HTTPClientPipeline::~HTTPClientPipeline() {
 
 	m_socket->Shutdown();
 
-	while( !m_socket->RemoteHasShutdown() && shutdown_clock.getElapsedTime() < sf::seconds( 2 ) ) {
+	while( !m_socket->LocalHasShutdown() && shutdown_clock.getElapsedTime() < sf::seconds( 1 ) ) {
 	}
 
-	if( shutdown_clock.getElapsedTime() >= sf::seconds( 2 ) ) {
+	if( shutdown_clock.getElapsedTime() >= sf::seconds( 1 ) ) {
 		std::cerr << "HTTP Connection shutdown timed out.\n";
 	}
+
+	m_socket->ClearBuffers();
+	m_socket->Reset();
+	m_socket->Close();
 }
 
 void HTTPClientPipeline::LoadCertificate( TlsCertificate::Ptr certificate ) {
@@ -271,10 +275,11 @@ void HTTPClientPipeline::Reconnect() {
 
 	sf::Clock send_timer;
 
-	while( m_socket->BytesToSend() && !m_socket->RemoteHasShutdown() && ( send_timer.getElapsedTime() < sf::seconds( 1 ) ) ) {
+	while( !m_socket->LocalHasShutdown() && ( send_timer.getElapsedTime() < sf::seconds( 1 ) ) ) {
 	}
 
 	m_socket->ClearBuffers();
+	m_socket->Reset();
 	m_socket->Close();
 
 	if( !m_secure ) {

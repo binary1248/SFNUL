@@ -253,6 +253,10 @@ public:
 	 */
 	virtual void Close();
 
+	/// @cond
+	virtual void Reset() override;
+	/// @endcond
+
 	/** Queue data up for asynchronous sending over the connection.
 	 * @param data Pointer to a block of memory containing the data to queue.
 	 * @param size Size of the block of memory containing the data to queue.

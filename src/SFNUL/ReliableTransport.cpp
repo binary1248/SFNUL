@@ -12,6 +12,11 @@ ReliableTransport::ReliableTransport() {
 ReliableTransport::~ReliableTransport() {
 }
 
+/// @cond
+void ReliableTransport::Reset() {
+}
+/// @endcond
+
 void ReliableTransport::OnConnected() {
 }
 

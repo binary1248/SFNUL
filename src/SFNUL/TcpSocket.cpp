@@ -170,6 +170,12 @@ void TcpSocket::Close() {
 	OnDisconnected();
 }
 
+/// @cond
+void TcpSocket::Reset() {
+	m_fin_received = true;
+}
+/// @endcond
+
 void TcpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_sent ) {
 	{
 		sf::Lock lock{ m_mutex };

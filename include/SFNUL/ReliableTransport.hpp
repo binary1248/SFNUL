@@ -50,6 +50,10 @@ public:
 	 */
 	virtual void Close() = 0;
 
+	/// @cond
+	virtual void Reset();
+	/// @endcond
+
 	/** Get the local endpoint of the established connection this socket is part of.
 	 * @return Local endpoint of the established connection this socket is part of.
 	 */
