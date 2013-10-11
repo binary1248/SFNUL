@@ -9,7 +9,18 @@
 
 namespace sfn {
 namespace {
-struct TcpListenerMaker: public TcpListener {};
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Weffc++"
+#endif
+
+struct TcpListenerMaker : public TcpListener {};
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic pop
+#endif
+
 }
 
 TcpListener::TcpListener() :
@@ -82,7 +93,7 @@ void TcpListener::AcceptHandler( const asio::error_code& error, std::shared_ptr<
 
 	if( socket ) {
 		if( m_new_connections.size() < m_connection_limit_hard ) {
-			m_new_connections.push_back( std::move( *socket ) );
+			m_new_connections.emplace_back( std::move( *socket ) );
 		}
 		else {
 			asio::error_code shutdown_error;

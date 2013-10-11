@@ -5,6 +5,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 #include <type_traits>
 #include <tropicssl/net.h>
 #include <tropicssl/ssl.h>
@@ -12,7 +13,6 @@
 #include <tropicssl/havege.h>
 #include <tropicssl/x509.h>
 #include <SFNUL/Config.hpp>
-#include <SFNUL/ReliableTransport.hpp>
 
 #if defined( NONE )
 #undef NONE
@@ -26,7 +26,16 @@
 #undef REQUIRED
 #endif
 
+namespace sf {
+class Mutex;
+class Packet;
+}
+
 namespace sfn {
+
+class ReliableTransport;
+class Endpoint;
+class Message;
 
 /// @cond
 namespace detail {
@@ -114,8 +123,7 @@ private:
 
 	x509_cert m_cert;
 
-	template<class T, TlsEndpointType U, TlsVerificationType V>
-	friend class TlsConnection;
+	friend class TlsConnectionBase;
 };
 
 /** TLS Key class.
@@ -145,8 +153,7 @@ private:
 
 	rsa_context m_key;
 
-	template<class T, TlsEndpointType U, TlsVerificationType V>
-	friend class TlsConnection;
+	friend class TlsConnectionBase;
 };
 
 /** TLS connection base.
@@ -162,39 +169,6 @@ public:
 	 * @param g g value as a hexadecimal std::string.
 	 */
 	static void SetDiffieHellmanParameters( const std::string& p, const std::string& g );
-
-protected:
-	static std::string m_diffie_hellman_p;
-	static std::string m_diffie_hellman_g;
-};
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Weffc++"
-#endif
-
-/** TLS connection class.
- */
-template<class T, TlsEndpointType U, TlsVerificationType V>
-class TlsConnection : public T, public TlsConnectionBase {
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
-
-public:
-	static_assert( std::is_base_of<ReliableTransport, T>::value, "TLS connections can only be set up over reliable transports." );
-
-	typedef std::shared_ptr<TlsConnection<T, U, V>> Ptr; //!< Shared pointer.
-
-	/** Create a TLS connection.
-	 * @return A shared pointer that owns a new TLS connection.
-	 */
-	static Ptr Create();
-
-	/** Destructor.
-	 */
-	virtual ~TlsConnection();
 
 	/** Set the level of debug output produced by the TLS implementation.
 	 * 0 to disable, 3 for full debug output. Default: 0
@@ -225,33 +199,109 @@ public:
 	 */
 	TlsVerificationResult GetVerificationResult() const;
 
+protected:
+	TlsConnectionBase();
+	~TlsConnectionBase();
+
+	virtual sf::Mutex& GetMutex() const = 0;
+
+	virtual void OnSentProxy() = 0;
+	virtual void OnReceivedProxy() = 0;
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
+
+	ssl_context m_ssl_context{};
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic pop
+#endif
+
+	bool require_certificate_key = false;
+
+private:
+	static std::string m_diffie_hellman_p;
+	static std::string m_diffie_hellman_g;
+
+	static bool havege_initialized;
+	static havege_state m_havege_state;
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
+
+	ssl_session m_ssl_session{};
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic pop
+#endif
+
+	TlsCertificate::Ptr m_ca_cert{};
+	TlsCertificate::Ptr m_server_cert{};
+	TlsKey::Ptr m_key{};
+
+	int m_debug_level{ 0 };
+	std::string m_common_name = {};
+};
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Weffc++"
+#endif
+
+/** TLS connection class.
+ */
+template<class T, TlsEndpointType U, TlsVerificationType V>
+class TlsConnection : public T, public TlsConnectionBase {
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic pop
+#endif
+
+public:
+	static_assert( std::is_base_of<ReliableTransport, T>::value, "TLS connections can only be set up over reliable transports." );
+
+	typedef std::shared_ptr<TlsConnection<T, U, V>> Ptr; //!< Shared pointer.
+
+	/** Create a TLS connection.
+	 * @return A shared pointer that owns a new TLS connection.
+	 */
+	static Ptr Create();
+
+	/** Destructor.
+	 */
+	virtual ~TlsConnection();
+
 	/** Asynchronously connect to a remote endpoint.
 	 * @param endpoint Remote endpoint.
 	 */
-	virtual void Connect( const Endpoint& endpoint );
+	virtual void Connect( const Endpoint& endpoint ) override;
 
 	/** Shutdown the connection for sending. This is required for graceful connection termination.
 	 */
-	virtual void Shutdown();
+	virtual void Shutdown() override;
 
 	/** Check if the local system has shut the connection down for sending.
 	 * @return true if the local system has shut the connection down for sending.
 	 */
-	virtual bool LocalHasShutdown() const;
+	virtual bool LocalHasShutdown() const override;
 
 	/** Check if the remote system has shut the connection down for sending.
 	 * @return true if the remote system has shut the connection down for sending.
 	 */
-	virtual bool RemoteHasShutdown() const;
+	virtual bool RemoteHasShutdown() const override;
 
 	/** Check if the TLS connection is operational.
 	 * @return true if the TLS connection is operational.
 	 */
-	virtual bool IsConnected() const;
+	virtual bool IsConnected() const override;
 
 	/** Close the connection. This frees up the operating system resources assigned to the connection.
 	 */
-	virtual void Close();
+	virtual void Close() override;
 
 	/// @cond
 	virtual void Reset() override;
@@ -261,39 +311,50 @@ public:
 	 * @param data Pointer to a block of memory containing the data to queue.
 	 * @param size Size of the block of memory containing the data to queue.
 	 */
-	virtual void Send( const void* data, std::size_t size );
+	virtual void Send( const void* data, std::size_t size ) override;
 
 	/** Dequeue data that was asynchronously received over the connection.
 	 * @param data Pointer to a block of memory that will contain the data to dequeue.
 	 * @param size Size of the block of memory that will contain the data to dequeue.
 	 * @return Number of bytes of data that was actually dequeued.
 	 */
-	virtual std::size_t Receive( void* data, std::size_t size );
+	virtual std::size_t Receive( void* data, std::size_t size ) override;
 
 	/** Queue an sf::Packet up for asynchronous sending over the connection.
 	 * @param packet sf::Packet to queue.
 	 */
-	virtual void Send( sf::Packet& packet );
+	virtual void Send( sf::Packet& packet ) override;
 
 	/** Dequeue an sf::Packet that was asynchronously received over the connection.
 	 * @param packet sf::Packet to dequeue into.
 	 * @return Size of the sf::Packet that was dequeued. This includes the size field of the packet. If no packet could be dequeued, this method will return 0.
 	 */
-	virtual std::size_t Receive( sf::Packet& packet );
+	virtual std::size_t Receive( sf::Packet& packet ) override;
+
+	/** Queue a Message up for asynchronous sending over the connection.
+	 * @param message Message to queue.
+	 */
+	virtual void Send( const Message& message ) override;
+
+	/** Dequeue an Message that was asynchronously received over the connection.
+	 * @param message Message to dequeue into.
+	 * @return Size of the Message that was dequeued. This includes the size field of the Message. If no Message could be dequeued, this method will return 0.
+	 */
+	virtual std::size_t Receive( Message& message ) override;
 
 	/** Clear the send and receive queues of this socket.
 	 */
-	void ClearBuffers();
+	virtual void ClearBuffers() override;
 
 	/** Get the number of bytes queued for sending.
 	 * @return Number of bytes queued for sending.
 	 */
-	std::size_t BytesToSend() const;
+	virtual std::size_t BytesToSend() const override;
 
 	/** Get the number of bytes queued for receiving.
 	 * @return Number of bytes queued for receiving.
 	 */
-	std::size_t BytesToReceive() const;
+	virtual std::size_t BytesToReceive() const override;
 
 	/** Used to inform subclasses that the transport has connected.
 	 */
@@ -317,20 +378,14 @@ protected:
 	 */
 	virtual void OnDisconnected() override;
 
+	virtual sf::Mutex& GetMutex() const override;
+
+	virtual void OnSentProxy() override;
+	virtual void OnReceivedProxy() override;
+
 private:
 	int SendInterface( void* /*unused*/, const unsigned char* buffer, int length );
 	int RecvInterface( void* /*unused*/, unsigned char* buffer, int length );
-
-	static bool havege_initialized;
-	static havege_state m_havege_state;
-
-	ssl_context m_ssl_context{};
-	ssl_session m_ssl_session{};
-	TlsCertificate::Ptr m_ca_cert{};
-	TlsCertificate::Ptr m_server_cert{};
-	TlsKey::Ptr m_key{};
-
-	int m_debug_level{ 0 };
 
 	const static TlsEndpointType m_type = U;
 	const static TlsVerificationType m_verify = V;
@@ -341,13 +396,9 @@ private:
 	std::array<char, 2048> m_send_memory{ {} };
 	std::array<char, 2048> m_receive_memory{ {} };
 
-	std::string m_common_name = {};
-
 	bool m_request_close = false;
 	bool m_remote_closed = false;
 	bool m_local_closed = false;
-
-	bool require_certificate_key = false;
 };
 
 }

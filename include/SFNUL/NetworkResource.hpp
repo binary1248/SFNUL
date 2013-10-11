@@ -5,11 +5,10 @@
 #pragma once
 
 #include <memory>
-#include <SFML/System.hpp>
+#include <SFML/System/Mutex.hpp>
 #include <SFNUL/Config.hpp>
 #include <asio/io_service.hpp>
 #include <asio/strand.hpp>
-#include <SFNUL/NonCopyable.hpp>
 
 namespace sfn {
 
@@ -17,8 +16,11 @@ class IpAddress;
 
 /** Network resource base class.
  */
-class SFNUL_API NetworkResource : public NonCopyable {
-public:
+class SFNUL_API NetworkResource {
+private:
+	std::shared_ptr<asio::io_service> m_io_service;
+
+protected:
 	/** Constructor.
 	 */
 	NetworkResource();
@@ -27,10 +29,14 @@ public:
 	 */
 	~NetworkResource();
 
-private:
-	std::shared_ptr<asio::io_service> m_io_service;
+	NetworkResource( const NetworkResource& other ) = delete;
 
-protected:
+	NetworkResource( NetworkResource&& other ) = default;
+
+	NetworkResource& operator=( const NetworkResource& other ) = delete;
+
+	NetworkResource& operator=( NetworkResource&& other ) = default;
+
 	/** Get the associated asio io_service.
 	 * @return associated asio io_service.
 	 */

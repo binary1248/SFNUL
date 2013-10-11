@@ -81,10 +81,18 @@ set(
 	${INC_DIR}/SFNUL/HTTP.hpp
 	${INC_DIR}/SFNUL/HTTPClient.hpp
 	${INC_DIR}/SFNUL/IpAddress.hpp
+	${INC_DIR}/SFNUL/Link.hpp
+	${INC_DIR}/SFNUL/Link.inl
+	${INC_DIR}/SFNUL/Message.hpp
+	${INC_DIR}/SFNUL/Message.inl
 	${INC_DIR}/SFNUL/NetworkResource.hpp
-	${INC_DIR}/SFNUL/NonCopyable.hpp
 	${INC_DIR}/SFNUL/ReliableTransport.hpp
 	${INC_DIR}/SFNUL/Socket.hpp
+	${INC_DIR}/SFNUL/SyncedObject.hpp
+	${INC_DIR}/SFNUL/SyncedType.hpp
+	${INC_DIR}/SFNUL/SyncedType.inl
+	${INC_DIR}/SFNUL/Synchronizer.hpp
+	${INC_DIR}/SFNUL/Synchronizer.inl
 	${INC_DIR}/SFNUL/TcpListener.hpp
 	${INC_DIR}/SFNUL/TcpListener.inl
 	${INC_DIR}/SFNUL/TcpSocket.hpp
@@ -100,9 +108,14 @@ set(
 	${SRC_DIR}/SFNUL/HTTP.cpp
 	${SRC_DIR}/SFNUL/HTTPClient.cpp
 	${SRC_DIR}/SFNUL/IpAddress.cpp
+	${SRC_DIR}/SFNUL/Link.cpp
+	${SRC_DIR}/SFNUL/Message.cpp
 	${SRC_DIR}/SFNUL/NetworkResource.cpp
 	${SRC_DIR}/SFNUL/ReliableTransport.cpp
 	${SRC_DIR}/SFNUL/Socket.cpp
+	${SRC_DIR}/SFNUL/SyncedObject.cpp
+	${SRC_DIR}/SFNUL/SyncedType.cpp
+	${SRC_DIR}/SFNUL/Synchronizer.cpp
 	${SRC_DIR}/SFNUL/TcpListener.cpp
 	${SRC_DIR}/SFNUL/TcpSocket.cpp
 	${SRC_DIR}/SFNUL/TlsConnection.cpp
@@ -183,7 +196,7 @@ if( BUILD_SHARED_LIBS )
 	endif()
 else()
 	add_definitions( -DSFNUL_STATIC )
-	
+
 	add_library( sfnul ${ALL_FILES} )
 
 	set_target_properties( sfnul PROPERTIES DEBUG_POSTFIX -s-d )

@@ -78,7 +78,7 @@ std::deque<IpAddress> IpAddress::Resolve( const std::string& hostname ) {
 
 		IpAddress address;
 
-		addresses.push_back( endpoint.address() );
+		addresses.emplace_back( endpoint.address() );
 	}
 
 	return addresses;

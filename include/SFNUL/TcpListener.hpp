@@ -8,11 +8,12 @@
 #include <deque>
 #include <SFNUL/Config.hpp>
 #include <asio/ip/tcp.hpp>
-#include <SFNUL/TcpSocket.hpp>
+#include <SFNUL/Socket.hpp>
 
 namespace sfn {
 
 class Endpoint;
+class TcpSocket;
 
 #if defined( __GNUG__ )
 #pragma GCC diagnostic push

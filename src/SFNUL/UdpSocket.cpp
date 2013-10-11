@@ -5,7 +5,8 @@
 #include <functional>
 #include <algorithm>
 #include <iostream>
-#include <SFML/Network.hpp>
+#include <SFML/System/Lock.hpp>
+#include <SFML/Network/Packet.hpp>
 #include <SFNUL/Config.hpp>
 #include <asio/buffer.hpp>
 #include <SFNUL/Endpoint.hpp>
@@ -229,7 +230,7 @@ void UdpSocket::SendTo( sf::Packet& packet, const Endpoint& endpoint ) {
 	sf::Lock lock{ m_mutex };
 
 	std::size_t size = 0;
-	const void* data = static_cast<PacketAccessor*>( &packet )->Send( size );
+	auto data = static_cast<PacketAccessor*>( &packet )->Send( size );
 
 	sf::Uint32 packet_size = htonl( static_cast<sf::Uint32>( size ) );
 

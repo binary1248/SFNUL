@@ -5,7 +5,6 @@
 #pragma once
 
 #include <memory>
-#include <SFML/Network.hpp>
 #include <SFNUL/Config.hpp>
 #include <asio/ip/tcp.hpp>
 #include <SFNUL/Socket.hpp>
@@ -106,19 +105,30 @@ public:
 	 */
 	virtual std::size_t Receive( sf::Packet& packet ) override;
 
+	/** Queue a Message up for asynchronous sending over the established TCP connection this socket is part of.
+	 * @param message Message to queue.
+	 */
+	virtual void Send( const Message& message ) override;
+
+	/** Dequeue an Message that was asynchronously received over the established TCP connection this socket is part of.
+	 * @param message Message to dequeue into.
+	 * @return Size of the Message that was dequeued. This includes the size field of the Message. If no Message could be dequeued, this method will return 0.
+	 */
+	virtual std::size_t Receive( Message& message ) override;
+
 	/** Clear the send and receive queues of this socket.
 	 */
-	void ClearBuffers();
+	virtual void ClearBuffers() override;
 
 	/** Get the number of bytes queued for sending.
 	 * @return Number of bytes queued for sending.
 	 */
-	std::size_t BytesToSend() const;
+	virtual std::size_t BytesToSend() const override;
 
 	/** Get the number of bytes queued for receiving.
 	 * @return Number of bytes queued for receiving.
 	 */
-	std::size_t BytesToReceive() const;
+	virtual std::size_t BytesToReceive() const override;
 
 	/** Set/Get the send queue warning threshold.
 	 * @param limit Threshold above which to warn the user of the send queue size.

@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <deque>
+#include <SFML/System/Thread.hpp>
 #include <SFNUL/NetworkResource.hpp>
 
 namespace sfn {
@@ -45,7 +46,7 @@ void Start( std::size_t threads ) {
 	for( std::size_t index = 0; index < threads; index++ ) {
 		auto thread = std::make_shared<sf::Thread>( [=]() { io_service->run(); } );
 		thread->launch();
-		asio_threads.push_back( thread );
+		asio_threads.emplace_back( thread );
 	}
 }
 

@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#include <SFML/System/Mutex.hpp>
 #include <SFNUL/TlsConnection.hpp>
 
 namespace sfn {
@@ -55,6 +56,10 @@ std::string TlsConnectionBase::m_diffie_hellman_p =
 std::string TlsConnectionBase::m_diffie_hellman_g =
 "04";
 
+havege_state TlsConnectionBase::m_havege_state;
+
+bool TlsConnectionBase::havege_initialized = false;
+
 void TlsConnectionBase::SetDiffieHellmanParameters( const std::string& p, const std::string& g ) {
 	m_diffie_hellman_p = p;
 	m_diffie_hellman_g = g;
@@ -106,6 +111,165 @@ void TlsKey::LoadKey( const std::string& key, const std::string& password ) {
 	if( result < 0 ) {
 		std::cerr << "SetCertificateKeyPair() Error: x509parse_key returned: " << result << "\n";
 	}
+}
+
+TlsConnectionBase::TlsConnectionBase() {
+	if( !havege_initialized ) {
+		havege_initialized = true;
+		sfn::detail::havege_init( &m_havege_state );
+	}
+
+	std::memset( &m_ssl_context, 0, sizeof( ssl_context ) );
+	std::memset( &m_ssl_session, 0, sizeof( ssl_session ) );
+
+	auto result = sfn::detail::ssl_init( &m_ssl_context );
+
+	if( result ) {
+		std::cerr << "TlsConnection() Error: ssl_init returned: " << result << "\n";
+		return;
+	}
+
+	sfn::detail::ssl_set_rng(
+		&m_ssl_context,
+		[]( void* state ) {
+			static sf::Mutex mutex;
+
+			sf::Lock lock{ mutex };
+
+			return sfn::detail::havege_rand( state );
+		},
+		&m_havege_state
+	);
+
+	static const int ciphers[] = {
+		SSL_EDH_RSA_AES_256_SHA,
+		SSL_EDH_RSA_CAMELLIA_256_SHA,
+		SSL_EDH_RSA_DES_168_SHA,
+		SSL_RSA_AES_256_SHA,
+		SSL_RSA_CAMELLIA_256_SHA,
+		SSL_RSA_AES_128_SHA,
+		SSL_RSA_CAMELLIA_128_SHA,
+		SSL_RSA_DES_168_SHA,
+		SSL_RSA_RC4_128_SHA,
+		SSL_RSA_RC4_128_MD5,
+		0
+	};
+
+	sfn::detail::ssl_set_ciphers( &m_ssl_context, ciphers );
+
+	sfn::detail::ssl_set_session( &m_ssl_context, 1, 0, &m_ssl_session );
+
+	sfn::detail::ssl_set_dh_param( &m_ssl_context, m_diffie_hellman_p.c_str(), m_diffie_hellman_g.c_str() );
+
+	// Disable session resumption for the time being.
+	// TODO: Add session resumption support.
+	sfn::detail::ssl_set_scb( &m_ssl_context, []( ssl_context* ) { return 1; }, []( ssl_context* ) { return 1; } );
+
+	sfn::detail::ssl_set_dbg(
+		&m_ssl_context,
+		[]( void* context, int message_level, const char* debug_message ) {
+			if( message_level <= *static_cast<int*>( context ) ) {
+				if(
+
+					!std::strstr( debug_message, "returned -3984 (0xfffff070)" ) &&
+
+					// Don't inform about function completions, we don't encounter hangs...
+					!std::strstr( debug_message, "<=" ) &&
+
+					!std::strstr( debug_message, "handshake\n" ) &&
+					!std::strstr( debug_message, "ssl->f_send()" ) &&
+					!std::strstr( debug_message, "ssl->f_recv()" ) &&
+					!std::strstr( debug_message, "flush output" ) &&
+					!std::strstr( debug_message, "fetch input" ) &&
+					!std::strstr( debug_message, "in_left" ) &&
+					!std::strstr( debug_message, "out_left" ) &&
+					!std::strstr( debug_message, "=> read\n" ) &&
+					!std::strstr( debug_message, "<= read\n" ) &&
+					!std::strstr( debug_message, "=> write\n" ) &&
+					!std::strstr( debug_message, "<= write\n" ) &&
+
+					true
+				) {
+					std::cerr << debug_message;
+				}
+			}
+		},
+		&m_debug_level
+	);
+}
+
+TlsConnectionBase::~TlsConnectionBase() {
+	sfn::detail::ssl_free( &m_ssl_context );
+
+	memset( &m_ssl_context, 0, sizeof( ssl_context ) );
+}
+
+void TlsConnectionBase::SetDebugLevel( int level ) {
+	sf::Lock lock{ GetMutex() };
+
+	m_debug_level = level;
+}
+
+void TlsConnectionBase::AddTrustedCertificate( TlsCertificate::Ptr certificate ) {
+	sf::Lock lock{ GetMutex() };
+
+	m_ca_cert = certificate;
+
+	// We don't support client certificate authentication yet.
+	// TODO: Add client certificate authentication.
+	sfn::detail::ssl_set_ca_chain( &m_ssl_context, &( m_ca_cert->m_cert ), nullptr );
+}
+
+void TlsConnectionBase::SetPeerCommonName( const std::string& name ) {
+	sf::Lock lock{ GetMutex() };
+
+	m_common_name = name;
+}
+
+void TlsConnectionBase::SetCertificateKeyPair( TlsCertificate::Ptr certificate, TlsKey::Ptr key ) {
+	sf::Lock lock{ GetMutex() };
+
+	m_server_cert = certificate;
+	m_key = key;
+
+	sfn::detail::ssl_set_own_cert( &m_ssl_context, &( m_server_cert->m_cert ), &( m_key->m_key ) );
+
+	// For now we only support self-signed certificates.
+	// TODO: Add proper certificate chain support for servers.
+	sfn::detail::ssl_set_ca_chain( &m_ssl_context, &( m_server_cert->m_cert ), nullptr );
+
+	if( require_certificate_key ) {
+		require_certificate_key = false;
+
+		OnSentProxy();
+		OnReceivedProxy();
+	}
+}
+
+TlsVerificationResult TlsConnectionBase::GetVerificationResult() const {
+	sf::Lock lock{ GetMutex() };
+
+	auto verify_result = sfn::detail::ssl_get_verify_result( &m_ssl_context );
+
+	TlsVerificationResult result = TlsVerificationResult::PASSED;
+
+	if( verify_result & BADCERT_EXPIRED ) {
+		result |= TlsVerificationResult::EXPIRED;
+	}
+
+	if( verify_result & BADCERT_REVOKED ) {
+		result |= TlsVerificationResult::REVOKED;
+	}
+
+	if( verify_result & BADCERT_CN_MISMATCH ) {
+		result |= TlsVerificationResult::CN_MISMATCH;
+	}
+
+	if( verify_result & BADCERT_NOT_TRUSTED ) {
+		result |= TlsVerificationResult::NOT_TRUSTED;
+	}
+
+	return result;
 }
 
 }

@@ -6,7 +6,13 @@
 
 #include <SFNUL/Config.hpp>
 
+namespace sf {
+class Packet;
+}
+
 namespace sfn {
+
+class Endpoint;
 
 /** Transport interface.
  */
@@ -17,6 +23,15 @@ public:
 	/** Destructor.
 	 */
 	virtual ~Transport();
+
+	/** Get the local endpoint of the established connection this transport is part of.
+	 * @return Local endpoint of the established connection this transport is part of.
+	 */
+	virtual Endpoint GetLocalEndpoint() const = 0;
+
+	/** Clear the send and receive queues of this transport.
+	 */
+	virtual void ClearBuffers() = 0;
 
 protected:
 

@@ -5,11 +5,13 @@
 #include <functional>
 #include <algorithm>
 #include <iostream>
-#include <SFML/Network.hpp>
+#include <SFML/System/Lock.hpp>
+#include <SFML/Network/Packet.hpp>
 #include <SFNUL/Config.hpp>
 #include <asio/buffer.hpp>
 #include <SFNUL/Endpoint.hpp>
 #include <SFNUL/TcpSocket.hpp>
+#include <SFNUL/Message.hpp>
 
 namespace sfn {
 namespace {
@@ -386,7 +388,7 @@ void TcpSocket::Send( sf::Packet& packet ) {
 	sf::Lock lock{ m_mutex };
 
 	std::size_t size = 0;
-	const void* data = static_cast<PacketAccessor*>( &packet )->Send( size );
+	auto data = static_cast<PacketAccessor*>( &packet )->Send( size );
 
 	sf::Uint32 packet_size = htonl( static_cast<sf::Uint32>( size ) );
 
@@ -430,7 +432,58 @@ std::size_t TcpSocket::Receive( sf::Packet& packet ) {
 
 	static_cast<PacketAccessor*>( &packet )->Receive( &data_block[0], packet_size );
 
+	m_receive_buffer.erase( m_receive_buffer.begin(), m_receive_buffer.begin() + packet_size );
+
 	return sizeof( packet_size ) + packet_size;
+}
+
+void TcpSocket::Send( const Message& message ) {
+	sf::Lock lock{ m_mutex };
+
+	auto message_size = message.GetSize();
+
+	std::vector<char> data_block( sizeof( message_size ) + message_size );
+
+	std::memcpy( &data_block[0], &message_size, sizeof( message_size ) );
+
+	if( message_size ) {
+		const auto& message_data = message.GetBuffer();
+		std::copy( std::begin( message_data ), std::end( message_data ), std::begin( data_block ) + sizeof( message_size ) );
+	}
+
+	Send( &data_block[0], sizeof( message_size ) + static_cast<std::size_t>( message_size ) );
+}
+
+std::size_t TcpSocket::Receive( Message& message ) {
+	sf::Lock lock{ m_mutex };
+
+	message.Clear();
+
+	Message::size_type message_size = 0;
+
+	if( m_receive_buffer.size() < sizeof( message_size ) ) {
+		return 0;
+	}
+
+	for( std::size_t index = 0; index < sizeof( message_size ); index++ ) {
+		reinterpret_cast<char*>( &message_size )[index] = m_receive_buffer[index];
+	}
+
+	if( m_receive_buffer.size() < sizeof( message_size ) + message_size ) {
+		return 0;
+	}
+
+	std::vector<char> data_block( message_size );
+
+	m_receive_buffer.erase( m_receive_buffer.begin(), m_receive_buffer.begin() + sizeof( message_size ) );
+
+	std::copy_n( m_receive_buffer.begin(), message_size, data_block.begin() );
+
+	message.Append( data_block );
+
+	m_receive_buffer.erase( m_receive_buffer.begin(), m_receive_buffer.begin() + message_size );
+
+	return sizeof( message_size ) + message_size;
 }
 
 bool TcpSocket::IsConnected() const {
