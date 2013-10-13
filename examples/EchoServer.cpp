@@ -1,10 +1,11 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 #include <iostream>
-#include <SFML/Window.hpp>
 #include <SFNUL.hpp>
 
 int main() {
-	sf::Window window{ sf::VideoMode{ 300, 100 }, "SFNUL Echo Server" };
-
 	// Create our UDP socket.
 	auto socket = sfn::UdpSocket::Create();
 
@@ -14,15 +15,12 @@ int main() {
 	// Start a network processing thread.
 	sfn::Start();
 
-	while( window.isOpen() ) {
-		sf::Event event;
+	auto exit = false;
+	std::cout << "Press ENTER to exit.\n";
+	// Don't use sfn::Thread for your own projects, it is not what you think it is.
+	sfn::Thread exit_handler( [&]() { std::cin.get(); exit = true; } );
 
-		if( window.pollEvent( event ) ) {
-			if( event.type == sf::Event::Closed ) {
-				window.close();
-			}
-		}
-
+	while( !exit ) {
 		std::array<char, 1024> reply;
 
 		// Get the endpoints with data pending in their receive queue.
@@ -35,8 +33,6 @@ int main() {
 			// ... and send it right back to them.
 			socket->SendTo( reply.data(), reply_size, pe );
 		}
-
-		sf::sleep( sf::milliseconds( 20 ) );
 	}
 
 	// Close the socket.

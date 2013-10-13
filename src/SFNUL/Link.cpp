@@ -4,22 +4,12 @@
 
 #include <cassert>
 #include <iostream>
-#include <SFML/Network/Packet.hpp>
 #include <SFNUL/Endpoint.hpp>
 #include <SFNUL/Link.hpp>
 #include <SFNUL/Synchronizer.hpp>
 #include <SFNUL/Message.hpp>
 
 namespace sfn {
-
-namespace {
-struct PacketAccessor : public sf::Packet {
-	const void* Send( std::size_t& size ) { return onSend( size ); }
-	void Receive( const void* data, std::size_t size ) { onReceive( data, size ); }
-};
-}
-
-const LinkBase::segment_size_type LinkBase::m_maximum_segment_size = 65535;
 
 void LinkBase::Connect( const Endpoint& endpoint ) {
 	GetInternalTransport()->Connect( endpoint );
@@ -55,49 +45,37 @@ Endpoint LinkBase::GetRemoteEndpoint() const {
 	return GetInternalTransport()->GetRemoteEndpoint();
 }
 
-void LinkBase::Send( const void* data, std::size_t size ) {
-	Send( 0, data, size );
+bool LinkBase::Send( const void* data, std::size_t size ) {
+	return Send( 0, data, size );
 }
 
 std::size_t LinkBase::Receive( void* data, std::size_t size ) {
 	return Receive( 0, data, size );
 }
 
-void LinkBase::Send( sf::Packet& packet ) {
-	Send( 0, packet );
-}
-
-std::size_t LinkBase::Receive( sf::Packet& packet ) {
-	return Receive( 0, packet );
-}
-
-void LinkBase::Send( const Message& message ) {
-	Send( 0, message );
+bool LinkBase::Send( const Message& message ) {
+	return Send( 0, message );
 }
 
 std::size_t LinkBase::Receive( Message& message ) {
 	return Receive( 0, message );
 }
 
-void LinkBase::Send( stream_id_type stream_id, const void* data, std::size_t size ) {
-	std::size_t sent = 0;
+bool LinkBase::Send( stream_id_type stream_id, const void* data, std::size_t size ) {
+	auto segment_size = static_cast<segment_size_type>( size );
 
-	// Split data up into segments.
-	while( size ) {
-		// Send stream id.
-		GetInternalTransport()->Send( &stream_id, sizeof( stream_id ) );
+	std::vector<char> data_block( size + sizeof( stream_id ) + sizeof( segment_size ) );
 
-		auto segment_size = static_cast<segment_size_type>( std::min( static_cast<std::size_t>( m_maximum_segment_size ), size ) );
+	// Send stream id.
+	std::memcpy( data_block.data(), &stream_id, sizeof( stream_id ) );
 
-		// Send segment size.
-		GetInternalTransport()->Send( &segment_size, sizeof( segment_size ) );
+	// Send segment size.
+	std::memcpy( data_block.data() + sizeof( stream_id ), &segment_size, sizeof( segment_size ) );
 
-		// Send segment data.
-		GetInternalTransport()->Send( static_cast<const char*>( data ) + sent, segment_size );
+	// Send segment data.
+	std::memcpy( data_block.data() + sizeof( stream_id ) + sizeof( segment_size ), data, size );
 
-		sent += segment_size;
-		size -= segment_size;
-	}
+	return GetInternalTransport()->Send( data_block.data(), data_block.size() );
 }
 
 std::size_t LinkBase::Receive( stream_id_type stream_id, void* data, std::size_t size ) {
@@ -124,71 +102,6 @@ std::size_t LinkBase::Receive( stream_id_type stream_id, void* data, std::size_t
 	}
 
 	auto result = GetInternalTransport()->Receive( data, std::min( size, static_cast<std::size_t>( m_segment_remaining ) ) );
-
-	assert( result <= m_maximum_segment_size );
-
-	m_segment_remaining -= static_cast<segment_size_type>( result );
-
-	if( !m_segment_remaining ) {
-		m_segment_active = false;
-	}
-
-	return result;
-}
-
-void LinkBase::Send( stream_id_type stream_id, sf::Packet& packet ) {
-	std::size_t size = 0;
-	auto data = static_cast<PacketAccessor*>( &packet )->Send( size );
-
-	sf::Uint32 packet_size = htonl( static_cast<sf::Uint32>( size ) );
-
-	std::vector<char> data_block( sizeof( packet_size ) + size );
-
-	std::memcpy( &data_block[0], &packet_size, sizeof( packet_size ) );
-
-	if( size ) {
-		std::memcpy( &data_block[0] + sizeof( packet_size ), data, size );
-	}
-
-	if( sizeof( packet_size ) + size > m_maximum_segment_size ) {
-		std::cerr << "sf::Packets larger than " << m_maximum_segment_size - sizeof( packet_size ) << " bytes unsupported.\n";
-		return;
-	}
-
-	Send( stream_id, &data_block[0], sizeof( packet_size ) + size );
-}
-
-std::size_t LinkBase::Receive( stream_id_type stream_id, sf::Packet& packet ) {
-	if( m_segment_active && ( m_current_stream_reader != stream_id ) ) {
-		return 0;
-	}
-
-	if( !m_segment_active ) {
-		if( GetInternalTransport()->BytesToReceive() < sizeof( m_current_stream_reader ) + sizeof( m_segment_remaining ) ) {
-			return 0;
-		}
-
-		auto stream_id_received = GetInternalTransport()->Receive( &m_current_stream_reader, sizeof( m_current_stream_reader ) );
-		assert( stream_id_received == sizeof( m_current_stream_reader ) );
-
-		auto segment_remaining_received = GetInternalTransport()->Receive( &m_segment_remaining, sizeof( m_segment_remaining ) );
-		assert( segment_remaining_received == sizeof( m_segment_remaining ) );
-
-		m_segment_active = true;
-
-		if( m_current_stream_reader != stream_id ) {
-			return 0;
-		}
-	}
-
-	if( GetInternalTransport()->BytesToReceive() < m_segment_remaining ) {
-		return 0;
-	}
-
-	auto result = GetInternalTransport()->Receive( packet );
-
-	assert( result <= m_maximum_segment_size );
-	assert( result == m_segment_remaining );
 
 	m_segment_remaining -= static_cast<segment_size_type>( result );
 
@@ -228,7 +141,6 @@ std::size_t LinkBase::Receive( stream_id_type stream_id, Message& message ) {
 
 	auto result = GetInternalTransport()->Receive( message );
 
-	assert( result <= m_maximum_segment_size );
 	assert( result == m_segment_remaining );
 
 	m_segment_remaining -= static_cast<segment_size_type>( result );
@@ -240,7 +152,7 @@ std::size_t LinkBase::Receive( stream_id_type stream_id, Message& message ) {
 	return result;
 }
 
-void LinkBase::Send( stream_id_type stream_id, const Message& message ) {
+bool LinkBase::Send( stream_id_type stream_id, const Message& message ) {
 	auto message_size = message.GetSize();
 
 	std::vector<char> data_block( sizeof( message_size ) + message_size );
@@ -252,12 +164,7 @@ void LinkBase::Send( stream_id_type stream_id, const Message& message ) {
 		std::copy( std::begin( message_data ), std::end( message_data ), std::begin( data_block ) + sizeof( message_size ) );
 	}
 
-	if( sizeof( message_size ) + message_size > m_maximum_segment_size ) {
-		std::cerr << "Messages larger than " << m_maximum_segment_size - sizeof( message_size ) << " bytes unsupported.\n";
-		return;
-	}
-
-	Send( stream_id, &data_block[0], sizeof( message_size ) + static_cast<std::size_t>( message_size ) );
+	return Send( stream_id, &data_block[0], sizeof( message_size ) + static_cast<std::size_t>( message_size ) );
 }
 
 void LinkBase::SetInternalSocket( void* /*internal_socket*/ ) {

@@ -1,11 +1,11 @@
-#include <cstring>
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 #include <iostream>
-#include <SFML/Window.hpp>
 #include <SFNUL.hpp>
 
 int main() {
-	sf::Window window{ sf::VideoMode{ 300, 100 }, "SFNUL DNS Query" };
-
 	// Create our UDP socket.
 	auto socket = sfn::UdpSocket::Create();
 
@@ -25,11 +25,11 @@ int main() {
 	request += { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 	// Name part 1
-	request += static_cast<char>( strlen( "sfml-dev" ) );
-	request += "sfml-dev";
+	request += static_cast<char>( 4 ); // Length
+	request += "ietf";
 
 	// Name part 2
-	request += static_cast<char>( strlen( "org" ) );
+	request += static_cast<char>( 3 ); // Length
 	request += "org";
 
 	// Name terminator
@@ -50,15 +50,7 @@ int main() {
 	// Start a network processing thread.
 	sfn::Start();
 
-	while( window.isOpen() ) {
-		sf::Event event;
-
-		if( window.pollEvent( event ) ) {
-			if( event.type == sf::Event::Closed ) {
-				window.close();
-			}
-		}
-
+	while( true ) {
 		std::array<char, 1024> reply;
 
 		// Dequeue any data we receive from the Google DNS server.
@@ -70,9 +62,9 @@ int main() {
 			                         << static_cast<unsigned short>( reply[reply_size - 3] & 0xff ) << "."
 			                         << static_cast<unsigned short>( reply[reply_size - 2] & 0xff ) << "."
 			                         << static_cast<unsigned short>( reply[reply_size - 1] & 0xff ) << "\n";
-		}
 
-		sf::sleep( sf::milliseconds( 20 ) );
+			break;
+		}
 	}
 
 	// Close the socket.

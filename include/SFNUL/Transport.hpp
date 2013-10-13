@@ -6,10 +6,6 @@
 
 #include <SFNUL/Config.hpp>
 
-namespace sf {
-class Packet;
-}
-
 namespace sfn {
 
 class Endpoint;

@@ -8,8 +8,8 @@
 #include <deque>
 #include <tuple>
 #include <map>
+#include <chrono>
 #include <http_parser.h>
-#include <SFML/System/Clock.hpp>
 #include <SFNUL/Config.hpp>
 #include <SFNUL/HTTP.hpp>
 #include <SFNUL/TcpSocket.hpp>
@@ -22,7 +22,7 @@ namespace sfn {
 
 class SFNUL_API HTTPClientPipeline {
 public:
-	HTTPClientPipeline( Endpoint endpoint, bool secure, const sf::Time& timeout );
+	HTTPClientPipeline( Endpoint endpoint, bool secure, const std::chrono::seconds& timeout );
 
 	HTTPClientPipeline( HTTPClientPipeline&& ) = default;
 
@@ -79,9 +79,9 @@ private:
 	std::string m_last_header_field{};
 	bool m_header_field_complete{ false };
 
-	sf::Clock m_timeout_timer{};
+	std::chrono::steady_clock::time_point m_last_activity{ std::chrono::steady_clock::now() };
 
-	sf::Time m_timeout_value;
+	std::chrono::seconds m_timeout_value;
 };
 
 /// @endcond
@@ -114,9 +114,9 @@ public:
 
 	/** Set the timeout value a connection is allowed to be idle for before being closed. Default: 15 seconds. 0 to disable.
 	 * This will only have effect on new connections, so set before issuing any requests.
-	 * @param timeout Timeout value.
+	 * @param timeout Timeout value in seconds.
 	 */
-	void SetTimeoutValue( const sf::Time& timeout );
+	void SetTimeoutValue( const std::chrono::seconds& timeout );
 
 	/** Update the client and handle any pending data/operations.
 	 */
@@ -127,7 +127,7 @@ private:
 	std::list<Pipeline> m_pipelines{};
 	std::map<std::string, TlsCertificate::Ptr> m_certificates{};
 
-	sf::Time m_timeout_value{ sf::seconds( 15 ) };
+	std::chrono::seconds m_timeout_value{ 15 };
 };
 
 }

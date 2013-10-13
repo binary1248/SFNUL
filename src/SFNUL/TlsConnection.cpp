@@ -2,8 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include <SFML/System/Mutex.hpp>
 #include <SFNUL/TlsConnection.hpp>
+#include <SFNUL/Concurrency.hpp>
 
 namespace sfn {
 
@@ -30,6 +30,37 @@ void ssl_free(ssl_context * ssl) { ::ssl_free( ssl ); }
 
 void havege_init(havege_state * hs) { ::havege_init( hs ); }
 int havege_rand(void *p_rng) { return ::havege_rand( p_rng ); }
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Weffc++"
+#endif
+
+class SFNUL_API Havege : public Atomic {
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic pop
+#endif
+
+public:
+	Havege();
+
+	int Rand();
+private:
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
+
+	havege_state m_havege_state{};
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic pop
+#endif
+
+};
+
 }
 /// @endcond
 
@@ -56,9 +87,17 @@ std::string TlsConnectionBase::m_diffie_hellman_p =
 std::string TlsConnectionBase::m_diffie_hellman_g =
 "04";
 
-havege_state TlsConnectionBase::m_havege_state;
+sfn::detail::Havege::Havege() {
+	auto lock = AcquireLock();
 
-bool TlsConnectionBase::havege_initialized = false;
+	sfn::detail::havege_init( &m_havege_state );
+}
+
+int sfn::detail::Havege::Rand() {
+	auto lock = AcquireLock();
+
+	return sfn::detail::havege_rand( &m_havege_state );
+}
 
 void TlsConnectionBase::SetDiffieHellmanParameters( const std::string& p, const std::string& g ) {
 	m_diffie_hellman_p = p;
@@ -114,11 +153,6 @@ void TlsKey::LoadKey( const std::string& key, const std::string& password ) {
 }
 
 TlsConnectionBase::TlsConnectionBase() {
-	if( !havege_initialized ) {
-		havege_initialized = true;
-		sfn::detail::havege_init( &m_havege_state );
-	}
-
 	std::memset( &m_ssl_context, 0, sizeof( ssl_context ) );
 	std::memset( &m_ssl_session, 0, sizeof( ssl_session ) );
 
@@ -131,14 +165,12 @@ TlsConnectionBase::TlsConnectionBase() {
 
 	sfn::detail::ssl_set_rng(
 		&m_ssl_context,
-		[]( void* state ) {
-			static sf::Mutex mutex;
+		[]( void* /*unused*/ ) {
+			static sfn::detail::Havege havege;
 
-			sf::Lock lock{ mutex };
-
-			return sfn::detail::havege_rand( state );
+			return havege.Rand();
 		},
-		&m_havege_state
+		nullptr
 	);
 
 	static const int ciphers[] = {
@@ -205,14 +237,10 @@ TlsConnectionBase::~TlsConnectionBase() {
 }
 
 void TlsConnectionBase::SetDebugLevel( int level ) {
-	sf::Lock lock{ GetMutex() };
-
 	m_debug_level = level;
 }
 
 void TlsConnectionBase::AddTrustedCertificate( TlsCertificate::Ptr certificate ) {
-	sf::Lock lock{ GetMutex() };
-
 	m_ca_cert = certificate;
 
 	// We don't support client certificate authentication yet.
@@ -221,14 +249,10 @@ void TlsConnectionBase::AddTrustedCertificate( TlsCertificate::Ptr certificate )
 }
 
 void TlsConnectionBase::SetPeerCommonName( const std::string& name ) {
-	sf::Lock lock{ GetMutex() };
-
 	m_common_name = name;
 }
 
 void TlsConnectionBase::SetCertificateKeyPair( TlsCertificate::Ptr certificate, TlsKey::Ptr key ) {
-	sf::Lock lock{ GetMutex() };
-
 	m_server_cert = certificate;
 	m_key = key;
 
@@ -247,8 +271,6 @@ void TlsConnectionBase::SetCertificateKeyPair( TlsCertificate::Ptr certificate, 
 }
 
 TlsVerificationResult TlsConnectionBase::GetVerificationResult() const {
-	sf::Lock lock{ GetMutex() };
-
 	auto verify_result = sfn::detail::ssl_get_verify_result( &m_ssl_context );
 
 	TlsVerificationResult result = TlsVerificationResult::PASSED;

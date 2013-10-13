@@ -67,60 +67,12 @@ public:
 	explicit SyncedType( SyncedObject* owner, T value );
 
 	template<typename S>
-	auto operator=( S other ) -> decltype( this->m_value = other );
+	void SetValue( T value );
 
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Weffc++"
-#endif
-
-	auto operator++() -> decltype( this->m_value++ );
-
-	auto operator++( int ) -> decltype( ++( this->m_value ) );
-
-	auto operator--() -> decltype( this->m_value-- );
-
-	auto operator--( int ) -> decltype( --( this->m_value ) );
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
+	T GetValue() const;
 
 	template<typename S>
-	auto operator<<( S other ) -> decltype( this->m_value << other );
-
-	template<typename S>
-	auto operator>>( S other ) -> decltype( this->m_value >> other );
-
-	template<typename S>
-	auto operator+=( S other ) -> decltype( this->m_value += other );
-
-	template<typename S>
-	auto operator-=( S other ) -> decltype( this->m_value -= other );
-
-	template<typename S>
-	auto operator*=( S other ) -> decltype( this->m_value *= other );
-
-	template<typename S>
-	auto operator/=( S other ) -> decltype( this->m_value /= other );
-
-	template<typename S>
-	auto operator%=( S other ) -> decltype( this->m_value %= other );
-
-	template<typename S>
-	auto operator&=( S other ) -> decltype( this->m_value &= other );
-
-	template<typename S>
-	auto operator|=( S other ) -> decltype( this->m_value |= other );
-
-	template<typename S>
-	auto operator^=( S other ) -> decltype( this->m_value ^= other );
-
-	template<typename S>
-	auto operator<<=( S other ) -> decltype( this->m_value <<= other );
-
-	template<typename S>
-	auto operator>>=( S other ) -> decltype( this->m_value >>= other );
+	SyncedType<T>& operator=( S other );
 
 	template<typename S>
 	const auto operator[]( S other ) const -> decltype( this->m_value[other] );
@@ -135,6 +87,63 @@ protected:
 
 	virtual void Deserialize( Message& message );
 };
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Weffc++"
+#endif
+
+template<typename T>
+auto operator++( T synced_type ) -> decltype( synced_type = ( ++synced_type.GetValue() ) );
+
+template<typename T>
+auto operator++( T synced_type, int ) -> decltype( synced_type = ( synced_type.GetValue()++ ) );
+
+template<typename T>
+auto operator--( T synced_type ) -> decltype( synced_type = ( --synced_type.GetValue() ) );
+
+template<typename T>
+auto operator--( T synced_type, int ) -> decltype( synced_type = ( synced_type.GetValue()-- ) );
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic pop
+#endif
+
+template<typename T, typename S>
+auto operator<<( T synced_type, S other ) -> decltype( synced_type.GetValue() << other );
+
+template<typename T, typename S>
+auto operator>>( T synced_type, S other ) -> decltype( synced_type.GetValue() >> other );
+
+template<typename T, typename S>
+auto operator+=( T& synced_type, S other ) -> decltype( synced_type = synced_type + other );
+
+template<typename T, typename S>
+auto operator-=( T& synced_type, S other ) -> decltype( synced_type = synced_type - other );
+
+template<typename T, typename S>
+auto operator*=( T& synced_type, S other ) -> decltype( synced_type = synced_type * other );
+
+template<typename T, typename S>
+auto operator/=( T& synced_type, S other ) -> decltype( synced_type = synced_type / other );
+
+template<typename T, typename S>
+auto operator%=( T& synced_type, S other ) -> decltype( synced_type = synced_type % other );
+
+template<typename T, typename S>
+auto operator&=( T& synced_type, S other ) -> decltype( synced_type = synced_type & other );
+
+template<typename T, typename S>
+auto operator|=( T& synced_type, S other ) -> decltype( synced_type = synced_type | other );
+
+template<typename T, typename S>
+auto operator^=( T& synced_type, S other ) -> decltype( synced_type = synced_type ^ other );
+
+template<typename T, typename S>
+auto operator<<=( T& synced_type, S other ) -> decltype( synced_type = synced_type << other );
+
+template<typename T, typename S>
+auto operator>>=( T& synced_type, S other ) -> decltype( synced_type = synced_type >> other );
 
 }
 

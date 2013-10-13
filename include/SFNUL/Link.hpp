@@ -57,15 +57,17 @@ public:
 	/** Queue data up for asynchronous sending over the established connection this link is part of.
 	 * @param data Pointer to a block of memory containing the data to queue.
 	 * @param size Size of the block of memory containing the data to queue.
+	 * @return true if the data could be queued. If false is returned, retry again later.
 	 */
-	virtual void Send( const void* data, std::size_t size ) override;
+	virtual bool Send( const void* data, std::size_t size ) override;
 
 	/** Queue data up for asynchronous sending over the established connection this link is part of.
 	 * @param stream_id Identifier of the stream to send on.
 	 * @param data Pointer to a block of memory containing the data to queue.
 	 * @param size Size of the block of memory containing the data to queue.
+	 * @return true if the data could be queued. If false is returned, retry again later.
 	 */
-	void Send( stream_id_type stream_id, const void* data, std::size_t size );
+	bool Send( stream_id_type stream_id, const void* data, std::size_t size );
 
 	/** Dequeue data that was asynchronously received over the established connection this link is part of.
 	 * @param data Pointer to a block of memory that will contain the data to dequeue.
@@ -82,40 +84,18 @@ public:
 	 */
 	std::size_t Receive( stream_id_type stream_id, void* data, std::size_t size );
 
-	/** Queue an sf::Packet up for asynchronous sending over the established connection this link is part of.
-	 * @param packet sf::Packet to queue.
-	 */
-	virtual void Send( sf::Packet& packet ) override;
-
-	/** Queue an sf::Packet up on a stream for asynchronous sending over the established connection this link is part of.
-	 * @param stream_id Identifier of the stream to send on.
-	 * @param packet sf::Packet to queue.
-	 */
-	void Send( stream_id_type stream_id, sf::Packet& packet );
-
-	/** Dequeue an sf::Packet that was asynchronously received over the established connection this link is part of.
-	 * @param packet sf::Packet to dequeue into.
-	 * @return Size of the sf::Packet that was dequeued. This includes the size field of the packet. If no packet could be dequeued, this method will return 0.
-	 */
-	virtual std::size_t Receive( sf::Packet& packet ) override;
-
-	/** Dequeue an sf::Packet that was asynchronously received over the established connection this link is part of.
-	 * @param stream_id Identifier of the stream to dequeue from.
-	 * @param packet sf::Packet to dequeue into.
-	 * @return Size of the sf::Packet that was dequeued. This includes the size field of the packet. If no packet could be dequeued, this method will return 0.
-	 */
-	std::size_t Receive( stream_id_type stream_id, sf::Packet& packet );
-
 	/** Queue a Message up for asynchronous sending over the established connection this link is part of.
 	 * @param message Message to queue.
+	 * @return true if the message could be queued. If false is returned, retry again later.
 	 */
-	virtual void Send( const Message& message ) override;
+	virtual bool Send( const Message& message ) override;
 
 	/** Queue a Message up for asynchronous sending over the established connection this link is part of.
 	 * @param stream_id Identifier of the stream to send on.
 	 * @param message Message to queue.
+	 * @return true if the message could be queued. If false is returned, retry again later.
 	 */
-	void Send( stream_id_type stream_id, const Message& message );
+	bool Send( stream_id_type stream_id, const Message& message );
 
 	/** Dequeue an Message that was asynchronously received over the established connection this link is part of.
 	 * @param message Message to dequeue into.
@@ -153,14 +133,13 @@ protected:
 	virtual ReliableTransport* GetInternalTransport() = 0;
 	virtual const ReliableTransport* GetInternalTransport() const = 0;
 
+	bool m_segment_active{ false };
+
 private:
 	typedef Uint32 segment_size_type;
-	bool m_segment_active{ false };
 
 	stream_id_type m_current_stream_reader = 0;
 	segment_size_type m_segment_remaining = 0;
-
-	static const segment_size_type m_maximum_segment_size;
 };
 
 template<typename T>
@@ -175,8 +154,6 @@ public:
 
 	std::shared_ptr<T> GetTransport();
 	std::shared_ptr<const T> GetTransport() const;
-
-	operator bool() const;
 
 protected:
 

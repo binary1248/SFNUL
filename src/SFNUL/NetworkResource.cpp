@@ -4,22 +4,21 @@
 
 #include <iostream>
 #include <deque>
-#include <SFML/System/Thread.hpp>
 #include <SFNUL/NetworkResource.hpp>
 
 namespace sfn {
 
 namespace {
-	std::deque<std::shared_ptr<sf::Thread>> asio_threads;
+	std::deque<std::shared_ptr<Thread>> asio_threads;
 	std::shared_ptr<asio::io_service::work> asio_work;
 }
 
 std::weak_ptr<asio::io_service> NetworkResource::m_shared_io_service;
 
 NetworkResource::NetworkResource() :
+	Atomic{},
 	m_io_service{ m_shared_io_service.expired() ? std::make_shared<asio::io_service>() : m_shared_io_service.lock() },
-	m_strand{ *m_io_service },
-	m_mutex{}
+	m_strand{ *m_io_service }
 {
 	if( m_shared_io_service.expired() ) {
 		m_shared_io_service = m_io_service;
@@ -44,9 +43,7 @@ void Start( std::size_t threads ) {
 	asio_work = std::make_shared<asio::io_service::work>( *io_service );
 
 	for( std::size_t index = 0; index < threads; index++ ) {
-		auto thread = std::make_shared<sf::Thread>( [=]() { io_service->run(); } );
-		thread->launch();
-		asio_threads.emplace_back( thread );
+		asio_threads.emplace_back( std::make_shared<Thread>( [=]() { io_service->run(); } ) );
 	}
 }
 
@@ -60,13 +57,9 @@ void Stop() {
 	asio_work.reset();
 	io_service->stop();
 
-	for( auto t : asio_threads ) {
-		t->wait();
-	}
+	asio_threads.clear();
 
 	io_service->reset();
-
-	asio_threads.clear();
 }
 
 }

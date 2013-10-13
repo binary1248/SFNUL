@@ -203,8 +203,6 @@ protected:
 	TlsConnectionBase();
 	~TlsConnectionBase();
 
-	virtual sf::Mutex& GetMutex() const = 0;
-
 	virtual void OnSentProxy() = 0;
 	virtual void OnReceivedProxy() = 0;
 
@@ -224,9 +222,6 @@ protected:
 private:
 	static std::string m_diffie_hellman_p;
 	static std::string m_diffie_hellman_g;
-
-	static bool havege_initialized;
-	static havege_state m_havege_state;
 
 #if defined( __GNUG__ )
 #pragma GCC diagnostic push
@@ -310,8 +305,9 @@ public:
 	/** Queue data up for asynchronous sending over the connection.
 	 * @param data Pointer to a block of memory containing the data to queue.
 	 * @param size Size of the block of memory containing the data to queue.
+	 * @return true if the data could be queued. If false is returned, retry again later.
 	 */
-	virtual void Send( const void* data, std::size_t size ) override;
+	virtual bool Send( const void* data, std::size_t size ) override;
 
 	/** Dequeue data that was asynchronously received over the connection.
 	 * @param data Pointer to a block of memory that will contain the data to dequeue.
@@ -320,21 +316,11 @@ public:
 	 */
 	virtual std::size_t Receive( void* data, std::size_t size ) override;
 
-	/** Queue an sf::Packet up for asynchronous sending over the connection.
-	 * @param packet sf::Packet to queue.
-	 */
-	virtual void Send( sf::Packet& packet ) override;
-
-	/** Dequeue an sf::Packet that was asynchronously received over the connection.
-	 * @param packet sf::Packet to dequeue into.
-	 * @return Size of the sf::Packet that was dequeued. This includes the size field of the packet. If no packet could be dequeued, this method will return 0.
-	 */
-	virtual std::size_t Receive( sf::Packet& packet ) override;
-
 	/** Queue a Message up for asynchronous sending over the connection.
 	 * @param message Message to queue.
+	 * @return true if the message could be queued. If false is returned, retry again later.
 	 */
-	virtual void Send( const Message& message ) override;
+	virtual bool Send( const Message& message ) override;
 
 	/** Dequeue an Message that was asynchronously received over the connection.
 	 * @param message Message to dequeue into.
@@ -377,8 +363,6 @@ protected:
 	/** Used to inform subclasses that the transport has disconnected.
 	 */
 	virtual void OnDisconnected() override;
-
-	virtual sf::Mutex& GetMutex() const override;
 
 	virtual void OnSentProxy() override;
 	virtual void OnReceivedProxy() override;

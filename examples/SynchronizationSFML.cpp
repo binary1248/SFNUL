@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <random>
+#include <SFML/Graphics.hpp>
 #include <SFNUL.hpp>
 
 // This is an example of a SyncedObject.
@@ -17,8 +18,9 @@ public:
 	// All Synced member fields MUST be initialized with ( this ) or ( this, value ).
 	Coordinate() :
 		SyncedObject{},
-		x{ this, 300 },
-		y{ this, 200 }
+		x{ this, 300.f },
+		y{ this, 200.f },
+		color{ this, sf::Color::White }
 	{
 	}
 
@@ -38,13 +40,15 @@ public:
 	Coordinate( const Coordinate& coordinate ) :
 		SyncedObject{},
 		x{ this, coordinate.x },
-		y{ this, coordinate.y }
+		y{ this, coordinate.y },
+		color{ this, coordinate.color }
 	{
 	}
 
 	Coordinate& operator=( const Coordinate& coordinate ) {
 		x = coordinate.x;
 		y = coordinate.y;
+		color = coordinate.color;
 
 		return *this;
 	}
@@ -61,7 +65,8 @@ public:
 	Coordinate( Coordinate&& coordinate ) :
 		sfn::SyncedObject{ std::forward<sfn::SyncedObject>( coordinate ) },
 		x{ this, coordinate.x },
-		y{ this, coordinate.y }
+		y{ this, coordinate.y },
+		color{ this, coordinate.color }
 	{
 	}
 
@@ -70,6 +75,7 @@ public:
 
 		x = coordinate.x;
 		y = coordinate.y;
+		color = coordinate.color;
 
 		return *this;
 	}
@@ -90,23 +96,44 @@ public:
 	// SyncedFloat, SyncedUint16, SyncedBool, etc.
 	// It is essential that the ordering of these members stays the same
 	// on all systems or they won't get properly synchronized.
-	sfn::SyncedInt32 x;
-	sfn::SyncedInt32 y;
+	sfn::SyncedFloat x;
+	sfn::SyncedFloat y;
+	sfn::SyncedType<sf::Color> color;
+
+	// SFML Visualisation part...
+	void Draw( sf::RenderWindow& window ) {
+		shape.setPosition( x, y );
+		shape.setFillColor( color );
+		window.draw( shape );
+	}
+
+	// This object is not synchronized.
+	sf::CircleShape shape{ 20.f, 20 };
 };
 
 // Our Coordinate object type id.
 const Coordinate::object_type_id_type Coordinate::type_id = 0x1337;
 
-int main( int /*argc*/, char** argv ) {
-	auto exit = false;
-	std::cout << "Press ENTER to exit.\n";
-	// Don't use sfn::Thread for your own projects, it is not what you think it is.
-	sfn::Thread exit_handler( [&]() { std::cin.get(); exit = true; } );
+// Of course we need to teach sfn::Message how to deal with sf::Color objects.
+namespace sfn {
+sfn::Message& operator<<( sfn::Message& message, const sf::Color& input ) {
+	message << input.r << input.g << input.b << input.a;
+	return message;
+}
 
+sfn::Message& operator>>( sfn::Message& message, sf::Color& output ) {
+	message >> output.r >> output.g >> output.b >> output.a;
+	return message;
+}
+}
+
+int main( int /*argc*/, char** argv ) {
 	if( argv[1] && ( argv[1][0] == 's' ) ) {
 ////////////////////////////////////////////////////////////////////////////////
 // Server mode.
 ////////////////////////////////////////////////////////////////////////////////
+		sf::RenderWindow window( sf::VideoMode( 600, 400 ), "SFNUL Synchronization" );
+
 		// Create our TCP listener socket.
 		auto listener = sfn::TcpListener::Create();
 
@@ -142,22 +169,57 @@ int main( int /*argc*/, char** argv ) {
 		coordinates.emplace_back( synchronizer.CreateObject<Coordinate>() );
 
 		std::mt19937 gen{};
-		std::uniform_int_distribution<sfn::Int32> dist{ -100, 100 };
+		std::uniform_int_distribution<sf::Uint8> dist{ 0, 255 };
 
-		// Move construct a few more new Coordinate objects.
-		coordinates.emplace_back( synchronizer.CreateObject<Coordinate>() );
-		coordinates.emplace_back( synchronizer.CreateObject<Coordinate>() );
-		coordinates.emplace_back( synchronizer.CreateObject<Coordinate>() );
-		coordinates.emplace_back( synchronizer.CreateObject<Coordinate>() );
-		coordinates.emplace_back( synchronizer.CreateObject<Coordinate>() );
-		coordinates.emplace_back( synchronizer.CreateObject<Coordinate>() );
+		while( window.isOpen() ) {
+			sf::Event event;
 
-		for( auto& c : coordinates ) {
-			c.x += dist( gen );
-			c.y += dist( gen );
-		}
+			if( window.pollEvent( event ) ) {
+				if( event.type == sf::Event::Closed ) {
+					window.close();
+				} else if( ( event.type == sf::Event::KeyPressed ) && ( event.key.code == sf::Keyboard::Z ) ) {
+					// Move assign a new Coordinate object.
+					coordinates.push_back( synchronizer.CreateObject<Coordinate>() );
+					coordinates.back().color = sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 };
+				} else if( ( event.type == sf::Event::KeyPressed ) && ( event.key.code == sf::Keyboard::X ) ) {
+					// Clear all objects.
+					coordinates.clear();
 
-		while( !exit ) {
+					// Move construct a new Coordinate object.
+					coordinates.emplace_back( synchronizer.CreateObject<Coordinate>() );
+					coordinates.back().color = sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 };
+				} else if( ( event.type == sf::Event::KeyPressed ) && ( event.key.code == sf::Keyboard::C ) ) {
+					auto coordinate = synchronizer.CreateObject<Coordinate>();
+
+					// Copy assign a new Coordinate object.
+					// This won't work since the temporary Coordinate object at the
+					// end of the deque wasn't constructed through the synchronizer.
+					coordinates.push_back( coordinate );
+					coordinates.back().color = sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 };
+				} else if( ( event.type == sf::Event::KeyPressed ) && ( event.key.code == sf::Keyboard::V ) ) {
+					auto coordinate = synchronizer.CreateObject<Coordinate>();
+
+					// Copy construct a new Coordinate object.
+					// This won't work as well since in this case the container is the
+					// one invoking the constructor of the Coordinate object as well.
+					coordinates.emplace_back( coordinate );
+					coordinates.back().color = sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 };
+				}
+			}
+
+			if( sf::Keyboard::isKeyPressed( sf::Keyboard::W ) ) {
+				coordinates.back().y -= 5.f;
+			}
+			if( sf::Keyboard::isKeyPressed( sf::Keyboard::A ) ) {
+				coordinates.back().x -= 5.f;
+			}
+			if( sf::Keyboard::isKeyPressed( sf::Keyboard::S ) ) {
+				coordinates.back().y += 5.f;
+			}
+			if( sf::Keyboard::isKeyPressed( sf::Keyboard::D ) ) {
+				coordinates.back().x += 5.f;
+			}
+
 			do {
 				// Accept all pending connections and bind them to the temporary Link.
 				link->SetTransport( listener->GetPendingConnection() );
@@ -190,21 +252,25 @@ int main( int /*argc*/, char** argv ) {
 			// Update the synchronizer to broadcast the state to associated hosts.
 			synchronizer.Update();
 
+			window.clear();
+
 			for( auto& c : coordinates ) {
-				std::cout << "(" << c.x << "," << c.y << ") ";
+				c.Draw( window );
 			}
-			std::cout << "\n";
+
+			window.display();
+
+			sf::sleep( sf::milliseconds( 20 ) );
 		}
 
 		// Gracefully close all connections.
 		for( auto& l : links ) {
 			if( l && ( l->GetTransport() && l->GetTransport()->IsConnected() ) ) {
-				l->GetTransport()->Shutdown();
-
-				while( !l->GetTransport()->RemoteHasShutdown() ) {
-				}
+				l->Shutdown();
 			}
 		}
+
+		sf::sleep( sf::milliseconds( 20 ) );
 
 		// Stop all network processing threads.
 		sfn::Stop();
@@ -215,6 +281,8 @@ int main( int /*argc*/, char** argv ) {
 ////////////////////////////////////////////////////////////////////////////////
 // Client mode.
 ////////////////////////////////////////////////////////////////////////////////
+		sf::RenderWindow window( sf::VideoMode( 600, 400 ), "SFNUL Synchronization" );
+
 		// Resolve our hostname to an address.
 		auto addresses = sfn::IpAddress::Resolve( "127.0.0.1" );
 
@@ -292,7 +360,15 @@ int main( int /*argc*/, char** argv ) {
 		// Keeps track of whether we are already connected.
 		auto connected = false;
 
-		while( !exit ) {
+		while( window.isOpen() ) {
+			sf::Event event;
+
+			if( window.pollEvent( event ) ) {
+				if( event.type == sf::Event::Closed ) {
+					window.close();
+				}
+			}
+
 			// If we aren't already connected and the Link just came alive,
 			// add it to the synchronizer as a server and set connected to true.
 			if( !connected && link->GetTransport() && link->GetTransport()->IsConnected() ) {
@@ -312,10 +388,15 @@ int main( int /*argc*/, char** argv ) {
 			// Update the synchronizer to receive the state from associated hosts.
 			synchronizer.Update();
 
+			window.clear();
+
 			for( auto& c : coordinates ) {
-				std::cout << "(" << c.x << "," << c.y << ") ";
+				c.Draw( window );
 			}
-			std::cout << "\n";
+
+			window.display();
+
+			sf::sleep( sf::milliseconds( 20 ) );
 		}
 
 		// Gracefully close all connections.
@@ -323,6 +404,7 @@ int main( int /*argc*/, char** argv ) {
 			link->Shutdown();
 
 			while( !link->RemoteHasShutdown() ) {
+				sf::sleep( sf::milliseconds( 20 ) );
 			}
 		}
 

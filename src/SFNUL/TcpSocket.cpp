@@ -5,8 +5,6 @@
 #include <functional>
 #include <algorithm>
 #include <iostream>
-#include <SFML/System/Lock.hpp>
-#include <SFML/Network/Packet.hpp>
 #include <SFNUL/Config.hpp>
 #include <asio/buffer.hpp>
 #include <SFNUL/Endpoint.hpp>
@@ -16,12 +14,6 @@
 namespace sfn {
 namespace {
 struct TcpSocketMaker : public TcpSocket {};
-
-struct PacketAccessor : public sf::Packet {
-	const void* Send( std::size_t& size ) { return onSend( size ); }
-	void Receive( const void* data, std::size_t size ) { onReceive( data, size ); }
-};
-
 }
 
 TcpSocket::TcpSocket() :
@@ -40,7 +32,7 @@ TcpSocket::Ptr TcpSocket::Create() {
 }
 
 void TcpSocket::Connect( const Endpoint& endpoint ) {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	if( m_connected ) {
 		std::cerr << "Connect() Error: Disconnect the current connection before reconnecting.\n";
@@ -78,7 +70,7 @@ void TcpSocket::Connect( const Endpoint& endpoint ) {
 }
 
 void TcpSocket::Shutdown() {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	if( !m_socket.is_open() ) {
 		m_connected = false;
@@ -121,7 +113,7 @@ void TcpSocket::Shutdown() {
 
 void TcpSocket::Close() {
 	{
-		sf::Lock lock{ m_mutex };
+		auto lock = AcquireLock();
 
 		if( !m_socket.is_open() ) {
 			m_connected = false;
@@ -180,7 +172,7 @@ void TcpSocket::Reset() {
 
 void TcpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_sent ) {
 	{
-		sf::Lock lock{ m_mutex };
+		auto lock = AcquireLock();
 
 		if( m_sending ) {
 			return;
@@ -235,7 +227,7 @@ void TcpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_se
 									return;
 								}
 
-								sf::Lock handler_lock{ shared_socket->m_mutex };
+								auto handler_lock = shared_socket->AcquireLock();
 								shared_socket->m_sending = false;
 
 								if( !shared_socket->m_send_buffer.empty() ) {
@@ -257,7 +249,7 @@ void TcpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_se
 
 void TcpSocket::ReceiveHandler( const asio::error_code& error, std::size_t bytes_received ) {
 	{
-		sf::Lock lock{ m_mutex };
+		auto lock = AcquireLock();
 
 		if( m_receiving ) {
 			return;
@@ -284,17 +276,7 @@ void TcpSocket::ReceiveHandler( const asio::error_code& error, std::size_t bytes
 
 		m_receive_buffer.insert( m_receive_buffer.end(), m_receive_memory.begin(), m_receive_memory.begin() + bytes_received );
 
-		if( m_receive_buffer.size() > m_receive_limit_soft ) {
-			std::cerr << "Async Receive Warning: Buffer size (" << m_receive_buffer.size() << ") exceeds soft limit of " << m_receive_limit_soft << ".\n";
-		}
-
-		if( m_receive_buffer.size() > m_receive_limit_hard ) {
-			m_receive_buffer.resize( m_receive_limit_hard );
-
-			std::cerr << "Async Receive Warning: Buffer size (" << m_receive_buffer.size() << ") exceeds hard limit of " << m_receive_limit_hard << ". Dropping data.\n";
-		}
-
-		if( m_connected && !m_fin_received ) {
+		if( m_connected && !m_fin_received && ( m_receive_buffer.size() < SFNUL_MAX_BUFFER_DATA_SIZE ) ) {
 			m_receiving = true;
 
 			m_socket.async_receive( asio::buffer( m_receive_memory ),
@@ -307,7 +289,7 @@ void TcpSocket::ReceiveHandler( const asio::error_code& error, std::size_t bytes
 								return;
 							}
 
-							sf::Lock handler_lock{ shared_socket->m_mutex };
+							auto handler_lock = shared_socket->AcquireLock();
 							shared_socket->m_receiving = false;
 							shared_socket->ReceiveHandler( handler_error, handler_bytes_received );
 						},
@@ -324,50 +306,46 @@ void TcpSocket::ReceiveHandler( const asio::error_code& error, std::size_t bytes
 }
 
 bool TcpSocket::LocalHasShutdown() const {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	return m_fin_sent;
 }
 
 bool TcpSocket::RemoteHasShutdown() const {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	return m_fin_received;
 }
 
-void TcpSocket::Send( const void* data, std::size_t size ) {
-	sf::Lock lock{ m_mutex };
+bool TcpSocket::Send( const void* data, std::size_t size ) {
+	auto lock = AcquireLock();
 
 	if( !data || !size ) {
-		return;
+		return false;
 	}
 
 	if( m_request_shutdown ) {
 		std::cerr << "Send() Error: Cannot send data after shutdown.\n";
-		return;
+		return false;
+	}
+
+	if( m_send_buffer.size() + size >= SFNUL_MAX_BUFFER_DATA_SIZE ) {
+		return false;
 	}
 
 	bool start = m_send_buffer.empty();
 
 	m_send_buffer.insert( m_send_buffer.end(), static_cast<const char*>( data ), static_cast<const char*>( data ) + size );
 
-	if( m_send_buffer.size() > m_send_limit_soft ) {
-		std::cerr << "Send() Warning: Buffer size (" << m_send_buffer.size() << ") exceeds soft limit of " << m_send_limit_soft << ".\n";
-	}
-
-	if( m_send_buffer.size() > m_send_limit_hard ) {
-		m_send_buffer.resize( m_send_limit_hard );
-
-		std::cerr << "Send() Warning: Buffer size (" << m_send_buffer.size() << ") exceeds hard limit of " << m_send_limit_hard << ". Dropping data.\n";
-	}
-
 	if( start ) {
 		SendHandler( asio::error_code{}, 0 );
 	}
+
+	return true;
 }
 
 std::size_t TcpSocket::Receive( void* data, std::size_t size ) {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	if( !data || !size ) {
 		return 0;
@@ -379,68 +357,29 @@ std::size_t TcpSocket::Receive( void* data, std::size_t size ) {
 		static_cast<char*>( data )[index] = m_receive_buffer[index];
 	}
 
+	auto start = false;
+
+	if( ( m_receive_buffer.size() >= SFNUL_MAX_BUFFER_DATA_SIZE ) && ( m_receive_buffer.size() - receive_size ) < SFNUL_MAX_BUFFER_DATA_SIZE ) {
+		start = true;
+	}
+
 	m_receive_buffer.erase( m_receive_buffer.begin(), m_receive_buffer.begin() + receive_size );
+
+	if( start ) {
+		ReceiveHandler( asio::error_code{}, 0 );
+	}
 
 	return receive_size;
 }
 
-void TcpSocket::Send( sf::Packet& packet ) {
-	sf::Lock lock{ m_mutex };
-
-	std::size_t size = 0;
-	auto data = static_cast<PacketAccessor*>( &packet )->Send( size );
-
-	sf::Uint32 packet_size = htonl( static_cast<sf::Uint32>( size ) );
-
-	std::vector<char> data_block( sizeof( packet_size ) + size );
-
-	std::memcpy( &data_block[0], &packet_size, sizeof( packet_size ) );
-
-	if( size ) {
-		std::memcpy( &data_block[0] + sizeof( packet_size ), data, size );
-	}
-
-	Send( &data_block[0], sizeof( packet_size ) + size );
-}
-
-std::size_t TcpSocket::Receive( sf::Packet& packet ) {
-	sf::Lock lock{ m_mutex };
-
-	packet.clear();
-
-	sf::Uint32 packet_size = 0;
-
-	if( m_receive_buffer.size() < sizeof( packet_size ) ) {
-		return 0;
-	}
-
-	for( std::size_t index = 0; index < sizeof( packet_size ); index++ ) {
-		reinterpret_cast<char*>( &packet_size )[index] = m_receive_buffer[index];
-	}
-
-	packet_size = ntohl( packet_size );
-
-	if( m_receive_buffer.size() < sizeof( packet_size ) + packet_size ) {
-		return 0;
-	}
-
-	std::vector<char> data_block( packet_size );
-
-	m_receive_buffer.erase( m_receive_buffer.begin(), m_receive_buffer.begin() + sizeof( packet_size ) );
-
-	std::copy_n( m_receive_buffer.begin(), packet_size, data_block.begin() );
-
-	static_cast<PacketAccessor*>( &packet )->Receive( &data_block[0], packet_size );
-
-	m_receive_buffer.erase( m_receive_buffer.begin(), m_receive_buffer.begin() + packet_size );
-
-	return sizeof( packet_size ) + packet_size;
-}
-
-void TcpSocket::Send( const Message& message ) {
-	sf::Lock lock{ m_mutex };
+bool TcpSocket::Send( const Message& message ) {
+	auto lock = AcquireLock();
 
 	auto message_size = message.GetSize();
+
+	if( m_send_buffer.size() + sizeof( message_size ) + message_size >= SFNUL_MAX_BUFFER_DATA_SIZE ) {
+		return false;
+	}
 
 	std::vector<char> data_block( sizeof( message_size ) + message_size );
 
@@ -451,11 +390,11 @@ void TcpSocket::Send( const Message& message ) {
 		std::copy( std::begin( message_data ), std::end( message_data ), std::begin( data_block ) + sizeof( message_size ) );
 	}
 
-	Send( &data_block[0], sizeof( message_size ) + static_cast<std::size_t>( message_size ) );
+	return Send( &data_block[0], sizeof( message_size ) + static_cast<std::size_t>( message_size ) );
 }
 
 std::size_t TcpSocket::Receive( Message& message ) {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	message.Clear();
 
@@ -473,6 +412,12 @@ std::size_t TcpSocket::Receive( Message& message ) {
 		return 0;
 	}
 
+	auto start = false;
+
+	if( ( m_receive_buffer.size() >= SFNUL_MAX_BUFFER_DATA_SIZE ) && ( m_receive_buffer.size() - ( sizeof( message_size ) + message_size ) ) < SFNUL_MAX_BUFFER_DATA_SIZE ) {
+		start = true;
+	}
+
 	std::vector<char> data_block( message_size );
 
 	m_receive_buffer.erase( m_receive_buffer.begin(), m_receive_buffer.begin() + sizeof( message_size ) );
@@ -483,72 +428,54 @@ std::size_t TcpSocket::Receive( Message& message ) {
 
 	m_receive_buffer.erase( m_receive_buffer.begin(), m_receive_buffer.begin() + message_size );
 
+	if( start ) {
+		ReceiveHandler( asio::error_code{}, 0 );
+	}
+
 	return sizeof( message_size ) + message_size;
 }
 
 bool TcpSocket::IsConnected() const {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	return m_connected;
 }
 
 Endpoint TcpSocket::GetLocalEndpoint() const {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	return m_socket.local_endpoint();
 }
 
 Endpoint TcpSocket::GetRemoteEndpoint() const {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	return m_socket.remote_endpoint();
 }
 
 void TcpSocket::ClearBuffers() {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	m_send_buffer.clear();
 	m_receive_buffer.clear();
+
+	ReceiveHandler( asio::error_code{}, 0 );
 }
 
 std::size_t TcpSocket::BytesToSend() const {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	return m_send_buffer.size();
 }
 
 std::size_t TcpSocket::BytesToReceive() const {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	return m_receive_buffer.size();
 }
 
-std::size_t TcpSocket::SendSoftLimit( std::size_t limit ) {
-	sf::Lock lock{ m_mutex };
-
-	return m_send_limit_soft = ( limit ? limit : m_send_limit_soft );
-}
-
-std::size_t TcpSocket::SendHardLimit( std::size_t limit ) {
-	sf::Lock lock{ m_mutex };
-
-	return m_send_limit_hard = ( limit ? limit : m_send_limit_hard );
-}
-
-std::size_t TcpSocket::ReceiveSoftLimit( std::size_t limit ) {
-	sf::Lock lock{ m_mutex };
-
-	return m_receive_limit_soft = ( limit ? limit : m_receive_limit_soft );
-}
-
-std::size_t TcpSocket::ReceiveHardLimit( std::size_t limit ) {
-	sf::Lock lock{ m_mutex };
-
-	return m_receive_limit_hard = ( limit ? limit : m_receive_limit_hard );
-}
-
 int TcpSocket::GetLinger() const {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	asio::socket_base::linger option;
 
@@ -564,7 +491,7 @@ int TcpSocket::GetLinger() const {
 }
 
 void TcpSocket::SetLinger( int timeout ) {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	asio::socket_base::linger option( timeout > 0, timeout );
 
@@ -578,7 +505,7 @@ void TcpSocket::SetLinger( int timeout ) {
 }
 
 bool TcpSocket::GetKeepAlive() const {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	asio::socket_base::keep_alive option;
 
@@ -594,7 +521,7 @@ bool TcpSocket::GetKeepAlive() const {
 }
 
 void TcpSocket::SetKeepAlive( bool keep_alive ) {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	asio::socket_base::keep_alive option( keep_alive );
 

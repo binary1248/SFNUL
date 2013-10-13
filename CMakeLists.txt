@@ -14,39 +14,26 @@ project( SFNUL )
 
 set( BUILD_SHARED_LIBS false CACHE BOOL "Build dynamic library." )
 set( SFNUL_BUILD_EXAMPLES true CACHE BOOL "Build SFNUL examples." )
+set( SFNUL_BUILD_SFML_EXAMPLES false CACHE BOOL "Build SFNUL examples that use SFML for visualisation." )
 set( SFNUL_BUILD_DOC false CACHE BOOL "Generate the SFNUL API documentation." )
-set( SFML_STATIC_LIBRARIES false CACHE BOOL "Was SFML built as a static library?" )
-
-if( SFML_STATIC_LIBRARIES AND BUILD_SHARED_LIBS )
-	message( FATAL_ERROR "If you link to SFML statically you MUST link to SFNUL statically too." )
-endif()
 
 if( MSVC )
 	set( SFNUL_USE_STATIC_STD_LIBS false CACHE BOOL "True to link the runtime library statically, false to link them dynamically." )
 endif()
 
-# Add SFML's CMake Modules directory from extlibs to module search path for
-# finding FindSFML.cmake more easily.
-set( CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH};${PROJECT_SOURCE_DIR}/extlibs/SFML/cmake/Modules/" )
-
 # Find packages.
-find_package( SFML 2 COMPONENTS network system )
+find_package( Threads REQUIRED )
 
-# FindSFML was not run.
-if( NOT DEFINED FIND_SFML_LIB_SUFFIX )
-	set( CMAKE_MODULE_PATH "" CACHE PATH "Directory containing FindSFML.cmake" )
-	message( FATAL_ERROR "CMake couldn't find FindSFML.cmake. Did you remember to install SFML?\nOptionally, you can set the CMAKE_MODULE_PATH entry to the directory containing FindSFML.cmake.\nFindSFML.cmake will be searched for in there." )
-endif()
-
-# FindSFML couldn't find SFML.
-if( NOT SFML_FOUND )
-	set( SFML_ROOT "" CACHE PATH "SFML root directory" )
-	message( FATAL_ERROR "CMake couldn't find SFML. Set the SFML_ROOT entry to SFML's root directory (containing \"include\" and \"lib\" directories)." )
-endif()
-
-if( SFML_STATIC_LIBRARIES )
-	# Even though FindSFML sets -DSFML_STATIC itself, better safe than sorry.
-	add_definitions( -DSFML_STATIC )
+if( CMAKE_USE_WIN32_THREADS_INIT )
+	# We are using Win32 threads.
+	add_definitions( -DSFNUL_WIN32_THREADS )
+	message( STATUS "Using Win32 threads." )
+elseif( CMAKE_USE_PTHREADS_INIT )
+	# We are using pthreads.
+	add_definitions( -DSFNUL_PTHREADS )
+	message( STATUS "Using pthreads." )
+else()
+	message( FATAL_ERROR "Didn't find Win32 threads or pthreads. Other threading libraries are currently unsupported." )
 endif()
 
 # Make Windows happy.
@@ -77,6 +64,7 @@ set(
 	HEADERS
 	${INC_DIR}/SFNUL.hpp
 	${INC_DIR}/SFNUL/Config.hpp
+	${INC_DIR}/SFNUL/Concurrency.hpp
 	${INC_DIR}/SFNUL/Endpoint.hpp
 	${INC_DIR}/SFNUL/HTTP.hpp
 	${INC_DIR}/SFNUL/HTTPClient.hpp
@@ -104,6 +92,7 @@ set(
 
 set(
 	SOURCES
+	${SRC_DIR}/SFNUL/Concurrency.cpp
 	${SRC_DIR}/SFNUL/Endpoint.cpp
 	${SRC_DIR}/SFNUL/HTTP.cpp
 	${SRC_DIR}/SFNUL/HTTPClient.cpp
@@ -166,7 +155,6 @@ set(
 )
 
 include_directories( ${INC_DIR} )
-include_directories( SYSTEM ${SFML_INCLUDE_DIR} )
 include_directories( SYSTEM "${PROJECT_SOURCE_DIR}/extlibs/asio/asio/include" )
 include_directories( SYSTEM "${PROJECT_SOURCE_DIR}/extlibs/tropicssl/include" )
 include_directories( SYSTEM "${PROJECT_SOURCE_DIR}/extlibs/http-parser" )
@@ -206,7 +194,12 @@ endif()
 
 # Set default compile flags for GCC
 if( CMAKE_COMPILER_IS_GNUCXX )
-	set_source_files_properties( ${SOURCES} PROPERTIES COMPILE_FLAGS "-std=c++11 -Weffc++ -Wall -Wextra -Wshadow -Wconversion -Wunreachable-code -Wredundant-decls -pedantic" )
+	if( CMAKE_CXX_COMPILER MATCHES ".*clang[+][+]" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
+		set_source_files_properties( ${SOURCES} PROPERTIES COMPILE_FLAGS "-stdlib=libc++ -std=c++11 -Wall -Wextra -Wshadow -Wconversion -Wunreachable-code -Wredundant-decls -pedantic" )
+	else()
+		set_source_files_properties( ${SOURCES} PROPERTIES COMPILE_FLAGS "-std=c++11 -Weffc++ -Wall -Wextra -Wshadow -Wconversion -Wunreachable-code -Wredundant-decls -pedantic" )
+	endif()
+	
 	set_source_files_properties( ${TROPICSSL_SOURCES} PROPERTIES COMPILE_FLAGS "-D_FILE_OFFSET_BITS=64 -Wall -Wextra -Wformat=2 -fstrict-aliasing -Wstrict-aliasing -Wfloat-equal -Wundef -Wpointer-arith -Wbad-function-cast -Wcast-align -Wwrite-strings -Waddress -Waggregate-return -Wstrict-prototypes  -Wold-style-declaration -Wold-style-definition -Wmissing-parameter-type -Wmissing-field-initializers -Wmissing-noreturn -Wmissing-format-attribute -Wpacked -Wredundant-decls -Wnested-externs" )
 	set_source_files_properties( ${HTTP_PARSER_SOURCES} PROPERTIES COMPILE_FLAGS "-Wall -Wextra -Wformat=2 -fstrict-aliasing -Wstrict-aliasing -Wfloat-equal -Wundef -Wpointer-arith -Wbad-function-cast -Wcast-align -Wwrite-strings -Waddress -Waggregate-return -Wstrict-prototypes  -Wold-style-declaration -Wold-style-definition -Wmissing-parameter-type -Wmissing-field-initializers -Wmissing-noreturn -Wmissing-format-attribute -Wpacked -Wredundant-decls -Wnested-externs" )
 endif()
@@ -216,16 +209,15 @@ set_target_properties( sfnul PROPERTIES DEFINE_SYMBOL SFNUL_EXPORTS )
 
 # Link to dependencies.
 if( WIN32 )
-	target_link_libraries( sfnul ${SFML_NETWORK_LIBRARY} ${SFML_SYSTEM_LIBRARY} ws2_32 mswsock )
+	target_link_libraries( sfnul ws2_32 mswsock )
 elseif( APPLE )
 	target_link_libraries( sfnul ${COREFOUNDATION_LIBRARY} )
 endif()
 
-### EXAMPLES ###
+target_link_libraries( sfnul ${CMAKE_THREAD_LIBS_INIT} )
 
-if( SFNUL_BUILD_EXAMPLES )
-	add_subdirectory( "examples" )
-endif()
+### EXAMPLES ###
+add_subdirectory( "examples" )
 
 ### DOCUMENTATION ###
 

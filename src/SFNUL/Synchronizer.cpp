@@ -222,7 +222,7 @@ void SynchronizerServer::Send() {
 		for( auto iter = std::begin( m_links ); iter != std::end( m_links ); ) {
 			auto client_link = iter->lock();
 
-			if( !client_link || !( *client_link ) ) {
+			if( !client_link || !client_link->GetTransport() || !client_link->GetTransport()->IsConnected() || client_link->GetTransport()->RemoteHasShutdown() || client_link->GetTransport()->LocalHasShutdown() ) {
 				iter = m_links.erase( iter );
 				continue;
 			}
@@ -355,7 +355,7 @@ void SynchronizerClient::Receive() {
 	for( auto iter = std::begin( m_links ); iter != std::end( m_links ); ) {
 		auto server = iter->lock();
 
-		if( !server || !( *server ) ) {
+		if( !server || !server->GetTransport() || !server->GetTransport()->IsConnected() || server->GetTransport()->RemoteHasShutdown() || server->GetTransport()->LocalHasShutdown() ) {
 			iter = m_links.erase( iter );
 			continue;
 		}

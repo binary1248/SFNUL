@@ -1,10 +1,11 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 #include <iostream>
-#include <SFML/Window.hpp>
 #include <SFNUL.hpp>
 
 int main() {
-	sf::Window window{ sf::VideoMode{ 300, 100 }, "SFNUL HTTP Server" };
-
 	// Create our TCP listener socket.
 	auto listener = sfn::TcpListener::Create();
 
@@ -14,20 +15,15 @@ int main() {
 	// Start 3 network processing threads.
 	sfn::Start( 3 );
 
-	sf::Clock clock;
-
 	// A place to store all active connections.
 	std::deque<sfn::TcpSocket::Ptr> sockets;
 
-	while( window.isOpen() ) {
-		sf::Event event;
+	auto exit = false;
+	std::cout << "Press ENTER to exit.\n";
+	// Don't use sfn::Thread for your own projects, it is not what you think it is.
+	sfn::Thread exit_handler( [&]() { std::cin.get(); exit = true; } );
 
-		if( window.pollEvent( event ) ) {
-			if( event.type == sf::Event::Closed ) {
-				window.close();
-			}
-		}
-
+	while( !exit ) {
 		sfn::TcpSocket::Ptr socket;
 
 		// Dequeue any pending connections from the listener.
@@ -40,7 +36,7 @@ int main() {
 				"<html><head><title>SFNUL HTTP Server Page</title></head>"
 				"<body>SFNUL HTTP Server Document</body></html>\r\n\r\n";
 
-			// Turn of connection lingering.
+			// Turn off connection lingering.
 			socket->SetLinger( 0 );
 
 			// Send the HTTP response.
@@ -63,8 +59,6 @@ int main() {
 				++socket_iter;
 			}
 		}
-
-		sf::sleep( sf::milliseconds( 20 ) - clock.restart() );
 	}
 
 	// Close the listener socket.

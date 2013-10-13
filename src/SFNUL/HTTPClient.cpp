@@ -137,7 +137,7 @@ int OnMessageComplete( http_parser* parser ) {
 	return 0;
 }
 
-HTTPClientPipeline::HTTPClientPipeline( Endpoint endpoint, bool secure, const sf::Time& timeout ) :
+HTTPClientPipeline::HTTPClientPipeline( Endpoint endpoint, bool secure, const std::chrono::seconds& timeout ) :
 	m_secure{ secure },
 	m_remote_endpoint{ endpoint },
 	m_timeout_value{ timeout }
@@ -167,14 +167,14 @@ HTTPClientPipeline::~HTTPClientPipeline() {
 		return;
 	}
 
-	sf::Clock shutdown_clock;
+	auto shutdown_start = std::chrono::steady_clock::now();
 
 	m_socket->Shutdown();
 
-	while( !m_socket->LocalHasShutdown() && shutdown_clock.getElapsedTime() < sf::seconds( 1 ) ) {
+	while( !m_socket->LocalHasShutdown() && ( ( std::chrono::steady_clock::now() - shutdown_start ) < std::chrono::seconds{ 1 } ) ) {
 	}
 
-	if( shutdown_clock.getElapsedTime() >= sf::seconds( 1 ) ) {
+	if( ( std::chrono::steady_clock::now() - shutdown_start ) >= std::chrono::seconds{ 1 } ) {
 		std::cerr << "HTTP Connection shutdown timed out.\n";
 	}
 
@@ -206,7 +206,7 @@ void HTTPClientPipeline::SendRequest( HTTPRequest request ) {
 	auto request_string = request.ToString();
 
 	m_socket->Send( request_string.c_str(), request_string.length() );
-	m_timeout_timer.restart();
+	m_last_activity = std::chrono::steady_clock::now();
 
 	m_pipeline.emplace_back( std::move( request ), HTTPResponse{} );
 }
@@ -234,7 +234,7 @@ HTTPResponse HTTPClientPipeline::GetResponse( const HTTPRequest& request ) {
 void HTTPClientPipeline::Update() {
 	if( TimedOut() ) {
 		if( HasRequests() ) {
-			m_timeout_timer.restart();
+			m_last_activity = std::chrono::steady_clock::now();
 			Reconnect();
 		}
 
@@ -247,7 +247,7 @@ void HTTPClientPipeline::Update() {
 
 	while( ( received = m_socket->Receive( data.data(), data.size() ) ) ) {
 		if( received ) {
-			m_timeout_timer.restart();
+			m_last_activity = std::chrono::steady_clock::now();
 		}
 		else {
 			return;
@@ -273,9 +273,9 @@ void HTTPClientPipeline::Update() {
 void HTTPClientPipeline::Reconnect() {
 	m_socket->Shutdown();
 
-	sf::Clock send_timer;
+	auto send_start = std::chrono::steady_clock::now();
 
-	while( !m_socket->LocalHasShutdown() && ( send_timer.getElapsedTime() < sf::seconds( 1 ) ) ) {
+	while( !m_socket->LocalHasShutdown() && ( ( std::chrono::steady_clock::now() - send_start ) < std::chrono::seconds{ 1 } ) ) {
 	}
 
 	m_socket->ClearBuffers();
@@ -315,7 +315,7 @@ void HTTPClientPipeline::Reconnect() {
 }
 
 bool HTTPClientPipeline::TimedOut() const {
-	return ( m_timeout_value != sf::seconds( 0 ) ) && ( m_timeout_timer.getElapsedTime() > m_timeout_value );
+	return ( m_timeout_value != std::chrono::seconds{ 0 } ) && ( ( std::chrono::steady_clock::now() - m_last_activity ) > m_timeout_value );
 }
 
 bool HTTPClientPipeline::HasRequests() const {
@@ -388,7 +388,7 @@ void HTTPClient::LoadCertificate( const std::string& address, TlsCertificate::Pt
 	std::get<0>( *pipeline_iter ).LoadCertificate( std::move( certificate ) );
 }
 
-void HTTPClient::SetTimeoutValue( const sf::Time& timeout ) {
+void HTTPClient::SetTimeoutValue( const std::chrono::seconds& timeout ) {
 	m_timeout_value = timeout;
 }
 

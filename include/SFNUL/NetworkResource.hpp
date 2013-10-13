@@ -5,18 +5,28 @@
 #pragma once
 
 #include <memory>
-#include <SFML/System/Mutex.hpp>
 #include <SFNUL/Config.hpp>
 #include <asio/io_service.hpp>
 #include <asio/strand.hpp>
+#include <SFNUL/Concurrency.hpp>
 
 namespace sfn {
 
 class IpAddress;
 
+#if defined( __GNUG__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Weffc++"
+#endif
+
 /** Network resource base class.
  */
-class SFNUL_API NetworkResource {
+class SFNUL_API NetworkResource : protected Atomic {
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic pop
+#endif
+
 private:
 	std::shared_ptr<asio::io_service> m_io_service;
 
@@ -44,7 +54,6 @@ protected:
 
 	/// @cond
 	mutable asio::strand m_strand;
-	mutable sf::Mutex m_mutex;
 	/// @endcond
 
 private:

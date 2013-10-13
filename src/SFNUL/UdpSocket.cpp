@@ -5,8 +5,6 @@
 #include <functional>
 #include <algorithm>
 #include <iostream>
-#include <SFML/System/Lock.hpp>
-#include <SFML/Network/Packet.hpp>
 #include <SFNUL/Config.hpp>
 #include <asio/buffer.hpp>
 #include <SFNUL/Endpoint.hpp>
@@ -15,12 +13,6 @@
 namespace sfn {
 namespace {
 struct UdpSocketMaker : public UdpSocket {};
-
-struct PacketAccessor : public sf::Packet {
-	const void* Send( std::size_t& size ) { return onSend( size ); }
-	void Receive( const void* data, std::size_t size ) { onReceive( data, size ); }
-};
-
 }
 
 UdpSocket::UdpSocket() :
@@ -38,7 +30,7 @@ UdpSocket::Ptr UdpSocket::Create() {
 }
 
 void UdpSocket::Bind( const Endpoint& endpoint ) {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	auto asio_endpoint = endpoint.GetInternalEndpoint<asio::ip::udp>();
 
@@ -59,7 +51,7 @@ void UdpSocket::Bind( const Endpoint& endpoint ) {
 }
 
 void UdpSocket::Close() {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	if( !m_socket.is_open() ) {
 		return;
@@ -70,7 +62,7 @@ void UdpSocket::Close() {
 
 void UdpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_sent, asio::ip::udp::endpoint endpoint, std::shared_ptr<std::vector<char>> buffer ) {
 	{
-		sf::Lock lock{ m_mutex };
+		auto lock = AcquireLock();
 
 		if( ( error == asio::error::operation_aborted ) || ( error == asio::error::connection_aborted ) || ( error == asio::error::connection_reset ) ) {
 			return;
@@ -112,7 +104,7 @@ void UdpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_se
 
 void UdpSocket::ReceiveHandler( const asio::error_code& error, std::size_t bytes_received, std::shared_ptr<asio::ip::udp::endpoint> endpoint_ptr ) {
 	{
-		sf::Lock lock{ m_mutex };
+		auto lock = AcquireLock();
 
 		if( m_receiving ) {
 			return;
@@ -127,52 +119,37 @@ void UdpSocket::ReceiveHandler( const asio::error_code& error, std::size_t bytes
 		}
 
 		if( bytes_received ) {
-			if( m_receive_buffer.size() < m_endpoint_limit_hard ) {
-				auto endpoint = *endpoint_ptr;
+			auto endpoint = *endpoint_ptr;
 
-				m_receive_buffer[endpoint].insert( m_receive_buffer[endpoint].end(), m_receive_memory.begin(), m_receive_memory.begin() + bytes_received );
+			m_receive_buffer[endpoint].insert( m_receive_buffer[endpoint].end(), m_receive_memory.begin(), m_receive_memory.begin() + bytes_received );
 
-				if( m_receive_buffer.size() > m_endpoint_limit_soft ) {
-					std::cerr << "Async Receive Warning: Endpoint count (" << m_receive_buffer.size() << ") exceeds soft limit of " << m_endpoint_limit_soft << ".\n";
-				}
-
-				if( m_receive_buffer[endpoint].size() > m_receive_limit_soft ) {
-					std::cerr << "Async Receive Warning: Buffer size (" << m_receive_buffer[endpoint].size() << ") exceeds soft limit of " << m_receive_limit_soft << ".\n";
-				}
-
-				if( m_receive_buffer[endpoint].size() > m_receive_limit_hard ) {
-					m_receive_buffer[endpoint].resize( m_receive_limit_hard );
-
-					std::cerr << "Async Receive Warning: Buffer size (" << m_receive_buffer[endpoint].size() << ") exceeds hard limit of " << m_receive_limit_hard << ". Dropping data.\n";
-				}
-			}
-			else {
-				std::cerr << "Async Receive Warning: Endpoint count (" << m_receive_buffer.size() << ") exceeds hard limit of " << m_endpoint_limit_hard << ". Dropping data.\n";
-			}
+			m_pending_data += bytes_received;
 		}
 
-		std::shared_ptr<asio::ip::udp::endpoint> receive_endpoint_ptr = std::make_shared<asio::ip::udp::endpoint>();
+		if( m_pending_data < SFNUL_MAX_BUFFER_DATA_SIZE ) {
+			std::shared_ptr<asio::ip::udp::endpoint> receive_endpoint_ptr = std::make_shared<asio::ip::udp::endpoint>();
 
-		m_receiving = true;
+			m_receiving = true;
 
-		m_socket.async_receive_from( asio::buffer( m_receive_memory ), *receive_endpoint_ptr,
-			m_strand.wrap(
-				std::bind(
-					[]( std::weak_ptr<UdpSocket> socket, const asio::error_code& handler_error, std::size_t handler_bytes_received, std::shared_ptr<asio::ip::udp::endpoint> handler_endpoint_ptr ) {
-						auto shared_socket = socket.lock();
+			m_socket.async_receive_from( asio::buffer( m_receive_memory ), *receive_endpoint_ptr,
+				m_strand.wrap(
+					std::bind(
+						[]( std::weak_ptr<UdpSocket> socket, const asio::error_code& handler_error, std::size_t handler_bytes_received, std::shared_ptr<asio::ip::udp::endpoint> handler_endpoint_ptr ) {
+							auto shared_socket = socket.lock();
 
-						if( !shared_socket ) {
-							return;
-						}
+							if( !shared_socket ) {
+								return;
+							}
 
-						sf::Lock handler_lock{ shared_socket->m_mutex };
-						shared_socket->m_receiving = false;
-						shared_socket->ReceiveHandler( handler_error, handler_bytes_received, handler_endpoint_ptr );
-					},
-					std::weak_ptr<UdpSocket>( shared_from_this() ), std::placeholders::_1, std::placeholders::_2, receive_endpoint_ptr
+							auto handler_lock = shared_socket->AcquireLock();
+							shared_socket->m_receiving = false;
+							shared_socket->ReceiveHandler( handler_error, handler_bytes_received, handler_endpoint_ptr );
+						},
+						std::weak_ptr<UdpSocket>( shared_from_this() ), std::placeholders::_1, std::placeholders::_2, receive_endpoint_ptr
+					)
 				)
-			)
-		);
+			);
+		}
 	}
 
 	if( bytes_received ) {
@@ -181,7 +158,7 @@ void UdpSocket::ReceiveHandler( const asio::error_code& error, std::size_t bytes
 }
 
 void UdpSocket::SendTo( const void* data, std::size_t size, const Endpoint& endpoint ) {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	if( !data || !size ) {
 		return;
@@ -200,7 +177,7 @@ void UdpSocket::SendTo( const void* data, std::size_t size, const Endpoint& endp
 }
 
 std::size_t UdpSocket::ReceiveFrom( void* data, std::size_t size, const Endpoint& endpoint ) {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	if( !data || !size ) {
 		return 0;
@@ -223,76 +200,35 @@ std::size_t UdpSocket::ReceiveFrom( void* data, std::size_t size, const Endpoint
 		m_receive_buffer.erase( asio_endpoint );
 	}
 
+	auto start = false;
+
+	if( ( m_pending_data >= SFNUL_MAX_BUFFER_DATA_SIZE ) && ( m_pending_data - receive_size < SFNUL_MAX_BUFFER_DATA_SIZE ) ) {
+		start = true;
+	}
+
+	m_pending_data -= receive_size;
+
+	if( start ) {
+		ReceiveHandler( asio::error_code{}, 0, nullptr );
+	}
+
 	return receive_size;
 }
 
-void UdpSocket::SendTo( sf::Packet& packet, const Endpoint& endpoint ) {
-	sf::Lock lock{ m_mutex };
-
-	std::size_t size = 0;
-	auto data = static_cast<PacketAccessor*>( &packet )->Send( size );
-
-	sf::Uint32 packet_size = htonl( static_cast<sf::Uint32>( size ) );
-
-	std::vector<char> data_block( sizeof( packet_size ) + size );
-
-	std::memcpy( &data_block[0], &packet_size, sizeof( packet_size ) );
-
-	if( size ) {
-		std::memcpy( &data_block[0] + sizeof( packet_size ), data, size );
-	}
-
-	SendTo( &data_block[0], sizeof( packet_size ) + size, endpoint );
-}
-
-std::size_t UdpSocket::ReceiveFrom( sf::Packet& packet, const Endpoint& endpoint ) {
-	sf::Lock lock{ m_mutex };
-
-	packet.clear();
-
-	sf::Uint32 packet_size = 0;
-
-	auto asio_endpoint = endpoint.GetInternalEndpoint<asio::ip::udp>();
-
-	if( m_receive_buffer[asio_endpoint].size() < sizeof( packet_size ) ) {
-		return 0;
-	}
-
-	for( std::size_t index = 0; index < sizeof( packet_size ); index++ ) {
-		reinterpret_cast<char*>( &packet_size )[index] = m_receive_buffer[asio_endpoint][index];
-	}
-
-	packet_size = ntohl( packet_size );
-
-	if( m_receive_buffer[asio_endpoint].size() < sizeof( packet_size ) + packet_size ) {
-		return 0;
-	}
-
-	std::vector<char> data_block( packet_size );
-
-	m_receive_buffer[asio_endpoint].erase( m_receive_buffer[asio_endpoint].begin(), m_receive_buffer[asio_endpoint].begin() + sizeof( packet_size ) );
-
-	std::copy_n( m_receive_buffer[asio_endpoint].begin(), packet_size, data_block.begin() );
-
-	static_cast<PacketAccessor*>( &packet )->Receive( &data_block[0], packet_size );
-
-	return sizeof( packet_size ) + packet_size;
-}
-
 Endpoint UdpSocket::GetLocalEndpoint() const {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	return m_socket.local_endpoint();
 }
 
 void UdpSocket::ClearBuffers() {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	m_receive_buffer.clear();
 }
 
 std::size_t UdpSocket::BytesToReceive( const Endpoint& endpoint ) const {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	auto asio_endpoint = endpoint.GetInternalEndpoint<asio::ip::udp>();
 	auto iterator = m_receive_buffer.find( asio_endpoint );
@@ -305,7 +241,7 @@ std::size_t UdpSocket::BytesToReceive( const Endpoint& endpoint ) const {
 }
 
 std::deque<Endpoint> UdpSocket::PendingEndpoints() const {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	std::deque<Endpoint> endpoints;
 
@@ -314,30 +250,6 @@ std::deque<Endpoint> UdpSocket::PendingEndpoints() const {
 	}
 
 	return endpoints;
-}
-
-std::size_t UdpSocket::ReceiveSoftLimit( std::size_t limit ) {
-	sf::Lock lock{ m_mutex };
-
-	return m_receive_limit_soft = ( limit ? limit : m_receive_limit_soft );
-}
-
-std::size_t UdpSocket::ReceiveHardLimit( std::size_t limit ) {
-	sf::Lock lock{ m_mutex };
-
-	return m_receive_limit_hard = ( limit ? limit : m_receive_limit_hard );
-}
-
-std::size_t UdpSocket::EndpointSoftLimit( std::size_t limit ) {
-	sf::Lock lock{ m_mutex };
-
-	return m_endpoint_limit_soft = ( limit ? limit : m_endpoint_limit_soft );
-}
-
-std::size_t UdpSocket::EndpointHardLimit( std::size_t limit ) {
-	sf::Lock lock{ m_mutex };
-
-	return m_endpoint_limit_hard = ( limit ? limit : m_endpoint_limit_hard );
 }
 
 void UdpSocket::SetInternalSocket( void* internal_socket ) {

@@ -36,7 +36,7 @@ TcpListener::Ptr TcpListener::Create() {
 }
 
 void TcpListener::Listen( const Endpoint& endpoint, int backlog ) {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	asio::error_code error;
 
@@ -77,7 +77,7 @@ void TcpListener::Listen( const Endpoint& endpoint, int backlog ) {
 }
 
 void TcpListener::AcceptHandler( const asio::error_code& error, std::shared_ptr<asio::ip::tcp::socket> socket ) {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	if( !socket ) {
 	}
@@ -92,22 +92,7 @@ void TcpListener::AcceptHandler( const asio::error_code& error, std::shared_ptr<
 	}
 
 	if( socket ) {
-		if( m_new_connections.size() < m_connection_limit_hard ) {
-			m_new_connections.emplace_back( std::move( *socket ) );
-		}
-		else {
-			asio::error_code shutdown_error;
-
-			socket->shutdown( asio::ip::tcp::socket::shutdown_both, shutdown_error );
-
-			socket->close();
-
-			std::cerr << "Async Accept Warning: Pending connection count (" << m_new_connections.size() << ") exceeds hard limit of " << m_connection_limit_hard << ". Dropping connection.\n";
-		}
-	}
-
-	if( m_new_connections.size() > m_connection_limit_soft ) {
-		std::cerr << "Async Accept Warning: Pending connection count (" << m_new_connections.size() << ") exceeds soft limit of " << m_connection_limit_soft << ".\n";
+		m_new_connections.emplace_back( std::move( *socket ) );
 	}
 
 	if( !m_listening ) {
@@ -133,7 +118,7 @@ void TcpListener::AcceptHandler( const asio::error_code& error, std::shared_ptr<
 }
 
 void TcpListener::Close() {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	asio::error_code error;
 
@@ -148,21 +133,9 @@ void TcpListener::Close() {
 }
 
 Endpoint TcpListener::GetEndpoint() const {
-	sf::Lock lock{ m_mutex };
+	auto lock = AcquireLock();
 
 	return m_acceptor.local_endpoint();
-}
-
-std::size_t TcpListener::ConnectionSoftLimit( std::size_t limit ) {
-	sf::Lock lock{ m_mutex };
-
-	return m_connection_limit_soft = ( limit ? limit : m_connection_limit_soft );
-}
-
-std::size_t TcpListener::ConnectionHardLimit( std::size_t limit ) {
-	sf::Lock lock{ m_mutex };
-
-	return m_connection_limit_hard = ( limit ? limit : m_connection_limit_hard );
 }
 
 }

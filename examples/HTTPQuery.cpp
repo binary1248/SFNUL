@@ -1,10 +1,11 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 #include <iostream>
-#include <SFML/Window.hpp>
 #include <SFNUL.hpp>
 
 int main() {
-	sf::Window window{ sf::VideoMode{ 300, 100 }, "SFNUL HTTP Query" };
-
 	// Start a network processing thread.
 	sfn::Start();
 
@@ -14,7 +15,7 @@ int main() {
 		// Construct our HTTP request.
 		sfn::HTTPRequest request{};
 		request.SetMethod( "GET" );
-		request.SetHeaderValue( "Host", "sfgui.sfml-dev.de" );
+		request.SetHeaderValue( "Host", "www.ietf.org" );
 
 		// Construct our HTTP client.
 		sfn::HTTPClient client;
@@ -22,25 +23,18 @@ int main() {
 		// Our sender lambda for convenience.
 		auto send_request = [&] ( std::string uri ) {
 			request.SetURI( uri );
-			client.SendRequest( request, "sfgui.sfml-dev.de", 80, false );
+			client.SendRequest( request, "www.ietf.org", 80, false );
 		};
 
 		// Send a few pipelined requests.
 		send_request( "/" );
-		send_request( "/download/" );
-		send_request( "/p/docs" );
-		send_request( "/p/contributing" );
-		send_request( "/p/contact" );
+		send_request( "/rfc/rfc768.txt" );
+		send_request( "/rfc/rfc791.txt" );
+		send_request( "/rfc/rfc793.txt" );
 
-		while( window.isOpen() ) {
-			sf::Event event;
+		int complete = 0;
 
-			if( window.pollEvent( event ) ) {
-				if( event.type == sf::Event::Closed ) {
-					window.close();
-				}
-			}
-
+		while( true ) {
 			// Update our client.
 			client.Update();
 
@@ -48,23 +42,25 @@ int main() {
 			auto get_response = [&]( std::string uri ) {
 				// Check if the responses to our requests have arrived.
 				request.SetURI( uri );
-				auto response = client.GetResponse( request, "sfgui.sfml-dev.de", 80 );
+				auto response = client.GetResponse( request, "www.ietf.org", 80 );
 
 				// Check if the response is complete and valid. Do not use it otherwise.
 				if( response.IsComplete() ) {
 					// Print the body of the response.
 					std::cout << response.GetBody();
+					++complete;
 				}
 			};
 
 			// Get responses with the help of our lambda.
 			get_response( "/" );
-			get_response( "/download/" );
-			get_response( "/p/docs" );
-			get_response( "/p/contributing" );
-			get_response( "/p/contact" );
+			get_response( "/rfc/rfc768.txt" );
+			get_response( "/rfc/rfc791.txt" );
+			get_response( "/rfc/rfc793.txt" );
 
-			sf::sleep( sf::milliseconds( 20 ) );
+			if( complete >= 4 ) {
+				break;
+			}
 		}
 	}
 

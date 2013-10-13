@@ -1,10 +1,11 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 #include <iostream>
-#include <SFML/Window.hpp>
 #include <SFNUL.hpp>
 
 int main() {
-	sf::Window window{ sf::VideoMode{ 300, 100 }, "SFNUL TLS Demonstration" };
-
 	// Resolve our hostname to an address.
 	auto addresses = sfn::IpAddress::Resolve( "www.ietf.org" );
 
@@ -71,31 +72,28 @@ int main() {
 	// Start a network processing thread.
 	sfn::Start();
 
-	while( window.isOpen() ) {
-		sf::Event event;
+	// Keep waiting until the remote has signalled that it has nothing more to send.
+	while( !connection->RemoteHasShutdown() ) {
+	}
 
-		if( window.pollEvent( event ) ) {
-			if( event.type == sf::Event::Closed ) {
-				window.close();
-			}
-		}
+	std::array<char, 1024> reply;
+	std::size_t reply_size = 0;
 
-		std::array<char, 1024> reply;
-
+	do {
 		// Dequeue any data we receive from the remote host.
-		std::size_t reply_size = connection->Receive( reply.data(), reply.size() );
+		reply_size = connection->Receive( reply.data(), reply.size() );
 
 		// Print out the data.
 		for( std::size_t index = 0; index < reply_size; index++ ) {
 			std::cout << reply[index];
 		}
+	} while( reply_size );
 
-		// Shutdown our side if the remote side has shutdown already.
-		if( connection->RemoteHasShutdown() ) {
-			connection->Shutdown();
-		}
+	// Shutdown our side.
+	connection->Shutdown();
 
-		sf::sleep( sf::milliseconds( 20 ) );
+	// Wait for the transport to send the last goodbye messages.
+	while( connection->BytesToSend() ) {
 	}
 
 	// Close the connection.

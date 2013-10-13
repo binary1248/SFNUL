@@ -28,6 +28,7 @@ const ReliableTransport* Link<T>::GetInternalTransport() const {
 
 template<typename T>
 void Link<T>::SetTransport( std::shared_ptr<T> transport ) {
+	m_segment_active = false;
 	m_transport = std::move( transport );
 }
 
@@ -39,11 +40,6 @@ std::shared_ptr<T> Link<T>::GetTransport() {
 template<typename T>
 std::shared_ptr<const T> Link<T>::GetTransport() const {
 	return m_transport;
-}
-
-template<typename T>
-Link<T>::operator bool() const {
-	return m_transport && m_transport->IsConnected() && !m_transport->RemoteHasShutdown() && !m_transport->LocalHasShutdown();
 }
 
 }

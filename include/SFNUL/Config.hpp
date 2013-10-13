@@ -32,6 +32,10 @@
 	#define SFNUL_DEBUG
 #endif
 
+// Maximum bytes that SFNUL will queue before waiting for OS buffer to empty.
+// If you think you need support for very large messages, go ahead and change this.
+#define SFNUL_MAX_BUFFER_DATA_SIZE 65536
+
 // Use asio in standalone header-only mode
 #define ASIO_STANDALONE
 #define ASIO_HEADER_ONLY

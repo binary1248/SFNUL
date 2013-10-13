@@ -5,8 +5,6 @@
 #include <cstring>
 #include <iostream>
 #include <algorithm>
-#include <SFML/Network/Packet.hpp>
-#include <SFML/System/Lock.hpp>
 #include <SFNUL/Message.hpp>
 
 #if defined( SFNUL_SYSTEM_WINDOWS )
@@ -32,12 +30,6 @@ namespace sfn {
 namespace {
 template<class T, TlsEndpointType U, TlsVerificationType V>
 struct TlsConnectionMaker : public TlsConnection<T, U, V> {};
-
-struct PacketAccessor : public sf::Packet {
-	const void* Send( std::size_t& size ) { return onSend( size ); }
-	void Receive( const void* data, std::size_t size ) { onReceive( data, size ); }
-};
-
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
@@ -104,7 +96,7 @@ void TlsConnection<T, U, V>::Connect( const Endpoint& endpoint ) {
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::Shutdown() {
-	sf::Lock lock{ T::m_mutex };
+	auto lock = T::AcquireLock();
 
 	if( m_local_closed || T::LocalHasShutdown() || !T::IsConnected() ) {
 		return;
@@ -146,7 +138,7 @@ bool TlsConnection<T, U, V>::IsConnected() const {
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::Close() {
-	sf::Lock lock{ T::m_mutex };
+	auto lock = T::AcquireLock();
 
 	if( !m_local_closed ) {
 		if( !m_send_buffer.empty() ) {
@@ -165,18 +157,24 @@ void TlsConnection<T, U, V>::Reset() {
 /// @endcond
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
-void TlsConnection<T, U, V>::Send( const void* data, std::size_t size ) {
+bool TlsConnection<T, U, V>::Send( const void* data, std::size_t size ) {
 	if( !data || !size ) {
-		return;
+		return false;
 	}
 
 	{
-		sf::Lock lock{ T::m_mutex };
+		auto lock = T::AcquireLock();
+
+		if( m_send_buffer.size() + size >= SFNUL_MAX_BUFFER_DATA_SIZE / 2 ) {
+			return false;
+		}
 
 		m_send_buffer.insert( m_send_buffer.end(), static_cast<const char*>( data ), static_cast<const char*>( data ) + size );
 	}
 
 	OnSent();
+
+	return true;
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
@@ -187,7 +185,7 @@ std::size_t TlsConnection<T, U, V>::Receive( void* data, std::size_t size ) {
 		return 0;
 	}
 
-	sf::Lock lock{ T::m_mutex };
+	auto lock = T::AcquireLock();
 
 	auto receive_size = std::min( size, m_receive_buffer.size() );
 
@@ -201,65 +199,14 @@ std::size_t TlsConnection<T, U, V>::Receive( void* data, std::size_t size ) {
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
-void TlsConnection<T, U, V>::Send( sf::Packet& packet ) {
-	sf::Lock lock{ T::m_mutex };
-
-	std::size_t size = 0;
-	auto data = static_cast<PacketAccessor*>( &packet )->Send( size );
-
-	sf::Uint32 packet_size = htonl( static_cast<sf::Uint32>( size ) );
-
-	std::vector<char> data_block( sizeof( packet_size ) + size );
-
-	std::memcpy( &data_block[0], &packet_size, sizeof( packet_size ) );
-
-	if( size ) {
-		std::memcpy( &data_block[0] + sizeof( packet_size ), data, size );
-	}
-
-	Send( &data_block[0], sizeof( packet_size ) + size );
-}
-
-template<class T, TlsEndpointType U, TlsVerificationType V>
-std::size_t TlsConnection<T, U, V>::Receive( sf::Packet& packet ) {
-	sf::Lock lock{ T::m_mutex };
-
-	packet.clear();
-
-	sf::Uint32 packet_size = 0;
-
-	if( m_receive_buffer.size() < sizeof( packet_size ) ) {
-		return 0;
-	}
-
-	for( std::size_t index = 0; index < sizeof( packet_size ); index++ ) {
-		reinterpret_cast<char*>( &packet_size )[index] = m_receive_buffer[index];
-	}
-
-	packet_size = ntohl( packet_size );
-
-	if( m_receive_buffer.size() < sizeof( packet_size ) + packet_size ) {
-		return 0;
-	}
-
-	std::vector<char> data_block( packet_size );
-
-	m_receive_buffer.erase( m_receive_buffer.begin(), m_receive_buffer.begin() + sizeof( packet_size ) );
-
-	std::copy_n( m_receive_buffer.begin(), packet_size, data_block.begin() );
-
-	static_cast<PacketAccessor*>( &packet )->Receive( &data_block[0], packet_size );
-
-	m_receive_buffer.erase( m_receive_buffer.begin(), m_receive_buffer.begin() + packet_size );
-
-	return sizeof( packet_size ) + packet_size;
-}
-
-template<class T, TlsEndpointType U, TlsVerificationType V>
-void TlsConnection<T, U, V>::Send( const Message& message ) {
-	sf::Lock lock{ T::m_mutex };
+bool TlsConnection<T, U, V>::Send( const Message& message ) {
+	auto lock = T::AcquireLock();
 
 	auto message_size = message.GetSize();
+
+	if( m_send_buffer.size() + sizeof( message_size ) + message_size >= SFNUL_MAX_BUFFER_DATA_SIZE / 2 ) {
+		return false;
+	}
 
 	std::vector<char> data_block( sizeof( message_size ) + message_size );
 
@@ -270,12 +217,12 @@ void TlsConnection<T, U, V>::Send( const Message& message ) {
 		std::copy( std::begin( message_data ), std::end( message_data ), std::begin( data_block ) + sizeof( message_size ) );
 	}
 
-	Send( &data_block[0], sizeof( message_size ) + static_cast<std::size_t>( message_size ) );
+	return Send( &data_block[0], sizeof( message_size ) + static_cast<std::size_t>( message_size ) );
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 std::size_t TlsConnection<T, U, V>::Receive( Message& message ) {
-	sf::Lock lock{ T::m_mutex };
+	auto lock = T::AcquireLock();
 
 	message.Clear();
 
@@ -308,7 +255,7 @@ std::size_t TlsConnection<T, U, V>::Receive( Message& message ) {
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::ClearBuffers() {
-	sf::Lock lock{ T::m_mutex };
+	auto lock = T::AcquireLock();
 
 	m_send_buffer.clear();
 	m_receive_buffer.clear();
@@ -316,21 +263,19 @@ void TlsConnection<T, U, V>::ClearBuffers() {
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 std::size_t TlsConnection<T, U, V>::BytesToSend() const {
-	sf::Lock lock{ T::m_mutex };
-
-	return m_send_buffer.size();
+	return T::BytesToSend();
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 std::size_t TlsConnection<T, U, V>::BytesToReceive() const {
-	sf::Lock lock{ T::m_mutex };
+	auto lock = T::AcquireLock();
 
 	return m_receive_buffer.size();
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::OnSent() {
-	sf::Lock lock{ T::m_mutex };
+	auto lock = T::AcquireLock();
 
 	if( m_local_closed ) {
 		return;
@@ -390,7 +335,7 @@ void TlsConnection<T, U, V>::OnSent() {
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::OnReceived() {
-	sf::Lock lock{ T::m_mutex };
+	auto lock = T::AcquireLock();
 
 	if( m_remote_closed ) {
 		return;
@@ -439,7 +384,7 @@ void TlsConnection<T, U, V>::OnReceived() {
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::OnConnected() {
-	sf::Lock lock{ T::m_mutex };
+	auto lock = T::AcquireLock();
 
 	auto result = sfn::detail::ssl_handshake( &m_ssl_context );
 
@@ -454,11 +399,6 @@ void TlsConnection<T, U, V>::OnConnected() {
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::OnDisconnected() {
-}
-
-template<class T, TlsEndpointType U, TlsVerificationType V>
-sf::Mutex& TlsConnection<T, U, V>::GetMutex() const {
-	return T::m_mutex;
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>

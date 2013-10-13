@@ -84,8 +84,9 @@ public:
 	/** Queue data up for asynchronous sending over the established TCP connection this socket is part of.
 	 * @param data Pointer to a block of memory containing the data to queue.
 	 * @param size Size of the block of memory containing the data to queue.
+	 * @return true if the data could be queued. If false is returned, retry again later.
 	 */
-	virtual void Send( const void* data, std::size_t size ) override;
+	virtual bool Send( const void* data, std::size_t size ) override;
 
 	/** Dequeue data that was asynchronously received over the established TCP connection this socket is part of.
 	 * @param data Pointer to a block of memory that will contain the data to dequeue.
@@ -94,21 +95,11 @@ public:
 	 */
 	virtual std::size_t Receive( void* data, std::size_t size ) override;
 
-	/** Queue an sf::Packet up for asynchronous sending over the established TCP connection this socket is part of.
-	 * @param packet sf::Packet to queue.
-	 */
-	virtual void Send( sf::Packet& packet ) override;
-
-	/** Dequeue an sf::Packet that was asynchronously received over the established TCP connection this socket is part of.
-	 * @param packet sf::Packet to dequeue into.
-	 * @return Size of the sf::Packet that was dequeued. This includes the size field of the packet. If no packet could be dequeued, this method will return 0.
-	 */
-	virtual std::size_t Receive( sf::Packet& packet ) override;
-
 	/** Queue a Message up for asynchronous sending over the established TCP connection this socket is part of.
 	 * @param message Message to queue.
+	 * @return true if the message could be queued. If false is returned, retry again later.
 	 */
-	virtual void Send( const Message& message ) override;
+	virtual bool Send( const Message& message ) override;
 
 	/** Dequeue an Message that was asynchronously received over the established TCP connection this socket is part of.
 	 * @param message Message to dequeue into.
@@ -129,30 +120,6 @@ public:
 	 * @return Number of bytes queued for receiving.
 	 */
 	virtual std::size_t BytesToReceive() const override;
-
-	/** Set/Get the send queue warning threshold.
-	 * @param limit Threshold above which to warn the user of the send queue size.
-	 * @return Threshold above which to warn the user of the send queue size.
-	 */
-	std::size_t SendSoftLimit( std::size_t limit = 0 );
-
-	/** Set/Get the send queue drop threshold.
-	 * @param limit Threshold above which to drop new data to be queued.
-	 * @return Threshold above which to drop new data to be queued.
-	 */
-	std::size_t SendHardLimit( std::size_t limit = 0 );
-
-	/** Set/Get the receive queue warning threshold.
-	 * @param limit Threshold above which to warn the user of the receive queue size.
-	 * @return Threshold above which to warn the user of the receive queue size.
-	 */
-	std::size_t ReceiveSoftLimit( std::size_t limit = 0 );
-
-	/** Set/Get the receive queue drop threshold.
-	 * @param limit Threshold above which to drop new data to be queued.
-	 * @return Threshold above which to drop new data to be queued.
-	 */
-	std::size_t ReceiveHardLimit( std::size_t limit = 0 );
 
 	/** Get the seconds a socket should linger after it has been closed.
 	 * @return Seconds a socket should linger after it has been closed. 0 means lingering is disabled.
@@ -194,12 +161,6 @@ private:
 
 	std::array<char, 2048> m_send_memory;
 	std::array<char, 2048> m_receive_memory;
-
-	std::size_t m_send_limit_soft = 65536;
-	std::size_t m_send_limit_hard = 65536 * 2;
-
-	std::size_t m_receive_limit_soft = 65536;
-	std::size_t m_receive_limit_hard = 65536 * 2;
 
 	bool m_connected = false;
 	bool m_request_shutdown = false;

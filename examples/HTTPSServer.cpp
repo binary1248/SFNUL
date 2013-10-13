@@ -1,10 +1,11 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 #include <iostream>
-#include <SFML/Window.hpp>
 #include <SFNUL.hpp>
 
 int main() {
-	sf::Window window{ sf::VideoMode{ 300, 100 }, "SFNUL HTTPS Server" };
-
 	// Create our TCP listener socket.
 	auto listener = sfn::TcpListener::Create();
 
@@ -13,8 +14,6 @@ int main() {
 
 	// Start 3 network processing threads.
 	sfn::Start( 3 );
-
-	sf::Clock clock;
 
 	// Just to make our lives easier...
 	typedef sfn::TlsConnection<sfn::TcpSocket, sfn::TlsEndpointType::SERVER, sfn::TlsVerificationType::NONE> Connection;
@@ -77,15 +76,12 @@ int main() {
 	auto certificate = sfn::TlsCertificate::Create( certificate_string );
 	auto key = sfn::TlsKey::Create( key_string );
 
-	while( window.isOpen() ) {
-		sf::Event event;
+	auto exit = false;
+	std::cout << "Press ENTER to exit.\n";
+	// Don't use sfn::Thread for your own projects, it is not what you think it is.
+	sfn::Thread exit_handler( [&]() { std::cin.get(); exit = true; } );
 
-		if( window.pollEvent( event ) ) {
-			if( event.type == sf::Event::Closed ) {
-				window.close();
-			}
-		}
-
+	while( !exit ) {
 		{
 			Connection::Ptr connection;
 
@@ -127,8 +123,6 @@ int main() {
 				++connection_iter;
 			}
 		}
-
-		sf::sleep( sf::milliseconds( 20 ) - clock.restart() );
 	}
 
 	// Close the listener socket.

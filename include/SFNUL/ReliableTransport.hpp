@@ -62,8 +62,9 @@ public:
 	/** Queue data up for asynchronous sending over the established connection this transport is part of.
 	 * @param data Pointer to a block of memory containing the data to queue.
 	 * @param size Size of the block of memory containing the data to queue.
+	 * @return true if the data could be queued. If false is returned, retry again later.
 	 */
-	virtual void Send( const void* data, std::size_t size ) = 0;
+	virtual bool Send( const void* data, std::size_t size ) = 0;
 
 	/** Dequeue data that was asynchronously received over the established connection this transport is part of.
 	 * @param data Pointer to a block of memory that will contain the data to dequeue.
@@ -72,21 +73,11 @@ public:
 	 */
 	virtual std::size_t Receive( void* data, std::size_t size ) = 0;
 
-	/** Queue an sf::Packet up for asynchronous sending over the established connection this transport is part of.
-	 * @param packet sf::Packet to queue.
-	 */
-	virtual void Send( sf::Packet& packet ) = 0;
-
-	/** Dequeue an sf::Packet that was asynchronously received over the established connection this transport is part of.
-	 * @param packet sf::Packet to dequeue into.
-	 * @return Size of the sf::Packet that was dequeued. This includes the size field of the packet. If no packet could be dequeued, this method will return 0.
-	 */
-	virtual std::size_t Receive( sf::Packet& packet ) = 0;
-
 	/** Queue a Message up for asynchronous sending over the established connection this transport is part of.
 	 * @param message Message to queue.
+	 * @return true if the message could be queued. If false is returned, retry again later.
 	 */
-	virtual void Send( const Message& message ) = 0;
+	virtual bool Send( const Message& message ) = 0;
 
 	/** Dequeue an Message that was asynchronously received over the established connection this transport is part of.
 	 * @param message Message to dequeue into.
