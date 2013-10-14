@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <iostream>
+#include <atomic>
 #include <SFNUL.hpp>
 
 int main() {
@@ -18,7 +19,7 @@ int main() {
 	// A place to store all active connections.
 	std::deque<sfn::TcpSocket::Ptr> sockets;
 
-	auto exit = false;
+	std::atomic_bool exit{ false };
 	std::cout << "Press ENTER to exit.\n";
 	// Don't use sfn::Thread for your own projects, it is not what you think it is.
 	sfn::Thread exit_handler( [&]() { std::cin.get(); exit = true; } );
@@ -27,7 +28,7 @@ int main() {
 		sfn::TcpSocket::Ptr socket;
 
 		// Dequeue any pending connections from the listener.
-		while( socket = listener->GetPendingConnection() ) {
+		while( ( socket = listener->GetPendingConnection() ) ) {
 			char response[] =
 				"HTTP/1.1 200 OK\r\n"
 				"Server: SFNUL HTTP Server\r\n"

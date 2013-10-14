@@ -81,44 +81,54 @@ int main() {
 
 	// vector
 	{
-		// deque
+		// deques
 		{
-			// array
+			// arrays
 			{
-				// string
-				"foo\n",
-				"bar\n",
-				"baz\n"
+				// strings
+				{
+					"foo\n",
+					"bar\n",
+					"baz\n"
+				}
 			}
 		},
-		// deque
+		// deques
 		{
 			// empty
-		},
-		// deque
-		{
-			// array
 			{
-				// string
-				"hello\n",
-				"world\n"
 			}
 		},
-		// deque
+		// deques
 		{
-			// array
+			// arrays
+			{
+				// strings
+				{
+					"hello\n",
+					"world\n"
+				}
+			}
+		},
+		// deques
+		{
+			// arrays
 			{
 				// empty
+				{
+				}
 			}
 		},
-		// deque
+		// deques
 		{
-			// array
+			// arrays
 			{
-				// string
-				"C++\n",
-				"is\n",
-				"awesome\n"
+				// strings
+				{
+					"C++\n",
+					"is\n",
+					"awesome\n"
+				}
 			}
 		}
 	};

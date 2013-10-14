@@ -75,7 +75,7 @@ public:
 	SyncedType<T>& operator=( S other );
 
 	template<typename S>
-	const auto operator[]( S other ) const -> decltype( this->m_value[other] );
+	auto operator[]( S other ) const -> decltype( this->m_value[other] );
 
 	template<typename S>
 	auto operator[]( S other ) -> decltype( this->m_value[other] );

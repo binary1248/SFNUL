@@ -71,7 +71,7 @@ typename TlsConnection<T, U, V>::Ptr TlsConnection<T, U, V>::Create() {
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 int TlsConnection<T, U, V>::SendInterface( void* /*unused*/, const unsigned char* buffer, int length ) {
-	T::Send( buffer, length );
+	T::Send( buffer, static_cast<std::size_t>( length ) );
 
 	return length;
 }
@@ -80,10 +80,10 @@ template<class T, TlsEndpointType U, TlsVerificationType V>
 int TlsConnection<T, U, V>::RecvInterface( void* /*unused*/, unsigned char* buffer, int length ) {
 	std::size_t received = 0;
 
-	received = T::Receive( buffer, length );
+	received = T::Receive( buffer, static_cast<std::size_t>( length ) );
 
 	if( received ) {
-		return received;
+		return static_cast<int>( received );
 	}
 
 	return TROPICSSL_ERR_NET_TRY_AGAIN;
@@ -193,7 +193,7 @@ std::size_t TlsConnection<T, U, V>::Receive( void* data, std::size_t size ) {
 		static_cast<char*>( data )[index] = m_receive_buffer[index];
 	}
 
-	m_receive_buffer.erase( m_receive_buffer.begin(), m_receive_buffer.begin() + receive_size );
+	m_receive_buffer.erase( m_receive_buffer.begin(), m_receive_buffer.begin() + static_cast<int>( receive_size ) );
 
 	return receive_size;
 }
@@ -290,13 +290,13 @@ void TlsConnection<T, U, V>::OnSent() {
 	std::copy_n( m_send_buffer.begin(), send_size, m_send_memory.begin() );
 
 	int length = 0;
-	std::size_t current_location = 0;
+	int current_location = 0;
 	bool start = false;
 
 	do {
 		auto state_before = m_ssl_context.state;
 
-		length = sfn::detail::ssl_write( &m_ssl_context, reinterpret_cast<const unsigned char*>( m_send_memory.data() + current_location ), send_size );
+		length = sfn::detail::ssl_write( &m_ssl_context, reinterpret_cast<const unsigned char*>( m_send_memory.data() + current_location ), static_cast<int>( send_size ) );
 
 		if( !start ) {
 			start = ( state_before != SSL_HANDSHAKE_OVER ) && ( m_ssl_context.state == SSL_HANDSHAKE_OVER );
@@ -304,7 +304,7 @@ void TlsConnection<T, U, V>::OnSent() {
 
 		if( length > 0 ) {
 			current_location += length;
-			send_size -= length;
+			send_size -= static_cast<std::size_t>( length );
 		}
 	} while( length > 0 );
 
@@ -347,7 +347,7 @@ void TlsConnection<T, U, V>::OnReceived() {
 	do {
 		auto state_before = m_ssl_context.state;
 
-		length = sfn::detail::ssl_read( &m_ssl_context, reinterpret_cast<unsigned char*>( m_receive_memory.data() ), m_receive_memory.size() );
+		length = sfn::detail::ssl_read( &m_ssl_context, reinterpret_cast<unsigned char*>( m_receive_memory.data() ), static_cast<int>( m_receive_memory.size() ) );
 
 		if( !start ) {
 			start = ( state_before != SSL_HANDSHAKE_OVER ) && ( m_ssl_context.state == SSL_HANDSHAKE_OVER );

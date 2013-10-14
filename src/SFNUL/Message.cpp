@@ -33,7 +33,7 @@ Message::size_type Message::GetSize() const {
 std::vector<char> Message::GetFront( std::size_t size ) {
 	std::vector<char> data( size );
 
-	std::copy( std::begin( m_data ), std::begin( m_data ) + size, std::begin( data ) );
+	std::copy( std::begin( m_data ), std::begin( m_data ) + static_cast<int>( size ), std::begin( data ) );
 
 	return data;
 }
@@ -41,17 +41,17 @@ std::vector<char> Message::GetFront( std::size_t size ) {
 std::vector<char> Message::GetBack( std::size_t size ) {
 	std::vector<char> data( size );
 
-	std::copy( std::end( m_data ) - size, std::end( m_data ), std::begin( data ) );
+	std::copy( std::end( m_data ) - static_cast<int>( size ), std::end( m_data ), std::begin( data ) );
 
 	return data;
 }
 
 void Message::PopFront( std::size_t size ) {
-	m_data.erase( std::begin( m_data ), std::begin( m_data ) + size );
+	m_data.erase( std::begin( m_data ), std::begin( m_data ) + static_cast<int>( size ) );
 }
 
 void Message::PopBack( std::size_t size ) {
-	m_data.erase( std::end( m_data ) - size, std::end( m_data ) );
+	m_data.erase( std::end( m_data ) - static_cast<int>( size ), std::end( m_data ) );
 }
 
 const std::deque<unsigned char>& Message::GetBuffer() const {

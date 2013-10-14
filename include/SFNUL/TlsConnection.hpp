@@ -7,6 +7,8 @@
 #include <memory>
 #include <vector>
 #include <type_traits>
+#include <string>
+#include <array>
 #include <tropicssl/net.h>
 #include <tropicssl/ssl.h>
 #include <tropicssl/certs.h>
@@ -141,7 +143,7 @@ public:
 	 * @param password std::string containing the optional password.
 	 * @return TlsKey
 	 */
-	static Ptr Create( const std::string& key, const std::string& password = "" );
+	static Ptr Create( const std::string& key, const std::string& password = std::string{} );
 
 protected:
 	/** Ctor.

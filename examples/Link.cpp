@@ -3,10 +3,11 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <iostream>
+#include <atomic>
 #include <SFNUL.hpp>
 
-int main( int argc, char** argv ) {
-	auto exit = false;
+int main( int /*argc*/, char** argv ) {
+	std::atomic_bool exit{ false };
 	std::cout << "Press ENTER to exit.\n";
 	// Don't use sfn::Thread for your own projects, it is not what you think it is.
 	sfn::Thread exit_handler( [&]() { std::cin.get(); exit = true; } );

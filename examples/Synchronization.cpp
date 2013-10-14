@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <random>
+#include <atomic>
 #include <SFNUL.hpp>
 
 // This is an example of a SyncedObject.
@@ -98,7 +99,7 @@ public:
 const Coordinate::object_type_id_type Coordinate::type_id = 0x1337;
 
 int main( int /*argc*/, char** argv ) {
-	auto exit = false;
+	std::atomic_bool exit{ false };
 	std::cout << "Press ENTER to exit.\n";
 	// Don't use sfn::Thread for your own projects, it is not what you think it is.
 	sfn::Thread exit_handler( [&]() { std::cin.get(); exit = true; } );

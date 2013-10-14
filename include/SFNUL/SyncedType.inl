@@ -139,7 +139,7 @@ auto operator>>=( T& synced_type, S other ) -> decltype( synced_type = synced_ty
 
 template<typename T>
 template<typename S>
-const auto SyncedType<T>::operator[]( S other ) const -> decltype( this->m_value[other] ) {
+auto SyncedType<T>::operator[]( S other ) const -> decltype( this->m_value[other] ) {
 	return m_value[other];
 }
 

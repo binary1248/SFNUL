@@ -11,10 +11,9 @@
 #include <SFNUL/Config.hpp>
 #include <SFNUL/SyncedObject.hpp>
 #include <SFNUL/Link.hpp>
+#include <SFNUL/TcpSocket.hpp>
 
 namespace sfn{
-
-class TcpSocket;
 
 class SFNUL_API SynchronizerBase {
 public:

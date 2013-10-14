@@ -74,11 +74,7 @@ std::deque<IpAddress> IpAddress::Resolve( const std::string& hostname ) {
 	}
 
 	for( ; endpoint_iterator != asio::ip::icmp::resolver::iterator{}; ++endpoint_iterator ) {
-		asio::ip::icmp::endpoint endpoint{ *endpoint_iterator };
-
-		IpAddress address;
-
-		addresses.emplace_back( endpoint.address() );
+		addresses.emplace_back( endpoint_iterator->endpoint().address() );
 	}
 
 	return addresses;

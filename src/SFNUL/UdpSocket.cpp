@@ -78,17 +78,20 @@ void UdpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_se
 		else {
 			auto new_buffer = std::make_shared<std::vector<char>>( buffer->size() - bytes_sent );
 
-			std::copy_n( buffer->begin() + bytes_sent, new_buffer->size(), new_buffer->begin() );
+			std::copy_n( buffer->begin() + static_cast<int>( bytes_sent ), new_buffer->size(), new_buffer->begin() );
 
 			m_socket.async_send_to( asio::buffer( *new_buffer ), endpoint,
 				m_strand.wrap(
 					std::bind(
 						[]( std::weak_ptr<UdpSocket> socket, const asio::error_code& handler_error, std::size_t handler_bytes_sent, asio::ip::udp::endpoint handler_endpoint, std::shared_ptr<std::vector<char>> handler_buffer ) {
-							if( socket.expired() ) {
+							auto shared_socket = socket.lock();
+
+							if( !shared_socket ) {
 								return;
 							}
 
-							socket.lock()->SendHandler( handler_error, handler_bytes_sent, handler_endpoint, handler_buffer );
+							auto handler_lock = shared_socket->AcquireLock();
+							shared_socket->SendHandler( handler_error, handler_bytes_sent, handler_endpoint, handler_buffer );
 						},
 						std::weak_ptr<UdpSocket>( shared_from_this() ), std::placeholders::_1, std::placeholders::_2, endpoint, new_buffer
 					)
@@ -194,7 +197,7 @@ std::size_t UdpSocket::ReceiveFrom( void* data, std::size_t size, const Endpoint
 		static_cast<char*>( data )[index] = m_receive_buffer[asio_endpoint][index];
 	}
 
-	m_receive_buffer[asio_endpoint].erase( m_receive_buffer[asio_endpoint].begin(), m_receive_buffer[asio_endpoint].begin() + receive_size );
+	m_receive_buffer[asio_endpoint].erase( m_receive_buffer[asio_endpoint].begin(), m_receive_buffer[asio_endpoint].begin() + static_cast<int>( receive_size ) );
 
 	if( m_receive_buffer[asio_endpoint].empty() ) {
 		m_receive_buffer.erase( asio_endpoint );

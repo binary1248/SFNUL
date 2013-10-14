@@ -32,7 +32,7 @@ SyncedObject& SyncedObject::operator=( SyncedObject&& object ) {
 	m_id = object.m_id;
 
 	if( m_synchronizer ) {
-		if( ( m_synchronizer == object.m_synchronizer ) ) {
+		if( m_synchronizer == object.m_synchronizer ) {
 			m_synchronizer->MoveObject( &object, this );
 		}
 		else {

@@ -116,6 +116,11 @@ const Coordinate::object_type_id_type Coordinate::type_id = 0x1337;
 
 // Of course we need to teach sfn::Message how to deal with sf::Color objects.
 namespace sfn {
+
+// Because we know we want to declare functions before defining them...
+sfn::Message& operator<<( sfn::Message& message, const sf::Color& input );
+sfn::Message& operator>>( sfn::Message& message, sf::Color& output );
+
 sfn::Message& operator<<( sfn::Message& message, const sf::Color& input ) {
 	message << input.r << input.g << input.b << input.a;
 	return message;
@@ -125,6 +130,7 @@ sfn::Message& operator>>( sfn::Message& message, sf::Color& output ) {
 	message >> output.r >> output.g >> output.b >> output.a;
 	return message;
 }
+
 }
 
 int main( int /*argc*/, char** argv ) {

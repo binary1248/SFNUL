@@ -430,10 +430,6 @@ void SynchronizerClient::Receive() {
 
 						break;
 					}
-					default: {
-						std::cerr << "Warning: Invalid Synchronizer synchronization type specified by the server.\n";
-						break;
-					}
 				}
 			}
 		} while( received );

@@ -42,31 +42,45 @@ void TcpSocket::Connect( const Endpoint& endpoint ) {
 	m_send_buffer.clear();
 	m_receive_buffer.clear();
 
-	m_socket.async_connect( endpoint.GetInternalEndpoint<asio::ip::tcp>(), [&]( const asio::error_code& error ) {
-		if( !error ) {
-			OnConnected();
+	m_socket.async_connect(
+		endpoint.GetInternalEndpoint<asio::ip::tcp>(),
+		m_strand.wrap(
+			std::bind(
+				[&]( std::weak_ptr<TcpSocket> socket, const asio::error_code& error ) {
+					auto shared_socket = socket.lock();
 
-			m_connected = true;
-			m_request_shutdown = false;
-			m_fin_sent = false;
-			m_fin_received = false;
+					if( !shared_socket ) {
+						return;
+					}
 
-			ReceiveHandler( asio::error_code{}, 0 );
-			SendHandler( asio::error_code{}, 0 );
-		}
-		else if( ( error == asio::error::operation_aborted ) || ( error == asio::error::connection_aborted ) || ( error == asio::error::connection_reset ) ) {
-			m_fin_sent = true;
-			m_fin_received = true;
-			m_connected = false;
-		}
-		else {
-			m_connected = false;
+					auto handler_lock = shared_socket->AcquireLock();
 
+					if( !error ) {
+						shared_socket->OnConnected();
 
+						shared_socket->m_connected = true;
+						shared_socket->m_request_shutdown = false;
+						shared_socket->m_fin_sent = false;
+						shared_socket->m_fin_received = false;
 
-			std::cerr << "Connect() Error: " << error.message() << "\n";
-		}
-	} );
+						shared_socket->ReceiveHandler( asio::error_code{}, 0 );
+						shared_socket->SendHandler( asio::error_code{}, 0 );
+					}
+					else if( ( error == asio::error::operation_aborted ) || ( error == asio::error::connection_aborted ) || ( error == asio::error::connection_reset ) ) {
+						shared_socket->m_fin_sent = true;
+						shared_socket->m_fin_received = true;
+						shared_socket->m_connected = false;
+					}
+					else {
+						shared_socket->m_connected = false;
+
+						std::cerr << "Connect() Error: " << error.message() << "\n";
+					}
+				},
+				std::weak_ptr<TcpSocket>( shared_from_this() ), std::placeholders::_1
+			)
+		)
+	);
 }
 
 void TcpSocket::Shutdown() {
@@ -186,7 +200,7 @@ void TcpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_se
 			return;
 		}
 
-		m_send_buffer.erase( m_send_buffer.begin(), m_send_buffer.begin() + bytes_sent );
+		m_send_buffer.erase( m_send_buffer.begin(), m_send_buffer.begin() + static_cast<int>( bytes_sent ) );
 
 		if( m_send_buffer.empty() ) {
 			if( m_request_shutdown && !m_fin_sent && m_socket.is_open() ) {
@@ -363,7 +377,7 @@ std::size_t TcpSocket::Receive( void* data, std::size_t size ) {
 		start = true;
 	}
 
-	m_receive_buffer.erase( m_receive_buffer.begin(), m_receive_buffer.begin() + receive_size );
+	m_receive_buffer.erase( m_receive_buffer.begin(), m_receive_buffer.begin() + static_cast<int>( receive_size ) );
 
 	if( start ) {
 		ReceiveHandler( asio::error_code{}, 0 );
