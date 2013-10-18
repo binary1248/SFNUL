@@ -26,11 +26,9 @@ find_package( Threads REQUIRED )
 
 if( CMAKE_USE_WIN32_THREADS_INIT )
 	# We are using Win32 threads.
-	add_definitions( -DSFNUL_WIN32_THREADS )
 	message( STATUS "Using Win32 threads." )
 elseif( CMAKE_USE_PTHREADS_INIT )
 	# We are using pthreads.
-	add_definitions( -DSFNUL_PTHREADS )
 	message( STATUS "Using pthreads." )
 else()
 	message( FATAL_ERROR "Didn't find Win32 threads or pthreads. Other threading libraries are currently unsupported." )

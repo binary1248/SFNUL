@@ -40,6 +40,15 @@
 #define ASIO_STANDALONE
 #define ASIO_HEADER_ONLY
 
+// Use Win32 threads on Windows and pthreads elsewhere unless explicitly requested.
+#if !defined( SFNUL_WIN32_THREADS ) && !defined( SFNUL_PTHREADS )
+	#if defined( SFNUL_SYSTEM_WINDOWS )
+		#define SFNUL_WIN32_THREADS
+	#else
+		#define SFNUL_PTHREADS
+	#endif
+#endif
+
 // Clang support, because asio doesn't detect it
 #if defined( __clang__ )
 	#if __has_feature( cxx_implicit_moves )
@@ -68,27 +77,20 @@
 	#define ASIO_HAS_CSTDINT 1
 #endif
 
+#include <cstdint>
+
 namespace sfn {
 
-typedef signed char Int8;
-typedef unsigned char Uint8;
+typedef std::int8_t Int8;
+typedef std::uint8_t Uint8;
 
-typedef signed short Int16;
-typedef unsigned short Uint16;
+typedef std::int16_t Int16;
+typedef std::uint16_t Uint16;
 
-typedef signed int Int32;
-typedef unsigned int Uint32;
+typedef std::int32_t Int32;
+typedef std::uint32_t Uint32;
 
-#if defined( _MSC_VER )
-
-typedef signed __int64 Int64;
-typedef unsigned __int64 Uint64;
-
-#else
-
-typedef signed long long Int64;
-typedef unsigned long long Uint64;
-
-#endif
+typedef std::int64_t Int64;
+typedef std::uint64_t Uint64;
 
 }
