@@ -26,26 +26,6 @@ function( build_example SAMPLE_NAME SOURCES )
 endfunction()
 
 function( build_sfml_example SAMPLE_NAME SOURCES )
-	set( SFML_STATIC_LIBRARIES false CACHE BOOL "Was SFML built as a static library?" )
-	find_package( SFML 2 COMPONENTS graphics window system )
-	
-	# FindSFML was not run.
-	if( NOT DEFINED FIND_SFML_LIB_SUFFIX )
-		set( CMAKE_MODULE_PATH "" CACHE PATH "Directory containing FindSFML.cmake" )
-		message( FATAL_ERROR "CMake couldn't find FindSFML.cmake. Did you remember to install SFML?\nOptionally, you can set the CMAKE_MODULE_PATH entry to the directory containing FindSFML.cmake.\nFindSFML.cmake will be searched for in there." )
-	endif()
-
-	# FindSFML couldn't find SFML.
-	if( NOT SFML_FOUND )
-		set( SFML_ROOT "" CACHE PATH "SFML root directory" )
-		message( FATAL_ERROR "CMake couldn't find SFML. Set the SFML_ROOT entry to SFML's root directory (containing \"include\" and \"lib\" directories)." )
-	endif()
-
-	if( SFML_STATIC_LIBRARIES )
-		# Even though FindSFML sets -DSFML_STATIC itself, better safe than sorry.
-		add_definitions( -DSFML_STATIC )
-	endif()
-	
 	include_directories( SYSTEM ${SFML_INCLUDE_DIR} )
 	
 	# Set default compile flags for GCC
@@ -59,7 +39,7 @@ function( build_sfml_example SAMPLE_NAME SOURCES )
 	
 	add_executable( ${SAMPLE_NAME} ${SOURCES} )
 
-	target_link_libraries( ${SAMPLE_NAME} sfnul ${SFML_LIBRARIES} ${OPENGL_glu_LIBRARY} ${OPENGL_gl_LIBRARY} )
+	target_link_libraries( ${SAMPLE_NAME} sfnul ${SFML_LIBRARIES} ${SFML_DEPENDENCIES} )
 	
 	if( WIN32 )
 		target_link_libraries( ${SAMPLE_NAME} ws2_32 mswsock )
@@ -93,5 +73,24 @@ if( SFNUL_BUILD_EXAMPLES )
 endif()
 
 if( SFNUL_BUILD_SFML_EXAMPLES )
+	# SFML_STATIC_LIBRARIES is used by FindSFML.cmake to select the correct library files to link to.
+	set( SFML_STATIC_LIBRARIES false CACHE BOOL "Was SFML built as a static library?" )
+
+	# A bit of non-trivial information.
+	message( STATUS "If using SFML as a static library remember to set SFML_STATIC_LIBRARIES." )
+	message( STATUS "If setting SFML_STATIC_LIBRARIES, display the advanced variables and remove all SFML_XXX_LIBRARY_YYY entries so that they get repopulated." )
+
+	# Automatically grab SFML_ROOT from the environment if it exists, or force the user to specify it if it doesn't.
+	set( SFML_ROOT "$ENV{SFML_ROOT}" CACHE PATH "SFML root directory." )
+
+	if( "${SFML_ROOT}" STREQUAL "" )
+		message( FATAL_ERROR "The SFML_ROOT environment variable was not found. Please set SFML_ROOT to the directory where SFML is located." )
+	endif()
+
+	# Add SFML's CMake Modules directory to module search path for finding FindSFML.cmake more easily.
+	set( CMAKE_MODULE_PATH "${SFML_ROOT}/cmake/Modules/;${CMAKE_MODULE_PATH}" )
+	
+	find_package( SFML 2 REQUIRED COMPONENTS graphics window system )
+	
 	build_sfml_example( "SynchronizationSFML" "SynchronizationSFML.cpp" )
 endif()

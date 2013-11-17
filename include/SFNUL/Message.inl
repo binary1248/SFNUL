@@ -55,6 +55,77 @@ public:
 	static const bool value = sizeof( test<T>( 0 ) ) == sizeof( yes );
 };
 
+#if defined( SFNUL_ENDIAN_SWAP )
+
+#if defined( _MSC_VER )
+#include <intrin.h>
+#endif
+
+template<typename T, size_t N>
+struct ByteSwapImpl;
+
+template<typename T>
+struct ByteSwapImpl<T, 1> {
+	void operator()( T& value ) const {
+	}
+};
+
+template<typename T>
+struct ByteSwapImpl<T, 2> {
+	void operator()( T& value ) const {
+		value = static_cast<T>(
+#if defined( _MSC_VER )
+			_byteswap_ushort( static_cast<uint16_t>( value ) )
+#elif defined( __GNUC__ )
+			__builtin_bswap16( static_cast<int16_t>( value ) )
+#else
+#error No built-in byte-swap supported for this compiler.
+#endif
+		);
+	}
+};
+
+template<typename T>
+struct ByteSwapImpl<T, 4> {
+	void operator()( T& value ) const {
+		value = static_cast<T>(
+#if defined( _MSC_VER )
+			_byteswap_ulong( static_cast<uint32_t>( value ) )
+#elif defined( __GNUC__ )
+			__builtin_bswap32( static_cast<int32_t>( value ) )
+#else
+#error No built-in byte-swap supported for this compiler.
+#endif
+		);
+	}
+};
+
+template<typename T>
+struct ByteSwapImpl<T, 8> {
+	void operator()( T& value ) const {
+		value = static_cast<T>(
+#if defined( _MSC_VER )
+			_byteswap_uint64( static_cast<uint64_t>( value ) )
+#elif defined( __GNUC__ )
+			__builtin_bswap64( static_cast<int64_t>( value ) )
+#else
+#error No built-in byte-swap supported for this compiler.
+#endif
+		);
+	}
+};
+
+template<typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+SFNUL_API void ByteSwap( T& value ) {
+	ByteSwapImpl<T, sizeof( T )>()( value );
+}
+
+template<typename T, typename std::enable_if<!std::is_integral<T>::value, int>::type = 0>
+SFNUL_API void ByteSwap( T& ) {
+}
+
+#endif
+
 #if defined( WITH_MESSAGE_FORWARD_LIST_SUPPORT )
 
 template<typename T, typename std::enable_if<std::is_same<T, std::forward_list<typename T::value_type>>::value, int>::type = 0>
@@ -90,7 +161,15 @@ template<typename T, typename std::enable_if<std::is_trivial<T>::value, int>::ty
 SFNUL_API Message& operator<<( Message& message, const T& input ) {
 	std::vector<char> data( sizeof( T ) );
 
+#if defined( SFNUL_ENDIAN_SWAP )
+	T swapped_input( input );
+
+	ByteSwap( swapped_input );
+
+	std::memcpy( data.data(), &swapped_input, sizeof( T ) );
+#else
 	std::memcpy( data.data(), &input, sizeof( T ) );
+#endif
 
 	message.Append( data );
 
@@ -101,7 +180,15 @@ template<typename T, typename std::enable_if<std::is_trivial<T>::value, int>::ty
 SFNUL_API Message& operator>>( const T& input, Message& message ) {
 	std::vector<char> data( sizeof( T ) );
 
+#if defined( SFNUL_ENDIAN_SWAP )
+	T swapped_input( input );
+
+	ByteSwap( swapped_input );
+
+	std::memcpy( data.data(), &swapped_input, sizeof( T ) );
+#else
 	std::memcpy( data.data(), &input, sizeof( T ) );
+#endif
 
 	message.Prepend( data );
 
@@ -171,6 +258,10 @@ SFNUL_API Message& operator>>( Message& message, T& output ) {
 
 	std::memcpy( &output, data.data(), sizeof( T ) );
 
+#if defined( SFNUL_ENDIAN_SWAP )
+	ByteSwap( output );
+#endif
+
 	message.PopFront( sizeof( T ) );
 
 	return message;
@@ -183,6 +274,10 @@ SFNUL_API Message& operator<<=( T& output, Message& message ) {
 	std::vector<char> data( message.GetBack( sizeof( T ) ) );
 
 	std::memcpy( &output, data.data(), sizeof( T ) );
+
+#if defined( SFNUL_ENDIAN_SWAP )
+	ByteSwap( output );
+#endif
 
 	message.PopBack( sizeof( T ) );
 

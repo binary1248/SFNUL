@@ -15,12 +15,33 @@ public:
 
 	// Requirement #1:
 	// You MUST provide at least one non-copy constructor.
-	// All Synced member fields MUST be initialized with ( this ) or ( this, value ).
+	// All Synced member fields MUST be initialized with ( this )
+	// or ( this, sync_type, value ).
+	// The synchronization type of the member can be very important depending on
+	// what the purpose of the member is and how it interacts with the rest of
+	// your application. It defaults to DYNAMIC for the first signature.
+	// STATIC synchronization means that the member should only be synchronized
+	// at the construction of the object. It is set once and never changed again
+	// throughout the lifetime of the object.
+	// DYNAMIC synchronization means that the member is synchronized when it is
+	// altered. This can be desirable in the case of e.g. user input which has
+	// an impact on the value of the member. When the member is not altered,
+	// no synchronization will take place.
+	// STREAM synchronization means that the member will be synchronized
+	// occasionally regardless of whether its value changes or not. This can be
+	// desirable e.g. in the case of values that are the result of physical
+	// computations or otherwise the derivative of other values that change very
+	// often. To prevent STREAM synchronization from consuming a lot of
+	// throughput, STREAM members are only synchronized after a user definable
+	// period of time has passed since the last synchronization or during a
+	// DYNAMIC synchronization. Set the period with
+	// SetStreamSynchronizationPeriod() based on testing of the network and
+	// state update performance.
 	Coordinate() :
 		SyncedObject{},
-		x{ this, 300.f },
-		y{ this, 200.f },
-		color{ this, sf::Color::White }
+		x{ this, sfn::SynchronizationType::DYNAMIC, 300.f },
+		y{ this, sfn::SynchronizationType::DYNAMIC, 200.f },
+		color{ this, sfn::SynchronizationType::STATIC, sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 } }
 	{
 	}
 
@@ -39,9 +60,9 @@ public:
 	// has to be created as with the default constructor.
 	Coordinate( const Coordinate& coordinate ) :
 		SyncedObject{},
-		x{ this, coordinate.x },
-		y{ this, coordinate.y },
-		color{ this, coordinate.color }
+		x{ this, sfn::SynchronizationType::DYNAMIC, coordinate.x },
+		y{ this, sfn::SynchronizationType::DYNAMIC, coordinate.y },
+		color{ this, sfn::SynchronizationType::STATIC, coordinate.color }
 	{
 	}
 
@@ -64,9 +85,9 @@ public:
 	// object is constructed due to the constraints mentioned above.
 	Coordinate( Coordinate&& coordinate ) :
 		sfn::SyncedObject{ std::forward<sfn::SyncedObject>( coordinate ) },
-		x{ this, coordinate.x },
-		y{ this, coordinate.y },
-		color{ this, coordinate.color }
+		x{ this, sfn::SynchronizationType::DYNAMIC, coordinate.x },
+		y{ this, sfn::SynchronizationType::DYNAMIC, coordinate.y },
+		color{ this, sfn::SynchronizationType::STATIC, coordinate.color }
 	{
 	}
 
@@ -107,12 +128,19 @@ public:
 		window.draw( shape );
 	}
 
-	// This object is not synchronized.
+	// These objects are not synchronized.
 	sf::CircleShape shape{ 20.f, 20 };
+
+	static std::mt19937 gen;
+	static std::uniform_int_distribution<sf::Uint8> dist;
 };
 
 // Our Coordinate object type id.
 const Coordinate::object_type_id_type Coordinate::type_id = 0x1337;
+
+// Our random colour generator
+std::mt19937 Coordinate::gen{};
+std::uniform_int_distribution<sf::Uint8> Coordinate::dist{ 0, 255 };
 
 // Of course we need to teach sfn::Message how to deal with sf::Color objects.
 namespace sfn {
@@ -174,9 +202,6 @@ int main( int /*argc*/, char** argv ) {
 		// In this case, the move constructor is invoked.
 		coordinates.emplace_back( synchronizer.CreateObject<Coordinate>() );
 
-		std::mt19937 gen{};
-		std::uniform_int_distribution<sf::Uint8> dist{ 0, 255 };
-
 		while( window.isOpen() ) {
 			sf::Event event;
 
@@ -186,14 +211,12 @@ int main( int /*argc*/, char** argv ) {
 				} else if( ( event.type == sf::Event::KeyPressed ) && ( event.key.code == sf::Keyboard::Z ) ) {
 					// Move assign a new Coordinate object.
 					coordinates.push_back( synchronizer.CreateObject<Coordinate>() );
-					coordinates.back().color = sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 };
 				} else if( ( event.type == sf::Event::KeyPressed ) && ( event.key.code == sf::Keyboard::X ) ) {
 					// Clear all objects.
 					coordinates.clear();
 
 					// Move construct a new Coordinate object.
 					coordinates.emplace_back( synchronizer.CreateObject<Coordinate>() );
-					coordinates.back().color = sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 };
 				} else if( ( event.type == sf::Event::KeyPressed ) && ( event.key.code == sf::Keyboard::C ) ) {
 					auto coordinate = synchronizer.CreateObject<Coordinate>();
 
@@ -201,7 +224,6 @@ int main( int /*argc*/, char** argv ) {
 					// This won't work since the temporary Coordinate object at the
 					// end of the deque wasn't constructed through the synchronizer.
 					coordinates.push_back( coordinate );
-					coordinates.back().color = sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 };
 				} else if( ( event.type == sf::Event::KeyPressed ) && ( event.key.code == sf::Keyboard::V ) ) {
 					auto coordinate = synchronizer.CreateObject<Coordinate>();
 
@@ -209,7 +231,6 @@ int main( int /*argc*/, char** argv ) {
 					// This won't work as well since in this case the container is the
 					// one invoking the constructor of the Coordinate object as well.
 					coordinates.emplace_back( coordinate );
-					coordinates.back().color = sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 };
 				}
 			}
 

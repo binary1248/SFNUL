@@ -8,6 +8,14 @@
 #include <SFNUL/SyncedType.hpp>
 #include <SFNUL/Synchronizer.hpp>
 
+// Until C++14 comes along...
+namespace std {
+template<typename T, typename... Args>
+inline std::unique_ptr<T> make_unique( Args&&... args ) {
+	return std::unique_ptr<T>( new T( std::forward<Args>( args )... ) );
+}
+}
+
 namespace sfn {
 
 SyncedObject::id_type SyncedObject::m_last_id = SyncedObject::invalid_id;
@@ -55,19 +63,29 @@ SyncedObject::~SyncedObject() {
   }
 }
 
-Message SyncedObject::Serialize() {
+Message SyncedObject::Serialize( SynchronizationType sync_type ) {
 	Message message;
 
+	message << static_cast<sfn::Uint8>( sync_type );
+
 	for( auto m : m_members ) {
-		m->Serialize( message );
+		m->Serialize( message, sync_type );
+	}
+
+	if( m_last_stream_sync ) {
+		*m_last_stream_sync = std::chrono::steady_clock::now();
 	}
 
 	return message;
 }
 
 void SyncedObject::Deserialize( Message& message ) {
+	sfn::Uint8 sync_type;
+
+	message >> sync_type;
+
 	for( auto m : m_members ) {
-		m->Deserialize( message );
+		m->Deserialize( message, static_cast<SynchronizationType>( sync_type ) );
 	}
 }
 
@@ -86,12 +104,23 @@ void SyncedObject::SetID( SyncedObject::id_type id ) {
 void SyncedObject::RegisterMember( BaseSyncedType* member ) {
 	m_members.emplace_back( member );
 	m_members.shrink_to_fit();
+
+	if( !m_last_stream_sync && ( member->GetSynchronizationType() == SynchronizationType::STREAM ) ) {
+		m_last_stream_sync = std::make_unique<std::chrono::steady_clock::time_point>( std::chrono::steady_clock::now() );
+	}
 }
 
 void SyncedObject::NotifyChanged() {
 	m_changed = true;
 
 	if( m_synchronizer ) {
+		m_synchronizer->UpdateObject( this );
+	}
+}
+
+void SyncedObject::CheckStreamUpdate() {
+	if( m_synchronizer && m_last_stream_sync && ( std::chrono::steady_clock::now() - ( *m_last_stream_sync ) > BaseSyncedType::m_sync_period ) ) {
+		*m_last_stream_sync = std::chrono::steady_clock::now();
 		m_synchronizer->UpdateObject( this );
 	}
 }

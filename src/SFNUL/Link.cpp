@@ -88,11 +88,16 @@ std::size_t LinkBase::Receive( stream_id_type stream_id, void* data, std::size_t
 			return 0;
 		}
 
+#if defined( SFNUL_DEBUG )
 		auto stream_id_received = GetInternalTransport()->Receive( &m_current_stream_reader, sizeof( m_current_stream_reader ) );
 		assert( stream_id_received == sizeof( m_current_stream_reader ) );
 
 		auto segment_remaining_received = GetInternalTransport()->Receive( &m_segment_remaining, sizeof( m_segment_remaining ) );
 		assert( segment_remaining_received == sizeof( m_segment_remaining ) );
+#else
+		GetInternalTransport()->Receive( &m_current_stream_reader, sizeof( m_current_stream_reader ) );
+		GetInternalTransport()->Receive( &m_segment_remaining, sizeof( m_segment_remaining ) );
+#endif
 
 		m_segment_active = true;
 
@@ -122,11 +127,16 @@ std::size_t LinkBase::Receive( stream_id_type stream_id, Message& message ) {
 			return 0;
 		}
 
+#if defined( SFNUL_DEBUG )
 		auto stream_id_received = GetInternalTransport()->Receive( &m_current_stream_reader, sizeof( m_current_stream_reader ) );
 		assert( stream_id_received == sizeof( m_current_stream_reader ) );
 
 		auto segment_remaining_received = GetInternalTransport()->Receive( &m_segment_remaining, sizeof( m_segment_remaining ) );
 		assert( segment_remaining_received == sizeof( m_segment_remaining ) );
+#else
+		GetInternalTransport()->Receive( &m_current_stream_reader, sizeof( m_current_stream_reader ) );
+		GetInternalTransport()->Receive( &m_segment_remaining, sizeof( m_segment_remaining ) );
+#endif
 
 		m_segment_active = true;
 

@@ -7,15 +7,15 @@
 namespace sfn {
 
 template<typename T>
-SyncedType<T>::SyncedType( SyncedObject* owner ) :
-	BaseSyncedType( owner ),
+SyncedType<T>::SyncedType( SyncedObject* owner, SynchronizationType sync_type ) :
+	BaseSyncedType( owner, sync_type ),
 	m_value()
 {
 }
 
 template<typename T>
-SyncedType<T>::SyncedType( SyncedObject* owner, T value ) :
-	BaseSyncedType( owner ),
+SyncedType<T>::SyncedType( SyncedObject* owner, SynchronizationType sync_type, T value ) :
+	BaseSyncedType( owner, sync_type ),
 	m_value( value )
 {
 }
@@ -156,13 +156,17 @@ SyncedType<T>::operator T() const {
 }
 
 template<typename T>
-void SyncedType<T>::Serialize( Message& message ) {
-	message << m_value;
+void SyncedType<T>::Serialize( Message& message, SynchronizationType sync_type ) {
+	if( GetSynchronizationType() >= sync_type ) {
+		message << m_value;
+	}
 }
 
 template<typename T>
-void SyncedType<T>::Deserialize( Message& message ) {
-	message >> m_value;
+void SyncedType<T>::Deserialize( Message& message, SynchronizationType sync_type ) {
+	if( GetSynchronizationType() >= sync_type ) {
+		message >> m_value;
+	}
 }
 
 }

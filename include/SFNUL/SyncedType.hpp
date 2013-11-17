@@ -4,12 +4,24 @@
 
 #pragma once
 
+#include <chrono>
 #include <SFNUL/Config.hpp>
 
 namespace sfn {
 
 class SyncedObject;
 class Message;
+
+enum class SynchronizationType : unsigned char {
+	STATIC = 0,
+	DYNAMIC = 1,
+	STREAM = 2
+};
+
+/** Set the period to wait for between synchronizations of STREAM SyncedTypes.
+ * @param period Period to wait for.
+ */
+SFNUL_API void SetStreamSynchronizationPeriod( const std::chrono::milliseconds& period );
 
 class SFNUL_API BaseSyncedType {
 public:
@@ -35,10 +47,16 @@ public:
 	 */
 	void SetModified( bool modified );
 
+	/** Get the synchronization type set for this object.
+	 */
+	SynchronizationType GetSynchronizationType() const;
+
 protected:
 	friend class SyncedObject;
 
-	BaseSyncedType( SyncedObject* owner );
+	friend void SetStreamSynchronizationPeriod( const std::chrono::milliseconds& milliseconds );
+
+	BaseSyncedType( SyncedObject* owner, SynchronizationType sync_type );
 
 	~BaseSyncedType();
 
@@ -46,12 +64,16 @@ protected:
 
 	BaseSyncedType( BaseSyncedType&& other ) = delete;
 
-	virtual void Serialize( Message& message ) = 0;
+	virtual void Serialize( Message& message, SynchronizationType sync_type ) = 0;
 
-	virtual void Deserialize( Message& message ) = 0;
+	virtual void Deserialize( Message& message, SynchronizationType sync_type ) = 0;
+
+	static std::chrono::milliseconds m_sync_period;
 
 private:
 	SyncedObject* m_owner = nullptr;
+
+	SynchronizationType m_sync_type;
 
 	bool m_modified = true;
 };
@@ -62,9 +84,9 @@ private:
 	T m_value;
 
 public:
-	explicit SyncedType( SyncedObject* owner );
+	explicit SyncedType( SyncedObject* owner, SynchronizationType sync_type = SynchronizationType::DYNAMIC );
 
-	explicit SyncedType( SyncedObject* owner, T value );
+	explicit SyncedType( SyncedObject* owner, SynchronizationType sync_type, T value );
 
 	template<typename S>
 	void SetValue( T value );
@@ -83,9 +105,9 @@ public:
 	operator T() const;
 
 protected:
-	virtual void Serialize( Message& message );
+	virtual void Serialize( Message& message, SynchronizationType sync_type );
 
-	virtual void Deserialize( Message& message );
+	virtual void Deserialize( Message& message, SynchronizationType sync_type );
 };
 
 #if defined( __GNUG__ )

@@ -16,6 +16,7 @@ set( BUILD_SHARED_LIBS false CACHE BOOL "Build dynamic library." )
 set( SFNUL_BUILD_EXAMPLES true CACHE BOOL "Build SFNUL examples." )
 set( SFNUL_BUILD_SFML_EXAMPLES false CACHE BOOL "Build SFNUL examples that use SFML for visualisation." )
 set( SFNUL_BUILD_DOC false CACHE BOOL "Generate the SFNUL API documentation." )
+set( SFNUL_ENDIAN_SWAP false CACHE BOOL "Swap endianness of integral values. Enable if building for specific hardware." )
 
 if( MSVC )
 	set( SFNUL_USE_STATIC_STD_LIBS false CACHE BOOL "True to link the runtime library statically, false to link them dynamically." )

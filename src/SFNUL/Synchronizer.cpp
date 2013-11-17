@@ -100,7 +100,7 @@ bool SynchronizerServer::AddClient( std::weak_ptr<Link<TcpSocket>> client_link )
 		m_links.emplace_back( client_link );
 
 		for( auto o : m_objects ) {
-			auto message = o->Serialize();
+			auto message = o->Serialize( SynchronizationType::STATIC );
 			o->GetID() >> message;
 			o->GetTypeID() >> message;
 			sync_type::create >> message;
@@ -137,6 +137,10 @@ bool SynchronizerServer::RemoveClient( std::weak_ptr<Link<TcpSocket>> client_lin
 }
 
 void SynchronizerServer::Update() {
+	for( auto o : m_objects ) {
+		o->CheckStreamUpdate();
+	}
+
 	Send();
 }
 
@@ -204,13 +208,13 @@ void SynchronizerServer::Send() {
 
 		if( u.second == sync_type::create ) {
 			auto object = GetObjectByID( u.first );
-			message = object->Serialize();
+			message = object->Serialize( SynchronizationType::STATIC );
 			u.first >> message;
 			object->GetTypeID() >> message;
 			sync_type::create >> message;
 		}
 		else if( u.second == sync_type::update ) {
-			message = GetObjectByID( u.first )->Serialize();
+			message = GetObjectByID( u.first )->Serialize( SynchronizationType::DYNAMIC );
 			u.first >> message;
 			sync_type::update >> message;
 		}

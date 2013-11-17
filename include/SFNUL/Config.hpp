@@ -14,7 +14,7 @@
 #endif
 
 #if defined( SFNUL_SYSTEM_WINDOWS ) && !defined( SFNUL_STATIC )
-	#ifdef SFNUL_EXPORTS
+	#if defined( SFNUL_EXPORTS )
 		#define SFNUL_API __declspec( dllexport )
 	#else
 		#define SFNUL_API __declspec( dllimport )
@@ -23,7 +23,7 @@
 	#define SFNUL_API
 #endif
 
-#ifdef _MSC_VER
+#if defined( _MSC_VER )
 	#pragma warning(disable : 4251) // Suppress a warning which is meaningless for us
 	#pragma warning(disable : 4503) // Suppress warnings about truncated names. Enable again if linker errors occur.
 #endif
