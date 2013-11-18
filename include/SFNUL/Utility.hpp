@@ -14,16 +14,12 @@
 
 namespace sfn {
 
-extern std::ostringstream discard_message;
-
 enum class MessageLevel : unsigned char {
 	ERROR = 0,
 	WARNING = 1,
 	INFORMATION = 2,
 	DEBUG = 3,
 };
-
-extern MessageLevel message_level;
 
 void SetMessageLevel( MessageLevel level );
 
