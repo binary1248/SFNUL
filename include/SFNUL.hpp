@@ -18,6 +18,7 @@
 #include <SFNUL/Message.hpp>
 #include <SFNUL/Link.hpp>
 #include <SFNUL/Synchronizer.hpp>
+#include <SFNUL/Utility.hpp>
 
 namespace sfn {
 

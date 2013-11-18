@@ -5,6 +5,7 @@
 #include <cstring>
 #include <iostream>
 #include <algorithm>
+#include <SFNUL/Utility.hpp>
 #include <SFNUL/Message.hpp>
 
 #if defined( SFNUL_SYSTEM_WINDOWS )
@@ -112,7 +113,7 @@ void TlsConnection<T, U, V>::Shutdown() {
 	int result = sfn::detail::ssl_close_notify( &m_ssl_context );
 
 	if( result ) {
-		std::cerr << "TlsConnection::Shutdown() Error: ssl_close_notify returned: " << result << "\n";
+		ErrorMessage() << "TlsConnection::Shutdown() Error: ssl_close_notify returned: " << result << "\n";
 		return;
 	}
 
@@ -142,7 +143,7 @@ void TlsConnection<T, U, V>::Close() {
 
 	if( !m_local_closed ) {
 		if( !m_send_buffer.empty() ) {
-			std::cerr << "TlsConnection::Close(): Warning, did not send all data before shutdown, possible data loss might occur.\n";
+			WarningMessage() << "TlsConnection::Close(): Warning, did not send all data before shutdown, possible data loss might occur.\n";
 		}
 	}
 
@@ -323,7 +324,7 @@ void TlsConnection<T, U, V>::OnSent() {
 			require_certificate_key = true;
 		}
 		else {
-			std::cerr << "TlsConnection::OnSent() Error: ssl_write returned: " << length << "\n";
+			ErrorMessage() << "TlsConnection::OnSent() Error: ssl_write returned: " << length << "\n";
 			return;
 		}
 	}
@@ -365,14 +366,14 @@ void TlsConnection<T, U, V>::OnReceived() {
 			m_remote_closed = true;
 		}
 		else if( length == TROPICSSL_ERR_X509_CERT_VERIFY_FAILED ) {
-			std::cerr << "Error: Verification of the peer certificate has failed. (specified REQUIRED)\n";
+			ErrorMessage() << "Error: Verification of the peer certificate has failed. (specified REQUIRED)\n";
 			return;
 		}
 		else if( length == TROPICSSL_ERR_SSL_CERTIFICATE_REQUIRED ) {
 			require_certificate_key = true;
 		}
 		else {
-			std::cerr << "TlsConnection::OnReceived() Error: ssl_read returned: " << length << "\n";
+			ErrorMessage() << "TlsConnection::OnReceived() Error: ssl_read returned: " << length << "\n";
 			return;
 		}
 	}
@@ -389,7 +390,7 @@ void TlsConnection<T, U, V>::OnConnected() {
 	auto result = sfn::detail::ssl_handshake( &m_ssl_context );
 
 	if( result && ( result != TROPICSSL_ERR_NET_TRY_AGAIN ) ) {
-		std::cerr << "TlsConnection::OnConnected() Error: ssl_handshake returned: " << result << "\n";
+		ErrorMessage() << "TlsConnection::OnConnected() Error: ssl_handshake returned: " << result << "\n";
 		return;
 	}
 

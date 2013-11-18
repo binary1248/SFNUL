@@ -13,25 +13,25 @@ many newer features are used that might not be supported by all compilers even
 though they claim C++11 support. Your mileage may vary.
 
 Dependencies:
-  - SFML 2.0 (http://sfml-dev.org/)
-  - ASIO (standalone C++11 version) provided in extlibs as a submodule
-  - TropicSSL (last BSD licensed release of PolarSSL/XySSL
-  - http-parser
-    Initialize all submodules with
-    git submodule update --init --recursive
-    in the root directory.
-    ASIO is provided under the Boost Software License.
-    TropicSSL is provided under the Modified BSD License.
-    http-parser is provided under the MIT License.
+ - ASIO (standalone C++11 version) provided in extlibs as a submodule
+ - TropicSSL (last BSD licensed release of PolarSSL/XySSL
+ - http-parser
+ - SFML 2.x for the optional SFML synchronization example (http://sfml-dev.org/)
+   Initialize all submodules with
+   git submodule update --init --recursive
+   in the root directory.
+   ASIO is provided under the Boost Software License.
+   TropicSSL is provided under the Modified BSD License.
+   http-parser is provided under the MIT License.
 
 The build system in use is CMake (http://cmake.org/). It's available for all
 major platforms.
 
 To build, perform the following steps:
 
-  - cmake .
-  - make install (as root)
-  - On Linux: ldconfig (as root)
+ - cmake .
+ - make install (as root)
+ - On Linux: ldconfig (as root)
 
 2. USING SFNUL IN OWN PROJECTS
 

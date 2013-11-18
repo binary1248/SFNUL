@@ -87,6 +87,7 @@ set(
 	${INC_DIR}/SFNUL/TlsConnection.inl
 	${INC_DIR}/SFNUL/Transport.hpp
 	${INC_DIR}/SFNUL/UdpSocket.hpp
+	${INC_DIR}/SFNUL/Utility.hpp
 )
 
 set(
@@ -109,6 +110,7 @@ set(
 	${SRC_DIR}/SFNUL/TlsConnection.cpp
 	${SRC_DIR}/SFNUL/Transport.cpp
 	${SRC_DIR}/SFNUL/UdpSocket.cpp
+	${SRC_DIR}/SFNUL/Utility.cpp
 )
 
 set(

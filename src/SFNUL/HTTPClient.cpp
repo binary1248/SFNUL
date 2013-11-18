@@ -59,7 +59,7 @@ int OnHeaderValue( http_parser* parser, const char* data, std::size_t length ) {
 	}
 
 	if( iter == std::end( pipeline.m_pipeline ) ) {
-		std::cerr << "Error: HTTP Parser could not find pipeline element to update.\n";
+		ErrorMessage() << "HTTP Parser could not find pipeline element to update.\n";
 		return 1;
 	}
 
@@ -88,7 +88,7 @@ int OnBody( http_parser* parser, const char* data, std::size_t length ) {
 	}
 
 	if( iter == std::end( pipeline.m_pipeline ) ) {
-		std::cerr << "Error: HTTP Parser could not find pipeline element to update.\n";
+		ErrorMessage() << "HTTP Parser could not find pipeline element to update.\n";
 		return 1;
 	}
 
@@ -115,7 +115,7 @@ int OnMessageComplete( http_parser* parser ) {
 	}
 
 	if( iter == std::end( pipeline.m_pipeline ) ) {
-		std::cerr << "Error: HTTP Parser could not find pipeline element to update.\n";
+		ErrorMessage() << "HTTP Parser could not find pipeline element to update.\n";
 		return 1;
 	}
 
@@ -175,7 +175,7 @@ HTTPClientPipeline::~HTTPClientPipeline() {
 	}
 
 	if( ( std::chrono::steady_clock::now() - shutdown_start ) >= std::chrono::seconds{ 1 } ) {
-		std::cerr << "HTTP Connection shutdown timed out.\n";
+		InformationMessage() << "HTTP Connection shutdown timed out.\n";
 	}
 
 	m_socket->ClearBuffers();
@@ -258,8 +258,8 @@ void HTTPClientPipeline::Update() {
 		auto parsed = http_parser_execute( &m_parser, &m_parser_settings, data.data(), received );
 
 		if( parsed != received ) {
-			std::cerr << "Error: HTTP Parser parsed " << parsed << " of " << received << " bytes.\n";
-			std::cerr << "Error: HTTP Parser error: " << http_errno_description( HTTP_PARSER_ERRNO( &m_parser ) ) << ".\n";
+			ErrorMessage() << "HTTP Parser parsed " << parsed << " of " << received << " bytes.\n";
+			ErrorMessage() << "HTTP Parser error: " << http_errno_description( HTTP_PARSER_ERRNO( &m_parser ) ) << ".\n";
 			return;
 		}
 	}
@@ -328,7 +328,7 @@ void HTTPClient::SendRequest( HTTPRequest request, const std::string& address, u
 	auto addresses = sfn::IpAddress::Resolve( address );
 
 	if( addresses.empty() ) {
-		std::cerr << "Warning: HTTP name resolution failed for " << address << "\n";
+		WarningMessage() << "HTTP name resolution failed for " << address << "\n";
 		return;
 	}
 

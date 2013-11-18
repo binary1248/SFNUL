@@ -5,6 +5,7 @@
 #include <iostream>
 #include <cassert>
 #include <algorithm>
+#include <SFNUL/Utility.hpp>
 #include <SFNUL/Synchronizer.hpp>
 #include <SFNUL/TcpSocket.hpp>
 #include <SFNUL/Link.hpp>
@@ -30,7 +31,7 @@ SyncedObject* SynchronizerBase::GetObjectByID( SyncedObject::id_type id ) {
 	);
 
 	if( iter == std::end( m_objects ) ) {
-		std::cerr << "Failed to find object " << id << "\n";
+		ErrorMessage() << "SynchronizerBase::GetObjectByID() Error: Failed to find object " << id << "\n";
 	}
 
 	assert( iter != std::end( m_objects ) );
@@ -372,7 +373,7 @@ void SynchronizerClient::Receive() {
 
 			if( received ) {
 				if( message.GetSize() < sizeof( sync_type ) + sizeof( SyncedObject::id_type ) ) {
-					std::cerr << "Invalid Synchronizer message received by the client.\n";
+					WarningMessage() << "Invalid Synchronizer message received by the client.\n";
 					continue;
 				}
 
@@ -385,7 +386,7 @@ void SynchronizerClient::Receive() {
 						message >> type;
 
 						if( !m_factories[type] ) {
-							std::cerr << "Error: No factories registered for type " << type << ".\n";
+							ErrorMessage() << "No factories registered for type " << type << ".\n";
 						}
 
 						assert( m_factories[type] );
@@ -426,7 +427,7 @@ void SynchronizerClient::Receive() {
 						auto type = object->GetTypeID();
 
 						if( !m_destructors[type] ) {
-							std::cerr << "Error: No destructors registered for type " << type << ".\n";
+							ErrorMessage() << "No destructors registered for type " << type << ".\n";
 						}
 
 						assert( m_destructors[type] );

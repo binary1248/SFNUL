@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <SFNUL/Config.hpp>
+#include <SFNUL/Utility.hpp>
 #include <asio/ip/icmp.hpp>
 #include <SFNUL/NetworkResource.hpp>
 #include <SFNUL/IpAddress.hpp>
@@ -26,7 +27,7 @@ IpAddress::IpAddress( std::string address_string ) {
 	( *this ) = from_string( address_string, error );
 
 	if( error ) {
-		std::cerr << "IpAddress() Error: " << error.message() << "\n";
+		ErrorMessage() << "IpAddress() Error: " << error.message() << "\n";
 	}
 }
 
@@ -39,7 +40,7 @@ IpAddress::operator std::string() const {
 	std::string address_string{ to_string( error ) };
 
 	if( error ) {
-		std::cerr << "Error converting IpAddress to string: " << error.message() << "\n";
+		ErrorMessage() << "Error converting IpAddress to string: " << error.message() << "\n";
 
 		return std::string();
 	}
@@ -68,7 +69,7 @@ std::deque<IpAddress> IpAddress::Resolve( const std::string& hostname ) {
 	std::deque<IpAddress> addresses{};
 
 	if( error ) {
-		std::cerr << "Error resolving \"" << hostname << "\": " << error.message() << "\n";
+		ErrorMessage() << "Error resolving \"" << hostname << "\": " << error.message() << "\n";
 
 		return addresses;
 	}

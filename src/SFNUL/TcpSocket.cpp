@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <iostream>
 #include <SFNUL/Config.hpp>
+#include <SFNUL/Utility.hpp>
 #include <asio/buffer.hpp>
 #include <SFNUL/Endpoint.hpp>
 #include <SFNUL/TcpSocket.hpp>
@@ -35,7 +36,7 @@ void TcpSocket::Connect( const Endpoint& endpoint ) {
 	auto lock = AcquireLock();
 
 	if( m_connected ) {
-		std::cerr << "Connect() Error: Disconnect the current connection before reconnecting.\n";
+		ErrorMessage() << "Connect() Error: Disconnect the current connection before reconnecting.\n";
 		return;
 	}
 
@@ -74,7 +75,7 @@ void TcpSocket::Connect( const Endpoint& endpoint ) {
 					else {
 						shared_socket->m_connected = false;
 
-						std::cerr << "Connect() Error: " << error.message() << "\n";
+						ErrorMessage() << "Connect() Error: " << error.message() << "\n";
 					}
 				},
 				std::weak_ptr<TcpSocket>( shared_from_this() ), std::placeholders::_1
@@ -93,7 +94,7 @@ void TcpSocket::Shutdown() {
 	}
 
 	if( !m_connected ) {
-		std::cerr << "Shutdown() Error: Cannot shutdown unconnected socket.\n";
+		ErrorMessage() << "Shutdown() Error: Cannot shutdown unconnected socket.\n";
 		return;
 	}
 
@@ -117,7 +118,7 @@ void TcpSocket::Shutdown() {
 		else if( error == asio::error::not_connected ) {
 		}
 		else if( error ) {
-			std::cerr << "Shutdown() Error: " << error.message() << "\n";
+			ErrorMessage() << "Shutdown() Error: " << error.message() << "\n";
 			return;
 		}
 
@@ -145,19 +146,19 @@ void TcpSocket::Close() {
 			else if( error == asio::error::not_connected ) {
 			}
 			else if( error ) {
-				std::cerr << "Shutdown() Error: " << error.message() << "\n";
+				ErrorMessage() << "Shutdown() Error: " << error.message() << "\n";
 				return;
 			}
 
 			m_fin_sent = true;
 
 			if( !m_send_buffer.empty() ) {
-				std::cerr << "Close(): Warning, did not send all data before shutdown, possible data loss might occur.\n";
+				WarningMessage() << "Close(): Warning, did not send all data before shutdown, possible data loss might occur.\n";
 			}
 		}
 
 		if( !m_fin_received ) {
-			std::cerr << "Close(): Warning, the remote host did not request connection shutdown, possible data loss might occur.\n";
+			WarningMessage() << "Close(): Warning, the remote host did not request connection shutdown, possible data loss might occur.\n";
 		}
 
 		m_connected = false;
@@ -169,7 +170,7 @@ void TcpSocket::Close() {
 		if( error == asio::error::not_connected ) {
 		}
 		else if( error ) {
-			std::cerr << "Close() Error: " << error.message() << "\n";
+			ErrorMessage() << "Close() Error: " << error.message() << "\n";
 		}
 
 		m_socket.close();
@@ -196,7 +197,7 @@ void TcpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_se
 			return;
 		}
 		else if( error ) {
-			std::cerr << "Async Send Error: " << error.message() << "\n";
+			ErrorMessage() << "Async Send Error: " << error.message() << "\n";
 			return;
 		}
 
@@ -217,7 +218,7 @@ void TcpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_se
 				else if( error == asio::error::not_connected ) {
 				}
 				else if( shutdown_error ) {
-					std::cerr << "Shutdown() Error: " << shutdown_error.message() << "\n";
+					ErrorMessage() << "Shutdown() Error: " << shutdown_error.message() << "\n";
 				}
 				else {
 					m_fin_sent = true;
@@ -284,7 +285,7 @@ void TcpSocket::ReceiveHandler( const asio::error_code& error, std::size_t bytes
 			m_fin_received = true;
 		}
 		else if( error ) {
-			std::cerr << "Async Receive Error: " << error.message() << "\n";
+			ErrorMessage() << "Async Receive Error: " << error.message() << "\n";
 			return;
 		}
 
@@ -339,7 +340,7 @@ bool TcpSocket::Send( const void* data, std::size_t size ) {
 	}
 
 	if( m_request_shutdown ) {
-		std::cerr << "Send() Error: Cannot send data after shutdown.\n";
+		ErrorMessage() << "Send() Error: Cannot send data after shutdown.\n";
 		return false;
 	}
 
@@ -498,7 +499,7 @@ int TcpSocket::GetLinger() const {
 	m_socket.get_option( option, error );
 
 	if( error ) {
-		std::cerr << "GetLinger() Error: " << error.message() << "\n";
+		ErrorMessage() << "GetLinger() Error: " << error.message() << "\n";
 	}
 
 	return option.enabled() ? option.timeout() : 0;
@@ -514,7 +515,7 @@ void TcpSocket::SetLinger( int timeout ) {
 	m_socket.set_option( option, error );
 
 	if( error ) {
-		std::cerr << "SetLinger() Error: " << error.message() << "\n";
+		ErrorMessage() << "SetLinger() Error: " << error.message() << "\n";
 	}
 }
 
@@ -528,7 +529,7 @@ bool TcpSocket::GetKeepAlive() const {
 	m_socket.get_option( option, error );
 
 	if( error ) {
-		std::cerr << "GetKeepAlive() Error: " << error.message() << "\n";
+		ErrorMessage() << "GetKeepAlive() Error: " << error.message() << "\n";
 	}
 
 	return option.value();
@@ -544,7 +545,7 @@ void TcpSocket::SetKeepAlive( bool keep_alive ) {
 	m_socket.set_option( option, error );
 
 	if( error ) {
-		std::cerr << "SetKeepAlive() Error: " << error.message() << "\n";
+		ErrorMessage() << "SetKeepAlive() Error: " << error.message() << "\n";
 	}
 }
 

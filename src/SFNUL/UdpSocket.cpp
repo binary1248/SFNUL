@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <iostream>
 #include <SFNUL/Config.hpp>
+#include <SFNUL/Utility.hpp>
 #include <asio/buffer.hpp>
 #include <SFNUL/Endpoint.hpp>
 #include <SFNUL/UdpSocket.hpp>
@@ -43,7 +44,7 @@ void UdpSocket::Bind( const Endpoint& endpoint ) {
 	m_socket.bind( asio_endpoint, error );
 
 	if( error ) {
-		std::cerr << "Bind() Error: " << error.message() << "\n";
+		ErrorMessage() << "Bind() Error: " << error.message() << "\n";
 		return;
 	}
 
@@ -68,7 +69,7 @@ void UdpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_se
 			return;
 		}
 		else if( error ) {
-			std::cerr << "Async Send Error: " << error.message() << "\n";
+			ErrorMessage() << "Async Send Error: " << error.message() << "\n";
 			return;
 		}
 
@@ -117,7 +118,7 @@ void UdpSocket::ReceiveHandler( const asio::error_code& error, std::size_t bytes
 			return;
 		}
 		else if( error ) {
-			std::cerr << "Async Receive Error: " << error.message() << "\n";
+			ErrorMessage() << "Async Receive Error: " << error.message() << "\n";
 			return;
 		}
 

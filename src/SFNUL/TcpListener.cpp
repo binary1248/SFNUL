@@ -4,6 +4,7 @@
 
 #include <functional>
 #include <iostream>
+#include <SFNUL/Utility.hpp>
 #include <SFNUL/Endpoint.hpp>
 #include <SFNUL/TcpListener.hpp>
 
@@ -45,7 +46,7 @@ void TcpListener::Listen( const Endpoint& endpoint, int backlog ) {
 	m_acceptor.open( asio_endpoint.protocol(), error );
 
 	if( error ) {
-		std::cerr << "Listen() Error: " << error.message() << "\n";
+		ErrorMessage() << "Listen() Error: " << error.message() << "\n";
 		return;
 	}
 
@@ -53,21 +54,21 @@ void TcpListener::Listen( const Endpoint& endpoint, int backlog ) {
 	m_acceptor.set_option( option, error );
 
 	if( error ) {
-		std::cerr << "Listen() Error: " << error.message() << "\n";
+		ErrorMessage() << "Listen() Error: " << error.message() << "\n";
 		return;
 	}
 
 	m_acceptor.bind( asio_endpoint, error );
 
 	if( error ) {
-		std::cerr << "Listen() Error: " << error.message() << "\n";
+		ErrorMessage() << "Listen() Error: " << error.message() << "\n";
 		return;
 	}
 
 	m_acceptor.listen( backlog, error );
 
 	if( error ) {
-		std::cerr << "Listen() Error: " << error.message() << "\n";
+		ErrorMessage() << "Listen() Error: " << error.message() << "\n";
 		return;
 	}
 
@@ -87,7 +88,7 @@ void TcpListener::AcceptHandler( const asio::error_code& error, std::shared_ptr<
 		socket.reset();
 	}
 	else if( error ) {
-		std::cerr << "Async Accept Error: " << error.message() << "\n";
+		ErrorMessage() << "Async Accept Error: " << error.message() << "\n";
 		return;
 	}
 
@@ -125,7 +126,7 @@ void TcpListener::Close() {
 	m_acceptor.close( error );
 
 	if( error ) {
-		std::cerr << "Close() Error: " << error.message() << "\n";
+		ErrorMessage() << "Close() Error: " << error.message() << "\n";
 		return;
 	}
 

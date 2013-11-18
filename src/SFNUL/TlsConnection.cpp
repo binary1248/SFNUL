@@ -124,7 +124,7 @@ void TlsCertificate::LoadCertificate( const std::string& certificate ) {
 	auto result = x509parse_crt( &m_cert, reinterpret_cast<const unsigned char*>( certificate.c_str() ), static_cast<int>( certificate.length() ) );
 
 	if( result < 0 ) {
-		std::cerr << "TlsCertificate::Create() Error: x509parse_crt returned: " << result << "\n";
+		ErrorMessage() << "TlsCertificate::Create() Error: x509parse_crt returned: " << result << "\n";
 	}
 }
 
@@ -148,7 +148,7 @@ void TlsKey::LoadKey( const std::string& key, const std::string& password ) {
 	auto result = x509parse_key( &m_key, reinterpret_cast<const unsigned char*>( key.c_str() ), static_cast<int>( key.length() ), password.empty() ? nullptr : reinterpret_cast<const unsigned char*>( password.c_str() ), static_cast<int>( password.length() ) );
 
 	if( result < 0 ) {
-		std::cerr << "SetCertificateKeyPair() Error: x509parse_key returned: " << result << "\n";
+		ErrorMessage() << "SetCertificateKeyPair() Error: x509parse_key returned: " << result << "\n";
 	}
 }
 
@@ -159,7 +159,7 @@ TlsConnectionBase::TlsConnectionBase() {
 	auto result = sfn::detail::ssl_init( &m_ssl_context );
 
 	if( result ) {
-		std::cerr << "TlsConnection() Error: ssl_init returned: " << result << "\n";
+		ErrorMessage() << "TlsConnection() Error: ssl_init returned: " << result << "\n";
 		return;
 	}
 
@@ -199,8 +199,8 @@ TlsConnectionBase::TlsConnectionBase() {
 
 	sfn::detail::ssl_set_dbg(
 		&m_ssl_context,
-		[]( void* context, int message_level, const char* debug_message ) {
-			if( message_level <= *static_cast<int*>( context ) ) {
+		[]( void* context, int ssl_dbg_message_level, const char* debug_message ) {
+			if( ssl_dbg_message_level <= *static_cast<int*>( context ) ) {
 				if(
 
 					!std::strstr( debug_message, "returned -3984 (0xfffff070)" ) &&
@@ -222,7 +222,7 @@ TlsConnectionBase::TlsConnectionBase() {
 
 					true
 				) {
-					std::cerr << debug_message;
+					DebugMessage() << debug_message;
 				}
 			}
 		},
