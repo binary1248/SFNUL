@@ -21,12 +21,16 @@ void HTTPMessage::SetHeaderValue( std::string field, std::string value ) {
 	m_header[field] = std::move( value );
 }
 
-std::string HTTPMessage::GetBody() const {
+const std::string& HTTPMessage::GetBody() const {
 	return m_body;
 }
 
 void HTTPMessage::SetBody( std::string body ) {
 	m_body = std::move( body );
+}
+
+void HTTPMessage::ReserveBody( std::size_t size ) {
+	m_body.reserve( size );
 }
 
 std::string HTTPMessage::ToString() const {
@@ -43,11 +47,32 @@ std::string HTTPMessage::ToString() const {
 	return str;
 }
 
+bool HTTPMessage::IsHeaderComplete() const {
+	return m_header_complete;
+}
+
+void HTTPMessage::SetHeaderComplete() {
+	m_header_complete = true;
+}
+
+bool HTTPMessage::IsBodyComplete() const {
+	return m_body_complete;
+}
+
+void HTTPMessage::SetBodyComplete() {
+	m_body_complete = true;
+}
+
 bool operator==( const HTTPMessage& left, const HTTPMessage& right ) {
 	return ( left.m_header == right.m_header ) && ( left.GetBody() == right.GetBody() );
 }
 
-std::string HTTPRequest::GetMethod() const {
+HTTPRequest::HTTPRequest() {
+	SetHeaderComplete();
+	SetBodyComplete();
+}
+
+const std::string& HTTPRequest::GetMethod() const {
 	return m_method;
 }
 
@@ -55,7 +80,7 @@ void HTTPRequest::SetMethod( std::string method ) {
 	m_method = std::move( method );
 }
 
-std::string HTTPRequest::GetURI() const {
+const std::string& HTTPRequest::GetURI() const {
 	return m_uri;
 }
 
@@ -73,7 +98,7 @@ bool operator==( const HTTPRequest& left, const HTTPRequest& right ) {
 	       ( static_cast<HTTPMessage>( left ) == static_cast<HTTPMessage>( right ) );
 }
 
-std::string HTTPResponse::GetHTTPVersion() const {
+const std::string& HTTPResponse::GetHTTPVersion() const {
 	return m_http_version;
 }
 
@@ -81,7 +106,7 @@ void HTTPResponse::SetHTTPVersion( std::string version ) {
 	m_http_version = std::move( version );
 }
 
-std::string HTTPResponse::GetStatus() const {
+const std::string& HTTPResponse::GetStatus() const {
 	return m_status;
 }
 
@@ -94,11 +119,7 @@ std::string HTTPResponse::ToString() const {
 }
 
 bool HTTPResponse::IsComplete() const {
-	return m_complete;
-}
-
-void HTTPResponse::SetComplete() {
-	m_complete = true;
+	return IsHeaderComplete() && IsBodyComplete();
 }
 
 bool operator==( const HTTPResponse& left, const HTTPResponse& right ) {

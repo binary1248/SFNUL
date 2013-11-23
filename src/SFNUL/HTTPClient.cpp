@@ -70,8 +70,30 @@ int OnHeaderValue( http_parser* parser, const char* data, std::size_t length ) {
 	return 0;
 }
 
-int OnHeadersComplete( http_parser* /*parser*/ ) {
-	//HTTPClientPipeline& pipeline( *static_cast<HTTPClientPipeline*>( parser->data ) );
+int OnHeadersComplete( http_parser* parser ) {
+	HTTPClientPipeline& pipeline( *static_cast<HTTPClientPipeline*>( parser->data ) );
+
+	auto iter( std::begin( pipeline.m_pipeline ) );
+
+	for( ; iter != std::end( pipeline.m_pipeline ); ++iter ) {
+		if( iter->first == pipeline.m_current_request ) {
+			break;
+		}
+	}
+
+	if( iter == std::end( pipeline.m_pipeline ) ) {
+		ErrorMessage() << "HTTP Parser could not find pipeline element to update.\n";
+		return 1;
+	}
+
+	HTTPResponse& response( iter->second );
+
+	response.SetHeaderComplete();
+
+	auto content_length = response.GetHeaderValue( "Content-Length" );
+	if( !content_length.empty() ) {
+		response.ReserveBody( static_cast<std::size_t>( std::stoi( content_length ) ) );
+	}
 
 	return 0;
 }
@@ -119,7 +141,7 @@ int OnMessageComplete( http_parser* parser ) {
 		return 1;
 	}
 
-	iter->second.SetComplete();
+	iter->second.SetBodyComplete();
 
 	if( iter->second.GetHeaderValue( "Connection" ) == "close" ) {
 		pipeline.Reconnect();
@@ -220,8 +242,12 @@ HTTPResponse HTTPClientPipeline::GetResponse( const HTTPRequest& request ) {
 		}
 	}
 
-	if( ( iter == std::end( m_pipeline ) ) || !iter->second.IsComplete() ) {
+	if( iter == std::end( m_pipeline ) ) {
 		return HTTPResponse{};
+	}
+
+	if( !iter->second.IsComplete() ) {
+		return iter->second;
 	}
 
 	auto result = std::move( iter->second );

@@ -30,23 +30,47 @@ public:
 	/** Get the body of this message.
 	 * @return The body of this message.
 	 */
-	std::string GetBody() const;
+	const std::string& GetBody() const;
 
 	/** Set the body of this message.
 	 * @param body The content to set the body to.
 	 */
 	void SetBody( std::string body );
 
+	/** Reserve memory for a body of a specific size.
+	 * size Memory to reserve in bytes.
+	 */
+	void ReserveBody( std::size_t size );
+
 	/** Convert this message to its string representation according to HTTP specifications.
 	 * @return String representation of this message.
 	 */
 	virtual std::string ToString() const;
+
+	/** Check whether the header of this HTTP response is complete.
+	 */
+	bool IsHeaderComplete() const;
+
+	/** Mark the header of this HTTP response as complete.
+	 */
+	void SetHeaderComplete();
+
+	/** Check whether the body of this HTTP response is complete.
+	 */
+	bool IsBodyComplete() const;
+
+	/** Mark the body of this HTTP response as complete.
+	 */
+	void SetBodyComplete();
 
 protected:
 	friend bool operator==( const HTTPMessage& left, const HTTPMessage& right );
 
 	std::unordered_map<std::string, std::string> m_header{};
 	std::string m_body{};
+
+	bool m_header_complete{ false };
+	bool m_body_complete{ false };
 };
 
 #if defined( __GNUG__ )
@@ -58,10 +82,14 @@ protected:
  */
 class SFNUL_API HTTPRequest : public HTTPMessage {
 public:
+	/** Ctor.
+	 */
+	HTTPRequest();
+
 	/** Get the method this HTTP request should employ.
 	 * @return The method this HTTP request should employ.
 	 */
-	std::string GetMethod() const;
+	const std::string& GetMethod() const;
 
 	/** Set the method this HTTP request should employ.
 	 * @param method The method this HTTP request should employ.
@@ -71,7 +99,7 @@ public:
 	/** Get the URI of this HTTP request.
 	 * @return The URI of this HTTP request.
 	 */
-	std::string GetURI() const;
+	const std::string& GetURI() const;
 
 	/** Set the URI of this HTTP request.
 	 * @param uri The URI of this HTTP request.
@@ -95,7 +123,7 @@ public:
 	/** Get the HTTP version of this response. e.g. "HTTP/1.1"
 	 * @return HTTP version of this response.
 	 */
-	std::string GetHTTPVersion() const;
+	const std::string& GetHTTPVersion() const;
 
 	/** Set the HTTP version of this response. e.g. "HTTP/1.1"
 	 * @param version The HTTP version of this response.
@@ -105,7 +133,7 @@ public:
 	/** Get the HTTP status of this response in string form. e.g. "200 OK"
 	 * @return The HTTP status of this response in string form.
 	 */
-	std::string GetStatus() const;
+	const std::string& GetStatus() const;
 
 	/** Set the HTTP status of this response in string form. e.g. "200 OK"
 	 * @param status The HTTP status of this response in string form.
@@ -122,15 +150,9 @@ public:
 	 */
 	bool IsComplete() const;
 
-	/** Mark this HTTP response as complete.
-	 */
-	void SetComplete();
-
 protected:
 	std::string m_http_version{};
 	std::string m_status{};
-
-	bool m_complete{ false };
 };
 
 #if defined( __GNUG__ )

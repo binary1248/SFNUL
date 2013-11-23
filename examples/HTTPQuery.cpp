@@ -34,33 +34,47 @@ int main() {
 
 		int complete = 0;
 
-		while( true ) {
+		// Our getter lambda for convenience.
+		auto get_response = [&]( std::string uri ) {
+			// Check if the responses to our requests have arrived.
+			request.SetURI( uri );
+			auto response = client.GetResponse( request, "www.ietf.org", 80 );
+
+			// Check if the header is complete and valid. Do not use it otherwise.
+			if( response.IsHeaderComplete() ) {
+				// Get the value in the "Content-Length" field.
+				auto content_length_str = response.GetHeaderValue( "Content-Length" );
+
+				// Check if the "Content-Length" field exists.
+				if( !content_length_str.empty() ) {
+					// Convert the string length to an integer.
+					auto content_length = std::stoi( content_length_str );
+
+					if( content_length ) {
+						// Print out the transfer status for the given URI.
+						std::cout << uri << ": Received " << response.GetBody().length()
+						          << " out of " << content_length << " bytes.\n";
+					}
+				}
+			}
+
+			// Check if the body is complete and valid. Do not use it otherwise.
+			if( response.IsBodyComplete() ) {
+				// Print the body of the response.
+				std::cout << response.GetBody();
+				++complete;
+			}
+		};
+
+		while( complete < 4 ) {
 			// Update our client.
 			client.Update();
-
-			// Our getter lambda for convenience.
-			auto get_response = [&]( std::string uri ) {
-				// Check if the responses to our requests have arrived.
-				request.SetURI( uri );
-				auto response = client.GetResponse( request, "www.ietf.org", 80 );
-
-				// Check if the response is complete and valid. Do not use it otherwise.
-				if( response.IsComplete() ) {
-					// Print the body of the response.
-					std::cout << response.GetBody();
-					++complete;
-				}
-			};
 
 			// Get responses with the help of our lambda.
 			get_response( "/" );
 			get_response( "/rfc/rfc768.txt" );
 			get_response( "/rfc/rfc791.txt" );
 			get_response( "/rfc/rfc793.txt" );
-
-			if( complete >= 4 ) {
-				break;
-			}
 		}
 	}
 
