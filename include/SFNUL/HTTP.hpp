@@ -6,6 +6,7 @@
 
 #include <unordered_map>
 #include <string>
+#include <vector>
 #include <SFNUL/Config.hpp>
 
 namespace sfn {
@@ -149,6 +150,11 @@ public:
 	 * @return true if this HTTP response has arrived and been parsed completely.
 	 */
 	bool IsComplete() const;
+
+	/** Get the header fields present in this HTTP response.
+	 * @return Header fields present in this HTTP response.
+	 */
+	std::vector<std::string> GetHeaderFields() const;
 
 protected:
 	std::string m_http_version{};

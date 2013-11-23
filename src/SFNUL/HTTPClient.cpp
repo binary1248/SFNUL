@@ -267,7 +267,7 @@ void HTTPClientPipeline::Update() {
 		return;
 	}
 
-	std::array<char, 4096> data;
+	std::vector<char> data( m_socket->BytesToReceive() );
 
 	std::size_t received = 0;
 

@@ -122,6 +122,16 @@ bool HTTPResponse::IsComplete() const {
 	return IsHeaderComplete() && IsBodyComplete();
 }
 
+std::vector<std::string> HTTPResponse::GetHeaderFields() const {
+	std::vector<std::string> fields;
+
+	for( const auto& f : m_header ) {
+		fields.emplace_back( f.first );
+	}
+
+	return fields;
+}
+
 bool operator==( const HTTPResponse& left, const HTTPResponse& right ) {
 	return ( left.GetHTTPVersion() == right.GetHTTPVersion() ) &&
 	       ( left.GetStatus() == right.GetStatus() ) &&

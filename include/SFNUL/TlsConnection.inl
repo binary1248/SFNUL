@@ -366,7 +366,26 @@ void TlsConnection<T, U, V>::OnReceived() {
 			m_remote_closed = true;
 		}
 		else if( length == TROPICSSL_ERR_X509_CERT_VERIFY_FAILED ) {
-			ErrorMessage() << "Error: Verification of the peer certificate has failed. (specified REQUIRED)\n";
+			ErrorMessage() << "Verification of the peer certificate has failed. (specified REQUIRED)\n";
+
+			auto verification_result = GetVerificationResult();
+
+			if( ( verification_result & TlsVerificationResult::EXPIRED ) == verification_result ) {
+				ErrorMessage() << "The peer certificate has expired and is no longer valid.\n";
+			}
+
+			if( ( verification_result & TlsVerificationResult::REVOKED ) == verification_result ) {
+				ErrorMessage() << "SECURITY RISK: The peer certificate has been revoked by its certificate authority.\n";
+			}
+
+			if( ( verification_result & TlsVerificationResult::CN_MISMATCH ) == verification_result ) {
+				ErrorMessage() << "The peer certificate common name does not match the provided common name.\n";
+			}
+
+			if( ( verification_result & TlsVerificationResult::NOT_TRUSTED ) == verification_result ) {
+				ErrorMessage() << "The peer certificate is not issued by a trusted certificate authority.\n";
+			}
+
 			return;
 		}
 		else if( length == TROPICSSL_ERR_SSL_CERTIFICATE_REQUIRED ) {
