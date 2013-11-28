@@ -258,6 +258,11 @@ install(
 )
 
 install(
+	FILES cmake/FindSFNUL.cmake
+	DESTINATION ./cmake
+)
+
+install(
 	FILES README AUTHORS CHANGELOG LICENSE
 	DESTINATION ${SHARE_TARGET_DIR}
 )

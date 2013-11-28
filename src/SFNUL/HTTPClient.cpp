@@ -288,6 +288,12 @@ void HTTPClientPipeline::Update() {
 			ErrorMessage() << "HTTP Parser error: " << http_errno_description( HTTP_PARSER_ERRNO( &m_parser ) ) << ".\n";
 			return;
 		}
+
+		auto new_buffer_size = m_socket->BytesToReceive();
+
+		if( new_buffer_size > data.size() ) {
+			data.resize( new_buffer_size );
+		}
 	}
 
 	if( m_socket->RemoteHasShutdown() && !m_socket->LocalHasShutdown() ) {
