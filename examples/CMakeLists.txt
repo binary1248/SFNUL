@@ -93,4 +93,6 @@ if( SFNUL_BUILD_SFML_EXAMPLES )
 	find_package( SFML 2 REQUIRED COMPONENTS graphics window system )
 	
 	build_sfml_example( "SynchronizationSFML" "SynchronizationSFML.cpp" )
+	build_sfml_example( "TestClient" "TestClient.cpp" )
+	build_sfml_example( "TestServer" "TestServer.cpp" )
 endif()

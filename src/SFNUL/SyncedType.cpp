@@ -14,8 +14,8 @@ SFNUL_API void SetStreamSynchronizationPeriod( const std::chrono::milliseconds& 
 std::chrono::milliseconds BaseSyncedType::m_sync_period{ 1000 };
 
 BaseSyncedType::BaseSyncedType( SyncedObject* owner, SynchronizationType sync_type ) :
-	m_owner( owner ),
-	m_sync_type( sync_type )
+	m_sync_type( sync_type ),
+	m_owner( owner )
 {
 	owner->RegisterMember( this );
 }

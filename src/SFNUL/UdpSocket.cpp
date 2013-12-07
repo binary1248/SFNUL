@@ -130,7 +130,7 @@ void UdpSocket::ReceiveHandler( const asio::error_code& error, std::size_t bytes
 			m_pending_data += bytes_received;
 		}
 
-		if( m_pending_data < SFNUL_MAX_BUFFER_DATA_SIZE ) {
+		if( m_pending_data < GetMaximumBlockSize() ) {
 			std::shared_ptr<asio::ip::udp::endpoint> receive_endpoint_ptr = std::make_shared<asio::ip::udp::endpoint>();
 
 			m_receiving = true;
@@ -206,7 +206,7 @@ std::size_t UdpSocket::ReceiveFrom( void* data, std::size_t size, const Endpoint
 
 	auto start = false;
 
-	if( ( m_pending_data >= SFNUL_MAX_BUFFER_DATA_SIZE ) && ( m_pending_data - receive_size < SFNUL_MAX_BUFFER_DATA_SIZE ) ) {
+	if( ( m_pending_data >= GetMaximumBlockSize() ) && ( m_pending_data - receive_size < GetMaximumBlockSize() ) ) {
 		start = true;
 	}
 

@@ -166,7 +166,7 @@ bool TlsConnection<T, U, V>::Send( const void* data, std::size_t size ) {
 	{
 		auto lock = T::AcquireLock();
 
-		if( m_send_buffer.size() + size >= SFNUL_MAX_BUFFER_DATA_SIZE / 2 ) {
+		if( m_send_buffer.size() + size >= GetMaximumBlockSize() / 2 ) {
 			return false;
 		}
 
@@ -205,7 +205,7 @@ bool TlsConnection<T, U, V>::Send( const Message& message ) {
 
 	auto message_size = message.GetSize();
 
-	if( m_send_buffer.size() + sizeof( message_size ) + message_size >= SFNUL_MAX_BUFFER_DATA_SIZE / 2 ) {
+	if( m_send_buffer.size() + sizeof( message_size ) + message_size >= GetMaximumBlockSize() / 2 ) {
 		return false;
 	}
 

@@ -235,7 +235,7 @@ void TcpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_se
 				m_socket.async_send( asio::buffer( m_send_memory, send_size ),
 					m_strand.wrap(
 						std::bind(
-							[]( std::weak_ptr<TcpSocket> socket, const asio::error_code& handler_error, std::size_t handler_bytes_received ) {
+							[]( std::weak_ptr<TcpSocket> socket, const asio::error_code& handler_error, std::size_t handler_bytes_sent ) {
 								auto shared_socket = socket.lock();
 
 								if( !shared_socket ) {
@@ -246,7 +246,7 @@ void TcpSocket::SendHandler( const asio::error_code& error, std::size_t bytes_se
 								shared_socket->m_sending = false;
 
 								if( !shared_socket->m_send_buffer.empty() ) {
-									shared_socket->SendHandler( handler_error, handler_bytes_received );
+									shared_socket->SendHandler( handler_error, handler_bytes_sent );
 								}
 							},
 							std::weak_ptr<TcpSocket>( shared_from_this() ), std::placeholders::_1, std::placeholders::_2
@@ -291,7 +291,7 @@ void TcpSocket::ReceiveHandler( const asio::error_code& error, std::size_t bytes
 
 		m_receive_buffer.insert( m_receive_buffer.end(), m_receive_memory.begin(), m_receive_memory.begin() + bytes_received );
 
-		if( m_connected && !m_fin_received && ( m_receive_buffer.size() < SFNUL_MAX_BUFFER_DATA_SIZE ) ) {
+		if( m_connected && !m_fin_received && ( m_receive_buffer.size() < GetMaximumBlockSize() ) ) {
 			m_receiving = true;
 
 			m_socket.async_receive( asio::buffer( m_receive_memory ),
@@ -344,7 +344,7 @@ bool TcpSocket::Send( const void* data, std::size_t size ) {
 		return false;
 	}
 
-	if( m_send_buffer.size() + size >= SFNUL_MAX_BUFFER_DATA_SIZE ) {
+	if( m_send_buffer.size() + size >= GetMaximumBlockSize() ) {
 		return false;
 	}
 
@@ -374,7 +374,7 @@ std::size_t TcpSocket::Receive( void* data, std::size_t size ) {
 
 	auto start = false;
 
-	if( ( m_receive_buffer.size() >= SFNUL_MAX_BUFFER_DATA_SIZE ) && ( m_receive_buffer.size() - receive_size ) < SFNUL_MAX_BUFFER_DATA_SIZE ) {
+	if( ( m_receive_buffer.size() >= GetMaximumBlockSize() ) && ( m_receive_buffer.size() - receive_size ) < GetMaximumBlockSize() ) {
 		start = true;
 	}
 
@@ -392,7 +392,7 @@ bool TcpSocket::Send( const Message& message ) {
 
 	auto message_size = message.GetSize();
 
-	if( m_send_buffer.size() + sizeof( message_size ) + message_size >= SFNUL_MAX_BUFFER_DATA_SIZE ) {
+	if( m_send_buffer.size() + sizeof( message_size ) + message_size >= GetMaximumBlockSize() ) {
 		return false;
 	}
 
@@ -429,7 +429,7 @@ std::size_t TcpSocket::Receive( Message& message ) {
 
 	auto start = false;
 
-	if( ( m_receive_buffer.size() >= SFNUL_MAX_BUFFER_DATA_SIZE ) && ( m_receive_buffer.size() - ( sizeof( message_size ) + message_size ) ) < SFNUL_MAX_BUFFER_DATA_SIZE ) {
+	if( ( m_receive_buffer.size() >= GetMaximumBlockSize() ) && ( m_receive_buffer.size() - ( sizeof( message_size ) + message_size ) ) < GetMaximumBlockSize() ) {
 		start = true;
 	}
 

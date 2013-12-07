@@ -7,6 +7,7 @@
 #include <type_traits>
 #include <array>
 #include <iostream>
+#include <iterator>
 
 // forward_list support is disabled for the time being...
 // Send me a message if you want to convince me that it is useful.
@@ -199,16 +200,17 @@ template<typename T, typename std::enable_if<has_const_iterator<T>::value, int>:
 SFNUL_API Message& operator<<( Message& message, const T& input ) {
 	message << static_cast<Uint32>( input.size() );
 
-	// Non-recursive implementation.
-	/*
-	std::vector<typename T::value_type> data( input.size() );
-	std::copy( std::begin( input ), std::end( input ), begin( data ) );
-	message.Append( reinterpret_cast<const char*>( data.data() ), input.size() * sizeof( typename T::value_type ) );
-	*/
-
-	// Recursive implementation.
-	for( const auto& e : input ) {
-		message << e;
+	if( std::is_trivial<typename T::value_type>::value ) {
+		// Non-recursive implementation.
+		std::vector<typename T::value_type> data( input.size() );
+		std::copy( std::begin( input ), std::end( input ), std::begin( data ) );
+		message.Append( reinterpret_cast<const char*>( data.data() ), input.size() * sizeof( typename T::value_type ) );
+	}
+	else {
+		// Recursive implementation.
+		for( const auto& e : input ) {
+			message << e;
+		}
 	}
 
 	return message;
@@ -219,14 +221,17 @@ template<typename T, typename std::enable_if<has_const_iterator<T>::value, int>:
 SFNUL_API Message& operator>>( const T& input, Message& message ) {
 	static_cast<Uint32>( input.size() ) >> message;
 
-	// Non-recursive implementation.
-	std::vector<typename T::value_type> data( input.size() );
-	std::copy( std::begin( input ), std::end( input ), begin( data ) );
-	message.Prepend( reinterpret_cast<const char*>( data.data() ), input.size() * sizeof( typename T::value_type ) );
-
-	// Recursive implementation.
-	for( const auto& e : input ) {
-		e >> message;
+	if( std::is_trivial<typename T::value_type>::value ) {
+		// Non-recursive implementation.
+		std::vector<typename T::value_type> data( input.size() );
+		std::copy( std::begin( input ), std::end( input ), std::begin( data ) );
+		message.Prepend( reinterpret_cast<const char*>( data.data() ), input.size() * sizeof( typename T::value_type ) );
+	}
+	else {
+		// Recursive implementation.
+		for( const auto& e : input ) {
+			e >> message;
+		}
 	}
 
 	return message;
@@ -292,21 +297,22 @@ SFNUL_API Message& operator>>( Message& message, T& output ) {
 	Uint32 size;
 	message >> size;
 
-	// Non-recursive implementation.
-	/*
-	std::vector<typename T::value_type> data( size );
-	// assert( message.GetSize() >= size * sizeof( typename T::value_type ) );
-	std::vector<char> char_data( message.GetFront( size * sizeof( typename T::value_type ) ) );
-	std::memcpy( data.data(), reinterpret_cast<const char*>( char_data.data() ), size * sizeof( typename T::value_type ) );
-	std::copy( std::begin( output ), std::end( output ), begin( data ) );
-	message.PopFront( size * sizeof( typename T::value_type ) );
-	*/
-
-	// Recursive implementation.
-	for( Uint32 index = 0; index < size; ++index ) {
-		typename T::value_type value;
-		message >> value;
-		InsertAtEnd( output, std::move( value ) );
+	if( std::is_trivial<typename T::value_type>::value ) {
+		// Non-recursive implementation.
+		std::vector<typename T::value_type> data( size );
+		assert( message.GetSize() >= size * sizeof( typename T::value_type ) );
+		std::vector<char> char_data( message.GetFront( size * sizeof( typename T::value_type ) ) );
+		std::memcpy( data.data(), reinterpret_cast<const char*>( char_data.data() ), size * sizeof( typename T::value_type ) );
+		std::copy( std::begin( data ), std::end( data ), std::back_inserter( output ) );
+		message.PopFront( size * sizeof( typename T::value_type ) );
+	}
+	else {
+		// Recursive implementation.
+		for( Uint32 index = 0; index < size; ++index ) {
+			typename T::value_type value;
+			message >> value;
+			InsertAtEnd( output, std::move( value ) );
+		}
 	}
 
 	return message;
@@ -320,21 +326,23 @@ SFNUL_API Message& operator<<=( T& output, Message& message ) {
 	Uint32 size;
 	size <<= message;
 
-	// Non-recursive implementation.
-	std::vector<typename T::value_type> data( size );
-	//assert( message.GetSize() >= size * sizeof( typename T::value_type ) );
-	std::vector<char> char_data( message.GetBack( size * sizeof( typename T::value_type ) ) );
-	std::memcpy( data.data(), reinterpret_cast<const char*>( char_data.data() ), size * sizeof( typename T::value_type ) );
-	std::copy( std::begin( output ), std::end( output ), begin( data ) );
-	message.PopBack( size * sizeof( typename T::value_type ) );
-
-	// Recursive implementation.
-	for( Uint32 index = 0; index < size; ++index ) {
-		typename T::value_type value;
-		value <<= message;
-		InsertAtEnd( output, std::move( value ) );
+	if( std::is_trivial<typename T::value_type>::value ) {
+		// Non-recursive implementation.
+		std::vector<typename T::value_type> data( size );
+		assert( message.GetSize() >= size * sizeof( typename T::value_type ) );
+		std::vector<char> char_data( message.GetBack( size * sizeof( typename T::value_type ) ) );
+		std::memcpy( data.data(), reinterpret_cast<const char*>( char_data.data() ), size * sizeof( typename T::value_type ) );
+		std::copy( std::begin( data ), std::end( data ), std::back_inserter( output ) );
+		message.PopBack( size * sizeof( typename T::value_type ) );
 	}
-
+	else {
+		// Recursive implementation.
+		for( Uint32 index = 0; index < size; ++index ) {
+			typename T::value_type value;
+			value <<= message;
+			InsertAtEnd( output, std::move( value ) );
+		}
+	}
 
 	return message;
 }

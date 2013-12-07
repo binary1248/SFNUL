@@ -14,6 +14,10 @@ MessageLevel message_level = MessageLevel::DEBUG;
 MessageLevel message_level = MessageLevel::ERROR;
 #endif
 
+// Maximum bytes that SFNUL will queue before waiting for OS buffer to empty.
+// If you think you need support for very large messages, go ahead and change this.
+std::size_t block_size = 65536;
+
 void SetMessageLevel( MessageLevel level ) {
 	message_level = level;
 }
@@ -56,6 +60,14 @@ std::ostream& DebugMessage() {
 
 	discard_message.str( "" );
 	return discard_message;
+}
+
+void SetMaximumBlockSize( std::size_t size ) {
+	block_size = size;
+}
+
+std::size_t GetMaximumBlockSize() {
+	return block_size;
 }
 
 }

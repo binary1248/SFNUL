@@ -21,11 +21,24 @@ enum class MessageLevel : unsigned char {
 	DEBUG = 3,
 };
 
+/** Set the severity level of the messages that SFNUL should report about.
+ * @param level Severity level.
+ */
 void SetMessageLevel( MessageLevel level );
 
 std::ostream& ErrorMessage();
 std::ostream& WarningMessage();
 std::ostream& InformationMessage();
 std::ostream& DebugMessage();
+
+/** Set the maximum block size you intend to send in a single transfer.
+ * @param size Maximum block size.
+ */
+void SetMaximumBlockSize( std::size_t size );
+
+/** Get the maximum block size supported in a single transfer.
+ * @return Maximum block size supported in a single transfer.
+ */
+std::size_t GetMaximumBlockSize();
 
 }
