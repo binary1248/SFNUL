@@ -80,37 +80,42 @@ private:
 
 template<typename T>
 class SFNUL_API SyncedType : BaseSyncedType {
+public:
+	typedef T value_type;
+	
 private:
-	T m_value;
+	value_type m_value;
+	
+	typedef decltype( &m_value ) address_type;
 
 public:
 	explicit SyncedType( SyncedObject* owner, SynchronizationType sync_type = SynchronizationType::DYNAMIC );
 
-	explicit SyncedType( SyncedObject* owner, SynchronizationType sync_type, const T& value );
+	explicit SyncedType( SyncedObject* owner, SynchronizationType sync_type, const value_type& value );
 
-	explicit SyncedType( SyncedObject* owner, SynchronizationType sync_type, T&& value );
+	explicit SyncedType( SyncedObject* owner, SynchronizationType sync_type, value_type&& value );
 
-	explicit SyncedType( SyncedObject* owner, const SyncedType<T>& other );
-
-	template<typename S>
-	void SetValue( T value );
-
-	T GetValue() const;
+	explicit SyncedType( SyncedObject* owner, const SyncedType<value_type>& other );
 
 	template<typename S>
-	SyncedType<T>& operator=( S other );
+	void SetValue( value_type value );
+
+	value_type GetValue() const;
 
 	template<typename S>
-	auto operator[]( S other ) const -> decltype( this->m_value[other] );
+	SyncedType<value_type>& operator=( S other );
 
 	template<typename S>
-	auto operator[]( S other ) -> decltype( this->m_value[other] );
+	auto operator[]( S other ) const -> decltype( value_type{}[other] );
 
-	operator T() const;
+	template<typename S>
+	auto operator[]( S other ) -> decltype( value_type{}[other] );
 
-	auto operator->() const -> decltype( &( this->m_value ) );
+	operator value_type() const;
 
-	auto operator->() -> decltype( &( this->m_value ) );
+	auto operator->() const -> address_type;
+
+	auto operator->() -> address_type;
 
 protected:
 	virtual void Serialize( Message& message, SynchronizationType sync_type );

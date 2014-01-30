@@ -51,7 +51,6 @@ public:
 	const static object_type_id_type type_id;
 
 	ChatLog() :
-		SyncedObject{},
 		m_chat_messages{ this, sfn::SynchronizationType::DYNAMIC }
 	{
 	}
@@ -101,7 +100,6 @@ public:
 	const static object_type_id_type type_id;
 
 	Bullet( const std::tuple<sf::Vector2f, sf::Vector2f, bool>& data ) :
-		SyncedObject{},
 		m_position{ this, sfn::SynchronizationType::STREAM, std::get<0>( data ) },
 		m_velocity{ this, sfn::SynchronizationType::DYNAMIC, std::get<1>( data ) }
 	{
@@ -156,7 +154,6 @@ public:
 	const static object_type_id_type type_id;
 
 	Player( std::shared_ptr<sfn::Link<sfn::TcpSocket>> player_link ) :
-		SyncedObject{},
 		m_position{ this, sfn::SynchronizationType::STREAM, { 300.f + position_dist( gen ), 200.f + position_dist( gen ) } },
 		m_velocity{ this, sfn::SynchronizationType::STREAM, { 0.f, 0.f } },
 		m_acceleration{ this, sfn::SynchronizationType::DYNAMIC, 0.f },

@@ -341,13 +341,13 @@ auto operator>>=( S& other, const SyncedType<T>& synced_type ) -> decltype( othe
 
 template<typename T>
 template<typename S>
-auto SyncedType<T>::operator[]( S other ) const -> decltype( this->m_value[other] ) {
+auto SyncedType<T>::operator[]( S other ) const -> decltype( SyncedType<T>::value_type{}[other] ) {
 	return m_value[other];
 }
 
 template<typename T>
 template<typename S>
-auto SyncedType<T>::operator[]( S other ) -> decltype( this->m_value[other] ) {
+auto SyncedType<T>::operator[]( S other ) -> decltype( SyncedType<T>::value_type{}[other] ) {
 	SetModified( true );
 	return m_value[other];
 }
@@ -358,12 +358,12 @@ SyncedType<T>::operator T() const {
 }
 
 template<typename T>
-auto SyncedType<T>::operator->() const -> decltype( &( this->m_value ) ) {
+auto SyncedType<T>::operator->() const -> SyncedType<T>::address_type {
 	return &( this->m_value );
 }
 
 template<typename T>
-auto SyncedType<T>::operator->() -> decltype( &( this->m_value ) ) {
+auto SyncedType<T>::operator->() -> SyncedType<T>::address_type {
 	SetModified( true );
 	return &( this->m_value );
 }

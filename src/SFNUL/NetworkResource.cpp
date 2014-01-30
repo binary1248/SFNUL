@@ -16,7 +16,6 @@ namespace {
 std::weak_ptr<asio::io_service> NetworkResource::m_shared_io_service;
 
 NetworkResource::NetworkResource() :
-	Atomic{},
 	m_io_service{ m_shared_io_service.expired() ? std::make_shared<asio::io_service>() : m_shared_io_service.lock() },
 	m_strand{ *m_io_service }
 {
