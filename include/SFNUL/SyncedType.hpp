@@ -5,6 +5,7 @@
 #pragma once
 
 #include <chrono>
+#include <ostream>
 #include <SFNUL/Config.hpp>
 
 namespace sfn {
@@ -284,6 +285,9 @@ auto operator>>=( SyncedType<T>& synced_type, S other ) -> decltype( synced_type
 
 template<typename T, typename S>
 auto operator>>=( S& other, const SyncedType<T>& synced_type ) -> decltype( other = other >> synced_type.GetValue() );
+
+template<typename T>
+std::ostream& operator<<( std::ostream& stream, const SyncedType<T>& synced_type );
 
 }
 

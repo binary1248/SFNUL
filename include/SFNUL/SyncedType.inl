@@ -382,4 +382,9 @@ void SyncedType<T>::Deserialize( Message& message, SynchronizationType sync_type
 	}
 }
 
+template<typename T>
+std::ostream& operator<<( std::ostream& stream, const SyncedType<T>& synced_type ) {
+	return stream << synced_type.GetValue();
+}
+
 }

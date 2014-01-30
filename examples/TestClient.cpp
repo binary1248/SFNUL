@@ -49,7 +49,6 @@ public:
 	const static object_type_id_type type_id;
 
 	ChatLog() :
-		SyncedObject{},
 		m_chat_messages{ this, sfn::SynchronizationType::DYNAMIC }
 	{
 	}
@@ -135,7 +134,6 @@ public:
 	const static object_type_id_type type_id;
 
 	Bullet() :
-		SyncedObject{},
 		m_position{ this, sfn::SynchronizationType::STREAM },
 		m_velocity{ this, sfn::SynchronizationType::DYNAMIC }
 	{
@@ -195,7 +193,6 @@ public:
 	const static object_type_id_type type_id;
 
 	Player() :
-		SyncedObject{},
 		m_position{ this, sfn::SynchronizationType::STREAM },
 		m_velocity{ this, sfn::SynchronizationType::STREAM },
 		m_acceleration{ this, sfn::SynchronizationType::DYNAMIC },

@@ -38,7 +38,6 @@ public:
 	// SetStreamSynchronizationPeriod() based on testing of the network and
 	// state update performance.
 	Coordinate() :
-		SyncedObject{},
 		x{ this, sfn::SynchronizationType::DYNAMIC, 300.f },
 		y{ this, sfn::SynchronizationType::DYNAMIC, 200.f },
 		color{ this, sfn::SynchronizationType::STATIC, sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 } }
@@ -59,7 +58,6 @@ public:
 	// to replicating the contained values. The underlying SyncedObject still
 	// has to be created as with the default constructor.
 	Coordinate( const Coordinate& coordinate ) :
-		SyncedObject{},
 		x{ this, sfn::SynchronizationType::DYNAMIC, coordinate.x },
 		y{ this, sfn::SynchronizationType::DYNAMIC, coordinate.y },
 		color{ this, sfn::SynchronizationType::STATIC, coordinate.color }
