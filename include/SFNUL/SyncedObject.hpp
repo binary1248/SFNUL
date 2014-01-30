@@ -22,6 +22,13 @@ class SFNUL_API SyncedObject {
 public:
 	typedef Uint32 object_type_id_type;
 
+	/** Move assignment operator.
+	 * @param object Object to move from.
+	 * @return *this
+	 */
+	SyncedObject& operator=( SyncedObject&& object );
+
+protected:
 	/** Ctor.
 	 */
 	SyncedObject();
@@ -30,13 +37,8 @@ public:
 	 */
 	SyncedObject( SyncedObject&& object );
 
-	/** Move assignment operator.
-	 * @param object Object to move from.
-	 * @return *this
+	/** Dtor.
 	 */
-	SyncedObject& operator=( SyncedObject&& object );
-
-protected:
 	~SyncedObject();
 
 	virtual object_type_id_type GetTypeID() const = 0;
