@@ -23,7 +23,7 @@ protected:
 	friend class SyncedObject;
 
 	SynchronizerBase() = default;
-	virtual ~SynchronizerBase() = default;
+	virtual ~SynchronizerBase();
 
 	virtual bool AddObject( SyncedObject* object ) = 0;
 	virtual void UpdateObject( SyncedObject* object ) = 0;

@@ -23,6 +23,9 @@ namespace sfn {
 
 const Link<ReliableTransport>::stream_id_type SynchronizerBase::stream_id = 200;
 
+SynchronizerBase::~SynchronizerBase() {
+}
+
 SyncedObject* SynchronizerBase::GetObjectByID( SyncedObject::id_type id ) {
 	auto iter = std::find_if( std::begin( m_objects ), std::end( m_objects ),
 		[id]( SyncedObject* object ) {

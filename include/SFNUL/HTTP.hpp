@@ -91,10 +91,6 @@ public:
 	 */
 	HTTPRequest();
 
-	/** Dtor.
-	 */
-	virtual ~HTTPRequest() = default;
-
 	/** Get the method this HTTP request should employ.
 	 * @return The method this HTTP request should employ.
 	 */
@@ -118,7 +114,7 @@ public:
 	/** Convert this request to its string representation according to HTTP specifications.
 	 * @return String representation of this request.
 	 */
-	virtual std::string ToString() const override;
+	std::string ToString() const override;
 
 protected:
 	std::string m_method{};
@@ -129,10 +125,6 @@ protected:
  */
 class SFNUL_API HTTPResponse : public HTTPMessage {
 public:
-	/** Dtor.
-	 */
-	virtual ~HTTPResponse() = default;
-
 	/** Get the HTTP version of this response. e.g. "HTTP/1.1"
 	 * @return HTTP version of this response.
 	 */
@@ -156,7 +148,7 @@ public:
 	/** Convert this response to its string representation according to HTTP specifications.
 	 * @return String representation of this response.
 	 */
-	virtual std::string ToString() const override;
+	std::string ToString() const override;
 
 	/** Check if this HTTP response has arrived and been parsed completely.
 	 * @return true if this HTTP response has arrived and been parsed completely.
