@@ -39,7 +39,7 @@ protected:
 
 	/** Dtor.
 	 */
-	~SyncedObject();
+	virtual ~SyncedObject();
 
 	virtual object_type_id_type GetTypeID() const = 0;
 

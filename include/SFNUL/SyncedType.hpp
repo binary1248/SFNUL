@@ -59,7 +59,7 @@ protected:
 
 	BaseSyncedType( SyncedObject* owner, SynchronizationType sync_type );
 
-	~BaseSyncedType();
+	virtual ~BaseSyncedType();
 
 	BaseSyncedType( const BaseSyncedType& other ) = delete;
 
@@ -83,10 +83,10 @@ template<typename T>
 class SFNUL_API SyncedType : BaseSyncedType {
 public:
 	typedef T value_type;
-	
+
 private:
 	value_type m_value;
-	
+
 	typedef decltype( &m_value ) address_type;
 
 public:
@@ -119,9 +119,9 @@ public:
 	auto operator->() -> address_type;
 
 protected:
-	virtual void Serialize( Message& message, SynchronizationType sync_type );
+	void Serialize( Message& message, SynchronizationType sync_type ) override;
 
-	virtual void Deserialize( Message& message, SynchronizationType sync_type );
+	void Deserialize( Message& message, SynchronizationType sync_type ) override;
 };
 
 template<typename T, typename S>

@@ -15,6 +15,10 @@ namespace sfn {
  */
 class SFNUL_API HTTPMessage {
 public:
+	/** Dtor.
+	 */
+	virtual ~HTTPMessage() = default;
+
 	/** Get the value of a header field in this message if it is present.
 	 * @param field_name Name of the header field.
 	 * @return Value of the header field if it exists, or an empty std::string if not.
@@ -87,6 +91,10 @@ public:
 	 */
 	HTTPRequest();
 
+	/** Dtor.
+	 */
+	virtual ~HTTPRequest() = default;
+
 	/** Get the method this HTTP request should employ.
 	 * @return The method this HTTP request should employ.
 	 */
@@ -121,6 +129,10 @@ protected:
  */
 class SFNUL_API HTTPResponse : public HTTPMessage {
 public:
+	/** Dtor.
+	 */
+	virtual ~HTTPResponse() = default;
+
 	/** Get the HTTP version of this response. e.g. "HTTP/1.1"
 	 * @return HTTP version of this response.
 	 */

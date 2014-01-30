@@ -23,7 +23,7 @@ protected:
 	friend class SyncedObject;
 
 	SynchronizerBase() = default;
-	~SynchronizerBase() = default;
+	virtual ~SynchronizerBase() = default;
 
 	virtual bool AddObject( SyncedObject* object ) = 0;
 	virtual void UpdateObject( SyncedObject* object ) = 0;
@@ -93,9 +93,9 @@ public:
 protected:
 	friend class SyncedObject;
 
-	virtual bool AddObject( SyncedObject* object ) override;
-	virtual void UpdateObject( SyncedObject* object ) override;
-	virtual bool RemoveObject( SyncedObject* object ) override;
+	bool AddObject( SyncedObject* object ) override;
+	void UpdateObject( SyncedObject* object ) override;
+	bool RemoveObject( SyncedObject* object ) override;
 
 private:
 	SynchronizerServer( const SynchronizerServer& synchronizer ) = delete;
@@ -152,9 +152,9 @@ public:
 protected:
 	friend class SyncedObject;
 
-	virtual bool AddObject( SyncedObject* object ) override;
-	virtual void UpdateObject( SyncedObject* object ) override;
-	virtual bool RemoveObject( SyncedObject* object ) override;
+	bool AddObject( SyncedObject* object ) override;
+	void UpdateObject( SyncedObject* object ) override;
+	bool RemoveObject( SyncedObject* object ) override;
 
 private:
 	SynchronizerClient( const SynchronizerClient& synchronizer ) = delete;
