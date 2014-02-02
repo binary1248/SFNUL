@@ -1,5 +1,5 @@
 SFNUL
-Network Utility library for SFML 2
+Simple and Fast Network Utility library
 
 © binary1248
 SFNUL is provided under the
@@ -14,15 +14,16 @@ though they claim C++11 support. Your mileage may vary.
 
 Dependencies:
  - ASIO (standalone C++11 version) provided in extlibs as a submodule
- - TropicSSL (last BSD licensed release of PolarSSL/XySSL
- - http-parser
+ - Botan provided in extlibs as a submodule
+ - http-parser provided in extlibs as a submodule
  - SFML 2.x for the optional SFML synchronization example (http://sfml-dev.org/)
    Initialize all submodules with
    git submodule update --init --recursive
    in the root directory.
    ASIO is provided under the Boost Software License.
-   TropicSSL is provided under the Modified BSD License.
+   Botan is provided under the Simplified BSD License.
    http-parser is provided under the MIT License.
+   SFML is provided under the zlib License.
 
 The build system in use is CMake (http://cmake.org/). It's available for all
 major platforms.
@@ -51,9 +52,6 @@ to your project's CMakeLists.txt file:
 
 In case CMake can't find your SFNUL installation, you can still specify the
 path manually by setting the SFNUL_ROOT CMake variable.
-
-Keep in mind that you still have to link to SFML 2.0 (at least system and
-network).
 
 Because SFNUL makes use of the operating system's networking subsystem, be sure
 to link the necessary networking libraries to your final application as well.

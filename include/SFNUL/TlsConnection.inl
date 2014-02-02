@@ -26,6 +26,14 @@
 #undef REQUIRED
 #endif
 
+// Until C++14 comes along...
+namespace std {
+template<typename T, typename... Args>
+inline std::unique_ptr<T> make_unique( Args&&... args ) {
+	return std::unique_ptr<T>( new T( std::forward<Args>( args )... ) );
+}
+}
+
 namespace sfn {
 
 namespace {
@@ -35,29 +43,6 @@ struct TlsConnectionMaker : public TlsConnection<T, U, V> {};
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 TlsConnection<T, U, V>::TlsConnection() {
-	sfn::detail::ssl_set_endpoint( &m_ssl_context, ( m_type == TlsEndpointType::CLIENT ? SSL_IS_CLIENT : SSL_IS_SERVER ) );
-
-	if( m_verify == TlsVerificationType::NONE ) {
-		sfn::detail::ssl_set_authmode( &m_ssl_context, SSL_VERIFY_NONE );
-	}
-	else if( m_verify == TlsVerificationType::OPTIONAL ) {
-		sfn::detail::ssl_set_authmode( &m_ssl_context, SSL_VERIFY_OPTIONAL );
-	}
-	else if( m_verify == TlsVerificationType::REQUIRED ) {
-		sfn::detail::ssl_set_authmode( &m_ssl_context, SSL_VERIFY_REQUIRED );
-	}
-
-	sfn::detail::ssl_set_bio(
-		&m_ssl_context,
-		[]( void* context, unsigned char* buffer, int length ) {
-			return static_cast<TlsConnection<T, U, V>*>( context )->RecvInterface( nullptr, buffer, length );
-		},
-		this,
-		[]( void* context, const unsigned char* buffer, int length ) {
-			return static_cast<TlsConnection<T, U, V>*>( context )->SendInterface( nullptr, buffer, length );
-		},
-		this
-	);
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
@@ -71,23 +56,27 @@ typename TlsConnection<T, U, V>::Ptr TlsConnection<T, U, V>::Create() {
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
-int TlsConnection<T, U, V>::SendInterface( void* /*unused*/, const unsigned char* buffer, int length ) {
-	T::Send( buffer, static_cast<std::size_t>( length ) );
-
-	return length;
+void TlsConnection<T, U, V>::OutputCallback( const unsigned char* buffer, std::size_t size ) {
+	T::Send( buffer, size );
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
-int TlsConnection<T, U, V>::RecvInterface( void* /*unused*/, unsigned char* buffer, int length ) {
-	std::size_t received = 0;
+void TlsConnection<T, U, V>::DataCallback( const unsigned char* buffer, std::size_t size ) {
+	auto lock = T::AcquireLock();
 
-	received = T::Receive( buffer, static_cast<std::size_t>( length ) );
-
-	if( received ) {
-		return static_cast<int>( received );
+	if( size > 0 ) {
+		m_receive_buffer.insert( m_receive_buffer.end(), buffer, buffer + size );
 	}
+}
 
-	return TROPICSSL_ERR_NET_TRY_AGAIN;
+template<class T, TlsEndpointType U, TlsVerificationType V>
+void TlsConnection<T, U, V>::AlertCallback( Botan::TLS::Alert, const unsigned char*, size_t ) {
+}
+
+template<class T, TlsEndpointType U, TlsVerificationType V>
+bool TlsConnection<T, U, V>::HandshakeCallback( const Botan::TLS::Session& ) {
+	// No session caching for now...
+	return false;
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
@@ -105,21 +94,13 @@ void TlsConnection<T, U, V>::Shutdown() {
 
 	m_request_close = true;
 
-	if( !m_send_buffer.empty() ) {
-		OnSent();
-		return;
+	if( m_tls_endpoint && m_tls_endpoint->is_active() ) {
+		m_tls_endpoint->close();
+
+		m_local_closed = true;
+
+		T::Shutdown();
 	}
-
-	int result = sfn::detail::ssl_close_notify( &m_ssl_context );
-
-	if( result ) {
-		ErrorMessage() << "TlsConnection::Shutdown() Error: ssl_close_notify returned: " << result << "\n";
-		return;
-	}
-
-	m_local_closed = true;
-
-	T::Shutdown();
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
@@ -170,10 +151,13 @@ bool TlsConnection<T, U, V>::Send( const void* data, std::size_t size ) {
 			return false;
 		}
 
-		m_send_buffer.insert( m_send_buffer.end(), static_cast<const char*>( data ), static_cast<const char*>( data ) + size );
+		if( m_tls_endpoint && m_tls_endpoint->is_active() ) {
+			m_tls_endpoint->send( static_cast<const unsigned char*>( data ), size );
+		}
+		else {
+			m_send_buffer.insert( m_send_buffer.end(), static_cast<const char*>( data ), static_cast<const char*>( data ) + size );
+		}
 	}
-
-	OnSent();
 
 	return true;
 }
@@ -205,7 +189,8 @@ bool TlsConnection<T, U, V>::Send( const Message& message ) {
 
 	auto message_size = message.GetSize();
 
-	if( m_send_buffer.size() + sizeof( message_size ) + message_size >= GetMaximumBlockSize() / 2 ) {
+	if( ( m_send_buffer.size() + sizeof( message_size ) + message_size >= GetMaximumBlockSize() / 2 ) ||
+			( T::BytesToSend() + sizeof( message_size ) + message_size >= GetMaximumBlockSize() / 2 ) ) {
 		return false;
 	}
 
@@ -275,66 +260,6 @@ std::size_t TlsConnection<T, U, V>::BytesToReceive() const {
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
-void TlsConnection<T, U, V>::OnSent() {
-	auto lock = T::AcquireLock();
-
-	if( m_local_closed ) {
-		return;
-	}
-
-	auto send_size = std::min( m_send_memory.size(), m_send_buffer.size() );
-
-	if( !send_size && ( m_ssl_context.state == SSL_HANDSHAKE_OVER ) ) {
-		return;
-	}
-
-	std::copy_n( m_send_buffer.begin(), send_size, m_send_memory.begin() );
-
-	int length = 0;
-	int current_location = 0;
-	bool start = false;
-
-	do {
-		auto state_before = m_ssl_context.state;
-
-		length = sfn::detail::ssl_write( &m_ssl_context, reinterpret_cast<const unsigned char*>( m_send_memory.data() + current_location ), static_cast<int>( send_size ) );
-
-		if( !start ) {
-			start = ( state_before != SSL_HANDSHAKE_OVER ) && ( m_ssl_context.state == SSL_HANDSHAKE_OVER );
-		}
-
-		if( length > 0 ) {
-			current_location += length;
-			send_size -= static_cast<std::size_t>( length );
-		}
-	} while( length > 0 );
-
-	if( current_location ) {
-		m_send_buffer.erase( m_send_buffer.begin(), m_send_buffer.begin() + current_location );
-	}
-
-	if( m_request_close && !m_local_closed && m_send_buffer.empty() ) {
-		Shutdown();
-	}
-
-	if( length < 0 ) {
-		if( length == TROPICSSL_ERR_NET_TRY_AGAIN ) {
-		}
-		else if( length == TROPICSSL_ERR_SSL_CERTIFICATE_REQUIRED ) {
-			require_certificate_key = true;
-		}
-		else {
-			ErrorMessage() << "TlsConnection::OnSent() Error: ssl_write returned: " << length << "\n";
-			return;
-		}
-	}
-
-	if( start ) {
-		OnReceived();
-	}
-}
-
-template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::OnReceived() {
 	auto lock = T::AcquireLock();
 
@@ -342,63 +267,39 @@ void TlsConnection<T, U, V>::OnReceived() {
 		return;
 	}
 
-	int length = 0;
-	auto start = false;
+	std::size_t received = 0;
 
-	do {
-		auto state_before = m_ssl_context.state;
+	while( true ) {
+		received = T::Receive( m_receive_memory.data(), m_receive_memory.size() );
 
-		length = sfn::detail::ssl_read( &m_ssl_context, reinterpret_cast<unsigned char*>( m_receive_memory.data() ), static_cast<int>( m_receive_memory.size() ) );
+		if( received ) {
+			m_tls_endpoint->received_data( reinterpret_cast<unsigned char*>( m_receive_memory.data() ), received );
 
-		if( !start ) {
-			start = ( state_before != SSL_HANDSHAKE_OVER ) && ( m_ssl_context.state == SSL_HANDSHAKE_OVER );
-		}
+			if( m_tls_endpoint->is_active() && ( m_last_verification_result != TlsVerificationResult::PASSED ) && ( m_verify == TlsVerificationType::REQUIRED ) ) {
+				ErrorMessage() << "Certificate verification failed (specified REQUIRED), closing connection.\n";
 
-		if( length > 0 ) {
-			m_receive_buffer.insert( m_receive_buffer.end(), m_receive_memory.begin(), m_receive_memory.begin() + length );
-		}
-	} while( length > 0 );
+				m_tls_endpoint->close();
 
-	if( length < 0 ) {
-		if( length == TROPICSSL_ERR_NET_TRY_AGAIN ) {
-		}
-		else if( length == TROPICSSL_ERR_SSL_PEER_CLOSE_NOTIFY ) {
-			m_remote_closed = true;
-		}
-		else if( length == TROPICSSL_ERR_X509_CERT_VERIFY_FAILED ) {
-			ErrorMessage() << "Verification of the peer certificate has failed. (specified REQUIRED)\n";
-
-			auto verification_result = GetVerificationResult();
-
-			if( ( verification_result & TlsVerificationResult::EXPIRED ) == verification_result ) {
-				ErrorMessage() << "The peer certificate has expired and is no longer valid.\n";
+				T::Shutdown();
 			}
+			else {
+				if( m_tls_endpoint->is_active() && !m_send_buffer.empty() ) {
+					m_tls_endpoint->send( reinterpret_cast<const unsigned char*>( m_send_buffer.data() ), m_send_buffer.size() );
+					m_send_buffer.clear();
+				}
 
-			if( ( verification_result & TlsVerificationResult::REVOKED ) == verification_result ) {
-				ErrorMessage() << "SECURITY RISK: The peer certificate has been revoked by its certificate authority.\n";
+				if( m_tls_endpoint->is_active() && m_request_close ) {
+					m_tls_endpoint->close();
+
+					m_local_closed = true;
+
+					T::Shutdown();
+				}
 			}
-
-			if( ( verification_result & TlsVerificationResult::CN_MISMATCH ) == verification_result ) {
-				ErrorMessage() << "The peer certificate common name does not match the provided common name.\n";
-			}
-
-			if( ( verification_result & TlsVerificationResult::NOT_TRUSTED ) == verification_result ) {
-				ErrorMessage() << "The peer certificate is not issued by a trusted certificate authority.\n";
-			}
-
-			return;
-		}
-		else if( length == TROPICSSL_ERR_SSL_CERTIFICATE_REQUIRED ) {
-			require_certificate_key = true;
 		}
 		else {
-			ErrorMessage() << "TlsConnection::OnReceived() Error: ssl_read returned: " << length << "\n";
-			return;
+			break;
 		}
-	}
-
-	if( start ) {
-		OnSent();
 	}
 }
 
@@ -406,29 +307,40 @@ template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::OnConnected() {
 	auto lock = T::AcquireLock();
 
-	auto result = sfn::detail::ssl_handshake( &m_ssl_context );
-
-	if( result && ( result != TROPICSSL_ERR_NET_TRY_AGAIN ) ) {
-		ErrorMessage() << "TlsConnection::OnConnected() Error: ssl_handshake returned: " << result << "\n";
-		return;
-	}
-
 	m_local_closed = false;
 	m_remote_closed = false;
+
+	if( m_type == TlsEndpointType::CLIENT ) {
+		m_tls_endpoint = std::make_unique<Botan::TLS::Client>(
+			std::bind( &TlsConnection<T, U, V>::OutputCallback, this, std::placeholders::_1, std::placeholders::_2 ),
+			std::bind( &TlsConnection<T, U, V>::DataCallback, this, std::placeholders::_1, std::placeholders::_2 ),
+			std::bind( &TlsConnection<T, U, V>::AlertCallback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3 ),
+			std::bind( &TlsConnection<T, U, V>::HandshakeCallback, this, std::placeholders::_1 ),
+			m_tls_session_manager,
+			*this, // credentials_manager
+			m_tls_policy,
+			m_rng,
+			Botan::TLS::Server_Information(),
+			Botan::TLS::Protocol_Version::latest_tls_version()
+		);
+	}
+	else if( m_type == TlsEndpointType::SERVER ) {
+		m_tls_endpoint = std::make_unique<Botan::TLS::Server>(
+			std::bind( &TlsConnection<T, U, V>::OutputCallback, this, std::placeholders::_1, std::placeholders::_2 ),
+			std::bind( &TlsConnection<T, U, V>::DataCallback, this, std::placeholders::_1, std::placeholders::_2 ),
+			std::bind( &TlsConnection<T, U, V>::AlertCallback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3 ),
+			std::bind( &TlsConnection<T, U, V>::HandshakeCallback, this, std::placeholders::_1 ),
+			m_tls_session_manager,
+			*this, // credentials_manager
+			m_tls_policy,
+			m_rng
+		);
+	}
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::OnDisconnected() {
-}
-
-template<class T, TlsEndpointType U, TlsVerificationType V>
-void TlsConnection<T, U, V>::OnSentProxy() {
-	OnSent();
-}
-
-template<class T, TlsEndpointType U, TlsVerificationType V>
-void TlsConnection<T, U, V>::OnReceivedProxy() {
-	OnReceived();
+	m_tls_endpoint.reset();
 }
 
 }

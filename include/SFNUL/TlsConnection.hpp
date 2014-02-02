@@ -9,11 +9,11 @@
 #include <type_traits>
 #include <string>
 #include <array>
-#include <tropicssl/net.h>
-#include <tropicssl/ssl.h>
-#include <tropicssl/certs.h>
-#include <tropicssl/havege.h>
-#include <tropicssl/x509.h>
+#include <botan/tls_client.h>
+#include <botan/tls_server.h>
+#include <botan/pkcs8.h>
+#include <botan/auto_rng.h>
+#include <botan/init.h>
 #include <SFNUL/Config.hpp>
 
 #if defined( NONE )
@@ -28,43 +28,11 @@
 #undef REQUIRED
 #endif
 
-namespace sf {
-class Mutex;
-class Packet;
-}
-
 namespace sfn {
 
 class ReliableTransport;
 class Endpoint;
 class Message;
-
-/// @cond
-namespace detail {
-// Declarations of TropicSSL API we use for declspec
-SFNUL_API int ssl_init(ssl_context * ssl);
-SFNUL_API void ssl_set_endpoint(ssl_context * ssl, int endpoint);
-SFNUL_API void ssl_set_authmode(ssl_context * ssl, int authmode);
-SFNUL_API void ssl_set_rng(ssl_context * ssl, int (*f_rng) (void *), void *p_rng);
-SFNUL_API void ssl_set_dbg(ssl_context * ssl, void (*f_dbg) (void *, int, const char *), void *p_dbg);
-SFNUL_API void ssl_set_bio(ssl_context * ssl, int (*f_recv) (void *, unsigned char *, int), void *p_recv, int (*f_send) (void *, const unsigned char *, int), void *p_send);
-SFNUL_API void ssl_set_scb(ssl_context * ssl, int (*s_get) (ssl_context *), int (*s_set) (ssl_context *));
-SFNUL_API void ssl_set_session(ssl_context * ssl, int resume, int timeout, ssl_session * session);
-SFNUL_API void ssl_set_ciphers(ssl_context * ssl, const int *ciphers);
-SFNUL_API void ssl_set_ca_chain(ssl_context * ssl, x509_cert * ca_chain, const char *peer_cn);
-SFNUL_API void ssl_set_own_cert(ssl_context * ssl, x509_cert * own_cert, rsa_context * rsa_key);
-SFNUL_API int ssl_set_dh_param(ssl_context * ssl, const char *dhm_P, const char *dhm_G);
-SFNUL_API int ssl_get_verify_result(const ssl_context * ssl);
-SFNUL_API int ssl_handshake(ssl_context * ssl);
-SFNUL_API int ssl_read(ssl_context * ssl, unsigned char *buf, int len);
-SFNUL_API int ssl_write(ssl_context * ssl, const unsigned char *buf, int len);
-SFNUL_API int ssl_close_notify(ssl_context * ssl);
-SFNUL_API void ssl_free(ssl_context * ssl);
-
-SFNUL_API void havege_init(havege_state * hs);
-SFNUL_API int havege_rand(void *p_rng);
-}
-/// @endcond
 
 enum class TlsEndpointType : unsigned char {
 	CLIENT = 0,
@@ -97,17 +65,38 @@ inline TlsVerificationResult& operator|=( TlsVerificationResult& left, TlsVerifi
 	return left = left | right;
 }
 
+class SFNUL_API BotanResource {
+
+protected:
+	BotanResource();
+	~BotanResource() = default;
+private:
+	static std::weak_ptr<Botan::LibraryInitializer> m_library_initializer;
+
+	std::shared_ptr<Botan::LibraryInitializer> m_library_initializer_reference{};
+};
+
 template<class T, TlsEndpointType U, TlsVerificationType V> class TlsConnection;
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Weffc++"
+#endif
 
 /** TLS Certificate class.
  */
-class SFNUL_API TlsCertificate {
+class SFNUL_API TlsCertificate : protected BotanResource {
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic pop
+#endif
+
 public:
 	typedef std::shared_ptr<TlsCertificate> Ptr; //!< Shared pointer.
 
 	/** Dtor.
 	 */
-	~TlsCertificate();
+	~TlsCertificate() = default;
 
 	/** Create a TlsCertificate from a certificate string.
 	 * @param certificate std::string containing the Base 64 DER encoded certificate.
@@ -118,28 +107,38 @@ public:
 protected:
 	/** Ctor.
 	 */
-	TlsCertificate();
+	TlsCertificate() = default;
 
 private:
 	void LoadCertificate( const std::string& certificate );
 
-	x509_cert m_cert;
+	std::unique_ptr<Botan::X509_Certificate> m_certificate{};
 
 	friend class TlsConnectionBase;
 };
 
+#if defined( __GNUG__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Weffc++"
+#endif
+
 /** TLS Key class.
  */
-class SFNUL_API TlsKey {
+class SFNUL_API TlsKey : protected BotanResource {
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic pop
+#endif
+
 public:
 	typedef std::shared_ptr<TlsKey> Ptr; //!< Shared pointer.
 
 	/** Dtor.
 	 */
-	~TlsKey();
+	~TlsKey() = default;
 
 	/** Create a TlsKey from a key string and optional password.
-	 * @param key std::string containing the Base 64 DER encoded key.
+	 * @param key std::string containing the PKCS8 key.
 	 * @param password std::string containing the optional password.
 	 * @return TlsKey
 	 */
@@ -148,36 +147,31 @@ public:
 protected:
 	/** Ctor.
 	 */
-	TlsKey();
+	TlsKey() = default;
 
 private:
 	void LoadKey( const std::string& key, const std::string& password );
 
-	rsa_context m_key;
+	Botan::AutoSeeded_RNG m_rng{};
+	Botan::Private_Key* m_key{};
 
 	friend class TlsConnectionBase;
 };
 
+#if defined( __GNUG__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Weffc++"
+#endif
+
 /** TLS connection base.
  */
-class SFNUL_API TlsConnectionBase {
+class SFNUL_API TlsConnectionBase : public Botan::Credentials_Manager, protected BotanResource {
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic pop
+#endif
+
 public:
-
-	/** Set the Diffie-Hellman generator parameters.
-	 * P is set to a pre-computed 1024-value.
-	 * G is set to 4.
-	 * If you know how to set them yourself, go ahead, you can only gain security if you set them right...
-	 * @param p p value as a hexadecimal std::string.
-	 * @param g g value as a hexadecimal std::string.
-	 */
-	static void SetDiffieHellmanParameters( const std::string& p, const std::string& g );
-
-	/** Set the level of debug output produced by the TLS implementation.
-	 * 0 to disable, 3 for full debug output. Default: 0
-	 * @param level Debug level.
-	 */
-	void SetDebugLevel( int level );
-
 	/** Add a trusted CA certificate to the certificate store to verify the peer against.
 	 * The certificate must be encoded in Base64 DER format.
 	 * @param certificate TlsCertificate containing the X.509 certificate to trust.
@@ -202,46 +196,41 @@ public:
 	TlsVerificationResult GetVerificationResult() const;
 
 protected:
-	TlsConnectionBase();
-	~TlsConnectionBase();
+	TlsConnectionBase() = default;
+	virtual ~TlsConnectionBase() = default;
 
-	virtual void OnSentProxy() = 0;
-	virtual void OnReceivedProxy() = 0;
+	std::vector<Botan::Certificate_Store*> trusted_certificate_authorities( const std::string& type, const std::string& /*context*/ ) override;
+	void verify_certificate_chain( const std::string& type, const std::string& hostname, const std::vector<Botan::X509_Certificate>& certificate_chain ) override;
 
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
-#endif
+	std::vector<Botan::X509_Certificate> cert_chain( const std::vector<std::string>& cert_key_types, const std::string& /*type*/, const std::string& /*context*/ ) override;
+	Botan::Private_Key* private_key_for( const Botan::X509_Certificate& /*cert*/, const std::string& /*type*/, const std::string& /*context*/ ) override;
 
-	ssl_context m_ssl_context{};
+	Botan::SymmetricKey psk( const std::string& /*type*/, const std::string& /*context*/, const std::string& identity ) override;
+	std::string psk_identity( const std::string& /*type*/, const std::string& /*context*/, const std::string& /*identity_hint*/ ) override;
+	std::string psk_identity_hint( const std::string& /*type*/, const std::string& /*context*/ ) override;
 
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
+	bool attempt_srp( const std::string& /*type*/, const std::string& /*context*/ ) override;
+	std::string srp_identifier( const std::string& /*type*/, const std::string& /*context*/ ) override;
+	std::string srp_password( const std::string& /*type*/, const std::string& /*context*/, const std::string& /*identifier*/ ) override;
+	bool srp_verifier( const std::string& /*type*/, const std::string& context, const std::string& /*identifier*/, std::string& /*group_name*/, Botan::BigInt& /*verifier*/, std::vector<unsigned char>& /*salt*/, bool /*generate_fake_on_unknown*/ ) override;
+
+	Botan::AutoSeeded_RNG m_rng{};
+	Botan::TLS::Policy m_tls_policy{};
+	Botan::TLS::Session_Manager_In_Memory m_tls_session_manager{ m_rng };
+
+	Botan::SymmetricKey m_session_ticket_key{};
+
+	TlsVerificationResult m_last_verification_result{ TlsVerificationResult::NOT_TRUSTED };
 
 	bool require_certificate_key = false;
 
 private:
-	static std::string m_diffie_hellman_p;
-	static std::string m_diffie_hellman_g;
+	std::vector<std::unique_ptr<Botan::Certificate_Store>> m_certificate_stores{};
 
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
-#endif
-
-	ssl_session m_ssl_session{};
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
-
-	TlsCertificate::Ptr m_ca_cert{};
 	TlsCertificate::Ptr m_server_cert{};
 	TlsKey::Ptr m_key{};
 
-	int m_debug_level{ 0 };
-	std::string m_common_name = {};
+	std::string m_common_name{};
 };
 
 #if defined( __GNUG__ )
@@ -349,14 +338,9 @@ public:
 	virtual void OnConnected() override;
 
 protected:
-
 	/** Ctor.
 	 */
 	TlsConnection();
-
-	/** Used to inform subclasses that the transport has sent data.
-	 */
-	virtual void OnSent() override;
 
 	/** Used to inform subclasses that the transport has received data.
 	 */
@@ -366,12 +350,11 @@ protected:
 	 */
 	virtual void OnDisconnected() override;
 
-	virtual void OnSentProxy() override;
-	virtual void OnReceivedProxy() override;
-
 private:
-	int SendInterface( void* /*unused*/, const unsigned char* buffer, int length );
-	int RecvInterface( void* /*unused*/, unsigned char* buffer, int length );
+	void OutputCallback( const unsigned char* buffer, std::size_t size );
+	void DataCallback( const unsigned char* buffer, std::size_t size );
+	void AlertCallback( Botan::TLS::Alert, const unsigned char*, size_t );
+	bool HandshakeCallback( const Botan::TLS::Session& );
 
 	const static TlsEndpointType m_type = U;
 	const static TlsVerificationType m_verify = V;
@@ -381,6 +364,8 @@ private:
 
 	std::array<char, 2048> m_send_memory{ {} };
 	std::array<char, 2048> m_receive_memory{ {} };
+
+	std::unique_ptr<Botan::TLS::Channel> m_tls_endpoint{};
 
 	bool m_request_close = false;
 	bool m_remote_closed = false;

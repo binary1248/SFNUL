@@ -20,6 +20,8 @@ std::shared_ptr<T> TcpListener::GetPendingConnection() {
 
 	m_new_connections.pop_front();
 
+	socket->OnConnected();
+
 	socket->m_connected = true;
 
 	socket->ReceiveHandler( asio::error_code{}, 0 );
