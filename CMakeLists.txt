@@ -425,7 +425,7 @@ install(
 )
 
 install(
-	DIRECTORY extlibs/tropicssl/include
+	DIRECTORY extlibs/botan/include
 	DESTINATION .
 	REGEX "^.*(\\.git|\\.gitignore|\\.am)$" EXCLUDE
 )
