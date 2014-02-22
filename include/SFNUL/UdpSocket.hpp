@@ -99,7 +99,7 @@ private:
 
 	asio::ip::udp::socket m_socket;
 
-	std::map<asio::ip::udp::endpoint, std::vector<char>> m_receive_buffer{};
+	std::map<asio::ip::udp::endpoint, std::vector<char>> m_receive_buffer;
 
 	std::array<char, 2048> m_receive_memory;
 

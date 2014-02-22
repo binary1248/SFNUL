@@ -11,6 +11,8 @@
 	#ifndef NOMINMAX
 		#define NOMINMAX
 	#endif
+	
+	#include <algorithm>
 #endif
 
 #if defined( SFNUL_SYSTEM_WINDOWS ) && !defined( SFNUL_STATIC )
@@ -62,6 +64,22 @@
 	#define ASIO_HAS_HANDLER_HOOKS 1
 
 	// We expect whoever uses clang to also have "proper" C++11 library support
+	#define ASIO_HAS_STD_SYSTEM_ERROR 1
+	#define ASIO_HAS_STD_ARRAY 1
+	#define ASIO_HAS_STD_SHARED_PTR 1
+	#define ASIO_HAS_STD_ATOMIC 1
+	#define ASIO_HAS_STD_CHRONO 1
+	#define ASIO_HAS_STD_ADDRESSOF 1
+	#define ASIO_HAS_STD_FUNCTION 1
+	#define ASIO_HAS_STD_TYPE_TRAITS 1
+	#define ASIO_HAS_CSTDINT 1
+#endif
+
+// VS2013 support, because asio doesn't detect it
+#if defined( _MSC_VER ) && ( _MSC_VER == 1800 )
+	#define ASIO_HAS_MOVE 1
+	#define ASIO_HAS_VARIADIC_TEMPLATES 1
+	#define ASIO_HAS_HANDLER_HOOKS 1
 	#define ASIO_HAS_STD_SYSTEM_ERROR 1
 	#define ASIO_HAS_STD_ARRAY 1
 	#define ASIO_HAS_STD_SHARED_PTR 1

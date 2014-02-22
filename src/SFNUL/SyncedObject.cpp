@@ -8,13 +8,15 @@
 #include <SFNUL/SyncedType.hpp>
 #include <SFNUL/Synchronizer.hpp>
 
+#if !defined( _MSC_VER )
 // Until C++14 comes along...
 namespace std {
-template<typename T, typename... Args>
-inline std::unique_ptr<T> make_unique( Args&&... args ) {
-	return std::unique_ptr<T>( new T( std::forward<Args>( args )... ) );
+	template<typename T, typename... Args>
+	inline std::unique_ptr<T> make_unique( Args&&... args ) {
+		return std::unique_ptr<T>( new T( std::forward<Args>( args )... ) );
+	}
 }
-}
+#endif
 
 namespace sfn {
 

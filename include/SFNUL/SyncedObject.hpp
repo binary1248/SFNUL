@@ -72,11 +72,11 @@ private:
 
 	void Deserialize( Message& message );
 
-	std::vector<BaseSyncedType*> m_members = {};
+	std::vector<BaseSyncedType*> m_members;
 
 	SynchronizerBase* m_synchronizer{ nullptr };
 
-	std::unique_ptr<std::chrono::steady_clock::time_point> m_last_stream_sync{};
+	std::unique_ptr<std::chrono::steady_clock::time_point> m_last_stream_sync;
 
 	static id_type m_last_id;
 

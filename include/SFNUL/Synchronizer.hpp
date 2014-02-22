@@ -40,9 +40,9 @@ protected:
 
 	SyncedObject* GetObjectByID( SyncedObject::id_type id );
 
-	std::list<std::weak_ptr<Link<TcpSocket>>> m_links{};
+	std::list<std::weak_ptr<Link<TcpSocket>>> m_links;
 
-	std::list<SyncedObject*> m_objects{};
+	std::list<SyncedObject*> m_objects;
 
 	bool m_destroyed = false;
 };
@@ -103,7 +103,7 @@ private:
 
 	void Send();
 
-	std::unordered_map<SyncedObject::id_type, sync_type> m_updates{};
+	std::unordered_map<SyncedObject::id_type, sync_type> m_updates;
 };
 
 class SFNUL_API SynchronizerClient : public SynchronizerBase {
@@ -162,8 +162,8 @@ private:
 
 	void Receive();
 
-	std::unordered_map<SyncedObject::object_type_id_type, std::function<SyncedObject*()>> m_factories{};
-	std::unordered_map<SyncedObject::object_type_id_type, std::function<void( SyncedObject* )>> m_destructors{};
+	std::unordered_map<SyncedObject::object_type_id_type, std::function<SyncedObject*()>> m_factories;
+	std::unordered_map<SyncedObject::object_type_id_type, std::function<void( SyncedObject* )>> m_destructors;
 };
 
 }

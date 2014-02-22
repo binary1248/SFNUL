@@ -358,12 +358,12 @@ SyncedType<T>::operator T() const {
 }
 
 template<typename T>
-auto SyncedType<T>::operator->() const -> SyncedType<T>::address_type {
+auto SyncedType<T>::operator->() const -> typename SyncedType<T>::address_type {
 	return &( this->m_value );
 }
 
 template<typename T>
-auto SyncedType<T>::operator->() -> SyncedType<T>::address_type {
+auto SyncedType<T>::operator->() -> typename SyncedType<T>::address_type {
 	SetModified( true );
 	return &( this->m_value );
 }

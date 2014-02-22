@@ -75,7 +75,7 @@ public:
 	const std::deque<unsigned char>& GetBuffer() const;
 
 private:
-	std::deque<unsigned char> m_data{};
+	std::deque<unsigned char> m_data;
 };
 
 }

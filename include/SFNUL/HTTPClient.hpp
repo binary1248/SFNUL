@@ -24,7 +24,9 @@ class SFNUL_API HTTPClientPipeline {
 public:
 	HTTPClientPipeline( Endpoint endpoint, bool secure, const std::chrono::seconds& timeout );
 
+#if !defined( _MSC_VER )
 	HTTPClientPipeline( HTTPClientPipeline&& ) = default;
+#endif
 
 	~HTTPClientPipeline();
 
@@ -54,29 +56,29 @@ private:
 
 	void Reconnect();
 
-	TcpSocket::Ptr m_socket{};
+	TcpSocket::Ptr m_socket;
 
 	bool m_secure;
 	Endpoint m_remote_endpoint;
-	TlsCertificate::Ptr m_certificate{};
+	TlsCertificate::Ptr m_certificate;
 
 #if defined( __GNUG__ )
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
-	http_parser_settings m_parser_settings{};
-	http_parser m_parser{};
+	http_parser_settings m_parser_settings;
+	http_parser m_parser;
 
 #if defined( __GNUG__ )
 #pragma GCC diagnostic pop
 #endif
 
-	Pipeline m_pipeline{};
+	Pipeline m_pipeline;
 
-	HTTPRequest m_current_request{};
+	HTTPRequest m_current_request;
 
-	std::string m_last_header_field{};
+	std::string m_last_header_field;
 	bool m_header_field_complete{ false };
 
 	std::chrono::steady_clock::time_point m_last_activity{ std::chrono::steady_clock::now() };
@@ -124,8 +126,8 @@ public:
 private:
 	typedef std::tuple<HTTPClientPipeline, std::string, unsigned short> Pipeline;
 
-	std::list<Pipeline> m_pipelines{};
-	std::map<std::string, TlsCertificate::Ptr> m_certificates{};
+	std::list<Pipeline> m_pipelines;
+	std::map<std::string, TlsCertificate::Ptr> m_certificates;
 
 	std::chrono::seconds m_timeout_value{ 15 };
 };

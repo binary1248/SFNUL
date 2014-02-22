@@ -114,9 +114,9 @@ public:
 
 	operator value_type() const;
 
-	auto operator->() const -> address_type;
+	auto operator->() const -> typename address_type;
 
-	auto operator->() -> address_type;
+	auto operator->() -> typename address_type;
 
 protected:
 	void Serialize( Message& message, SynchronizationType sync_type ) override;

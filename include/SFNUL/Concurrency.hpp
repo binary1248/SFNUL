@@ -25,7 +25,11 @@ public:
 	~Thread();
 
 	Thread( const Thread& other ) = delete;
+
+#if !defined( _MSC_VER )
 	Thread( Thread&& other ) = default;
+#endif
+
 	Thread& operator=( const Thread& other ) = delete;
 	Thread& operator=( Thread&& other ) = delete;
 private:
@@ -46,7 +50,7 @@ private:
 #pragma GCC diagnostic pop
 #endif
 
-	std::function<void()> m_function{};
+	std::function<void()> m_function;
 };
 
 class SFNUL_API Atomic {
@@ -56,7 +60,11 @@ protected:
 		ScopedLock( Atomic* atomic );
 		~ScopedLock();
 		ScopedLock( const ScopedLock& other ) = delete;
+
+#if !defined( _MSC_VER )
 		ScopedLock( ScopedLock&& other ) = default;
+#endif
+
 		ScopedLock& operator=( const ScopedLock& other ) = delete;
 		ScopedLock& operator=( ScopedLock&& other ) = delete;
 	private:
@@ -66,9 +74,16 @@ protected:
 	Atomic();
 	~Atomic();
 	Atomic( const Atomic& other ) = delete;
+
+#if !defined( _MSC_VER )
 	Atomic( Atomic&& other ) = default;
+#endif
+
 	Atomic& operator=( const Atomic& other ) = delete;
+
+#if !defined( _MSC_VER )
 	Atomic& operator=( Atomic&& other ) = default;
+#endif
 
 	ScopedLock AcquireLock() const;
 private:
@@ -80,9 +95,9 @@ private:
 #endif
 
 #if defined( SFNUL_WIN32_THREADS )
-	mutable CRITICAL_SECTION m_mutex{};
+	mutable CRITICAL_SECTION m_mutex;
 #elif defined( SFNUL_PTHREADS )
-	mutable pthread_mutex_t m_mutex{};
+	mutable pthread_mutex_t m_mutex;
 #endif
 
 #if defined( __GNUG__ )

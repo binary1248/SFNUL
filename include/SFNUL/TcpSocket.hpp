@@ -156,8 +156,8 @@ private:
 
 	asio::ip::tcp::socket m_socket;
 
-	std::vector<char> m_send_buffer = {};
-	std::vector<char> m_receive_buffer = {};
+	std::vector<char> m_send_buffer;
+	std::vector<char> m_receive_buffer;
 
 	std::array<char, 2048> m_send_memory;
 	std::array<char, 2048> m_receive_memory;

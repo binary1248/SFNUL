@@ -53,11 +53,17 @@ enum class TlsVerificationResult : unsigned char {
 	NOT_TRUSTED = 1 << 3
 };
 
-inline constexpr TlsVerificationResult operator&( TlsVerificationResult left, TlsVerificationResult right ) {
+#if defined( _MSC_VER )
+#define CONSTEXPR
+#else
+#define CONSTEXPR constexpr
+#endif
+
+inline CONSTEXPR TlsVerificationResult operator&( TlsVerificationResult left, TlsVerificationResult right ) {
 	return static_cast<TlsVerificationResult>( static_cast<unsigned char>( left ) & static_cast<unsigned char>( right ) );
 }
 
-inline constexpr TlsVerificationResult operator|( TlsVerificationResult left, TlsVerificationResult right ) {
+inline CONSTEXPR TlsVerificationResult operator|( TlsVerificationResult left, TlsVerificationResult right ) {
 	return static_cast<TlsVerificationResult>( static_cast<unsigned char>( left ) | static_cast<unsigned char>( right ) );
 }
 
@@ -73,7 +79,7 @@ protected:
 private:
 	static std::weak_ptr<Botan::LibraryInitializer> m_library_initializer;
 
-	std::shared_ptr<Botan::LibraryInitializer> m_library_initializer_reference{};
+	std::shared_ptr<Botan::LibraryInitializer> m_library_initializer_reference;
 };
 
 template<class T, TlsEndpointType U, TlsVerificationType V> class TlsConnection;
@@ -112,7 +118,7 @@ protected:
 private:
 	void LoadCertificate( const std::string& certificate );
 
-	std::unique_ptr<Botan::X509_Certificate> m_certificate{};
+	std::unique_ptr<Botan::X509_Certificate> m_certificate;
 
 	friend class TlsConnectionBase;
 };
@@ -152,8 +158,8 @@ protected:
 private:
 	void LoadKey( const std::string& key, const std::string& password );
 
-	Botan::AutoSeeded_RNG m_rng{};
-	Botan::Private_Key* m_key{};
+	Botan::AutoSeeded_RNG m_rng;
+	Botan::Private_Key* m_key;
 
 	friend class TlsConnectionBase;
 };
@@ -214,23 +220,23 @@ protected:
 	std::string srp_password( const std::string& /*type*/, const std::string& /*context*/, const std::string& /*identifier*/ ) override;
 	bool srp_verifier( const std::string& /*type*/, const std::string& context, const std::string& /*identifier*/, std::string& /*group_name*/, Botan::BigInt& /*verifier*/, std::vector<unsigned char>& /*salt*/, bool /*generate_fake_on_unknown*/ ) override;
 
-	Botan::AutoSeeded_RNG m_rng{};
-	Botan::TLS::Policy m_tls_policy{};
+	Botan::AutoSeeded_RNG m_rng;
+	Botan::TLS::Policy m_tls_policy;
 	Botan::TLS::Session_Manager_In_Memory m_tls_session_manager{ m_rng };
 
-	Botan::SymmetricKey m_session_ticket_key{};
+	Botan::SymmetricKey m_session_ticket_key;
 
 	TlsVerificationResult m_last_verification_result{ TlsVerificationResult::NOT_TRUSTED };
 
 	bool require_certificate_key = false;
 
 private:
-	std::vector<std::unique_ptr<Botan::Certificate_Store>> m_certificate_stores{};
+	std::vector<std::unique_ptr<Botan::Certificate_Store>> m_certificate_stores;
 
-	TlsCertificate::Ptr m_server_cert{};
-	TlsKey::Ptr m_key{};
+	TlsCertificate::Ptr m_server_cert;
+	TlsKey::Ptr m_key;
 
-	std::string m_common_name{};
+	std::string m_common_name;
 };
 
 #if defined( __GNUG__ )
@@ -359,13 +365,13 @@ private:
 	const static TlsEndpointType m_type = U;
 	const static TlsVerificationType m_verify = V;
 
-	std::vector<char> m_send_buffer = {};
-	std::vector<char> m_receive_buffer = {};
+	std::vector<char> m_send_buffer;
+	std::vector<char> m_receive_buffer;
 
-	std::array<char, 2048> m_send_memory{ {} };
-	std::array<char, 2048> m_receive_memory{ {} };
+	std::array<char, 2048> m_send_memory;
+	std::array<char, 2048> m_receive_memory;
 
-	std::unique_ptr<Botan::TLS::Channel> m_tls_endpoint{};
+	std::unique_ptr<Botan::TLS::Channel> m_tls_endpoint;
 
 	bool m_request_close = false;
 	bool m_remote_closed = false;

@@ -75,7 +75,7 @@ private:
 
 	asio::ip::tcp::acceptor m_acceptor;
 
-	std::deque<asio::ip::tcp::socket> m_new_connections = {};
+	std::deque<asio::ip::tcp::socket> m_new_connections;
 
 	bool m_listening = false;
 };

@@ -41,11 +41,15 @@ protected:
 
 	NetworkResource( const NetworkResource& other ) = delete;
 
+#if !defined( _MSC_VER )
 	NetworkResource( NetworkResource&& other ) = default;
+#endif
 
 	NetworkResource& operator=( const NetworkResource& other ) = delete;
 
+#if !defined( _MSC_VER )
 	NetworkResource& operator=( NetworkResource&& other ) = default;
+#endif
 
 	/** Get the associated asio io_service.
 	 * @return associated asio io_service.

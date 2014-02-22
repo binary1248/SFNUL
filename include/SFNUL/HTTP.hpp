@@ -71,8 +71,8 @@ public:
 protected:
 	friend bool operator==( const HTTPMessage& left, const HTTPMessage& right );
 
-	std::unordered_map<std::string, std::string> m_header{};
-	std::string m_body{};
+	std::unordered_map<std::string, std::string> m_header;
+	std::string m_body;
 
 	bool m_header_complete{ false };
 	bool m_body_complete{ false };
@@ -117,8 +117,8 @@ public:
 	std::string ToString() const override;
 
 protected:
-	std::string m_method{};
-	std::string m_uri{};
+	std::string m_method;
+	std::string m_uri;
 };
 
 /** A HTTP response containing a version, status and remaining HTTP message.
@@ -161,8 +161,8 @@ public:
 	std::vector<std::string> GetHeaderFields() const;
 
 protected:
-	std::string m_http_version{};
-	std::string m_status{};
+	std::string m_http_version;
+	std::string m_status;
 };
 
 #if defined( __GNUG__ )
