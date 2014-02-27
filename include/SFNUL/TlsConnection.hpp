@@ -84,18 +84,9 @@ private:
 
 template<class T, TlsEndpointType U, TlsVerificationType V> class TlsConnection;
 
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Weffc++"
-#endif
-
 /** TLS Certificate class.
  */
 class SFNUL_API TlsCertificate : protected BotanResource {
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
 
 public:
 	typedef std::shared_ptr<TlsCertificate> Ptr; //!< Shared pointer.
@@ -123,18 +114,9 @@ private:
 	friend class TlsConnectionBase;
 };
 
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Weffc++"
-#endif
-
 /** TLS Key class.
  */
 class SFNUL_API TlsKey : protected BotanResource {
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
 
 public:
 	typedef std::shared_ptr<TlsKey> Ptr; //!< Shared pointer.
@@ -164,18 +146,9 @@ private:
 	friend class TlsConnectionBase;
 };
 
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Weffc++"
-#endif
-
 /** TLS connection base.
  */
 class SFNUL_API TlsConnectionBase : public Botan::Credentials_Manager, protected BotanResource {
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
 
 public:
 	/** Add a trusted CA certificate to the certificate store to verify the peer against.
@@ -239,19 +212,10 @@ private:
 	std::string m_common_name;
 };
 
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Weffc++"
-#endif
-
 /** TLS connection class.
  */
 template<class T, TlsEndpointType U, TlsVerificationType V>
 class TlsConnection : public T, public TlsConnectionBase {
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
 
 public:
 	static_assert( std::is_base_of<ReliableTransport, T>::value, "TLS connections can only be set up over reliable transports." );

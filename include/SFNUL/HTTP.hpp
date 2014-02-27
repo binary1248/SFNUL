@@ -78,11 +78,6 @@ protected:
 	bool m_body_complete{ false };
 };
 
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Weffc++"
-#endif
-
 /** A HTTP request containing a method, uri and remaining HTTP message.
  */
 class SFNUL_API HTTPRequest : public HTTPMessage {
@@ -164,10 +159,6 @@ protected:
 	std::string m_http_version;
 	std::string m_status;
 };
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
 
 bool operator==( const HTTPMessage& left, const HTTPMessage& right );
 

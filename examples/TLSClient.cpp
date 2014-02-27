@@ -16,6 +16,8 @@ int main() {
 	}
 
 	// Create our TLS connection over a TCP transport.
+	// If you want to skip authentication of the remote host
+	// specify sfn::TlsVerificationType::OPTIONAL.
 	auto connection = sfn::TlsConnection<sfn::TcpSocket, sfn::TlsEndpointType::CLIENT, sfn::TlsVerificationType::REQUIRED>::Create();
 
 	// Set the Common Name we expect in the peer certificate.
@@ -51,14 +53,6 @@ int main() {
 
 	// Add our trusted certificate to the store to verify against.
 	connection->AddTrustedCertificate( sfn::TlsCertificate::Create( trusted_certificate ) );
-
-	// If you want to manually verify the certificate yourself,
-	// change the connection declaration to use OPTIONAL instead
-	// of REQUIRED, and use this to check the result.
-	if( connection->GetVerificationResult() != sfn::TlsVerificationResult::PASSED ) {
-		std::cout << "Something went wrong during the verification process.\n";
-		return 1;
-	}
 
 	// Connect the to the TLS endpoint.
 	connection->Connect( sfn::Endpoint{ addresses.front(), 443 } );

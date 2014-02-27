@@ -15,18 +15,9 @@ namespace sfn {
 
 class Endpoint;
 
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Weffc++"
-#endif
-
 /** UDP socket class.
  */
 class SFNUL_API UdpSocket : public Socket, public Transport, public std::enable_shared_from_this<UdpSocket> {
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
 
 public:
 	typedef std::shared_ptr<UdpSocket> Ptr; //!< Shared pointer.

@@ -15,18 +15,9 @@ namespace sfn {
 class Endpoint;
 class TcpSocket;
 
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Weffc++"
-#endif
-
 /** TCP listener class. This class listens for incoming connections and asynchronously accepts them.
  */
 class SFNUL_API TcpListener : public Socket, public std::enable_shared_from_this<TcpListener> {
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
 
 public:
 	typedef std::shared_ptr<TcpListener> Ptr; //!< Shared pointer.

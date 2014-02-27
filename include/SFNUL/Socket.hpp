@@ -9,18 +9,9 @@
 
 namespace sfn {
 
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Weffc++"
-#endif
-
 /** Base socket class.
  */
 class SFNUL_API Socket : public NetworkResource {
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
 
 public:
 	/** Constructor.

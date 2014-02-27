@@ -11,16 +11,7 @@
 namespace sfn {
 namespace {
 
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Weffc++"
-#endif
-
 struct TcpListenerMaker : public TcpListener {};
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
 
 }
 

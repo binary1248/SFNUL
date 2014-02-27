@@ -114,9 +114,9 @@ public:
 
 	operator value_type() const;
 
-	auto operator->() const -> typename address_type;
+	auto operator->() const -> address_type;
 
-	auto operator->() -> typename address_type;
+	auto operator->() -> address_type;
 
 protected:
 	void Serialize( Message& message, SynchronizationType sync_type ) override;
@@ -205,11 +205,6 @@ auto operator<=( const SyncedType<T>& synced_type, S other ) -> decltype( synced
 template<typename T, typename S>
 auto operator<=( S other, const SyncedType<T>& synced_type ) -> decltype( other <= synced_type.GetValue() );
 
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Weffc++"
-#endif
-
 template<typename T>
 auto operator++( SyncedType<T>& synced_type ) -> decltype( synced_type = ( ++( synced_type.GetValue() ) ) );
 
@@ -221,10 +216,6 @@ auto operator--( SyncedType<T>& synced_type ) -> decltype( synced_type = ( --( s
 
 template<typename T>
 auto operator--( SyncedType<T>& synced_type, int ) -> decltype( synced_type = ( ( synced_type.GetValue() )-- ) );
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
 
 template<typename T, typename S>
 auto operator+=( SyncedType<T>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() + other );

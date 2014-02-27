@@ -11,18 +11,9 @@
 
 namespace sfn {
 
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Weffc++"
-#endif
-
 /** An IP address. Can represent IPv4 or IPv6 addresses.
  */
 class SFNUL_API IpAddress : public asio::ip::address {
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
 
 public:
 	/** Constructor.

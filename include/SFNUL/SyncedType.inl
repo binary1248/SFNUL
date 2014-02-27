@@ -202,11 +202,6 @@ auto operator<=( S other, const SyncedType<T>& synced_type ) -> decltype( other 
 	return other <= synced_type.GetValue();
 }
 
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Weffc++"
-#endif
-
 template<typename T>
 auto operator++( SyncedType<T>& synced_type ) -> decltype( synced_type = ( ++synced_type.GetValue() ) ) {
 	return synced_type = ( ++synced_type.GetValue() );
@@ -234,10 +229,6 @@ auto operator--( SyncedType<T>& synced_type, int ) -> decltype( synced_type = ( 
 
 	return return_value;
 }
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
 
 template<typename T, typename S>
 auto operator+=( SyncedType<T>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() + other ) {
@@ -358,12 +349,12 @@ SyncedType<T>::operator T() const {
 }
 
 template<typename T>
-auto SyncedType<T>::operator->() const -> typename SyncedType<T>::address_type {
+auto SyncedType<T>::operator->() const -> address_type {
 	return &( this->m_value );
 }
 
 template<typename T>
-auto SyncedType<T>::operator->() -> typename SyncedType<T>::address_type {
+auto SyncedType<T>::operator->() -> address_type {
 	SetModified( true );
 	return &( this->m_value );
 }

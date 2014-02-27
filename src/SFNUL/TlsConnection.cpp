@@ -18,19 +18,10 @@ BotanResource::BotanResource() :
 	}
 }
 
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Weffc++"
-#endif
-
 namespace {
 struct TlsCertificateMaker : public TlsCertificate {};
 struct TlsKeyMaker : public TlsKey {};
 }
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
 
 TlsCertificate::Ptr TlsCertificate::Create( const std::string& certificate ) {
 	auto cert_ptr = std::make_shared<TlsCertificateMaker>();

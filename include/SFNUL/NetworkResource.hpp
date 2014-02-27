@@ -14,18 +14,9 @@ namespace sfn {
 
 class IpAddress;
 
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Weffc++"
-#endif
-
 /** Network resource base class.
  */
 class SFNUL_API NetworkResource : protected Atomic {
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
 
 private:
 	std::shared_ptr<asio::io_service> m_io_service;
