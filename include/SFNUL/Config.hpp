@@ -4,6 +4,9 @@
 
 #pragma once
 
+#define SFNUL_MAJOR_VERSION 0
+#define SFNUL_MINOR_VERSION 2
+
 #if defined( _WIN32 ) || defined( __WIN32__ )
 	#define SFNUL_SYSTEM_WINDOWS
 	#define WIN32_LEAN_AND_MEAN
