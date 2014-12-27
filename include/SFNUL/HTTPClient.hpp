@@ -30,7 +30,7 @@ public:
 
 	~HTTPClientPipeline();
 
-	void LoadCertificate( TlsCertificate::Ptr certificate );
+	void LoadCertificate( TlsCertificate::Ptr certificate, const std::string& common_name );
 
 	void SendRequest( HTTPRequest request );
 
@@ -111,8 +111,9 @@ public:
 	/** Load a certificate to use for a certain host.
 	 * @param address Address of the host.
 	 * @param certificate Certificate to use.
+	 * @param common_name Common Name to check against.
 	 */
-	void LoadCertificate( const std::string& address, TlsCertificate::Ptr certificate );
+	void LoadCertificate( const std::string& address, TlsCertificate::Ptr certificate, std::string common_name = "" );
 
 	/** Set the timeout value a connection is allowed to be idle for before being closed. Default: 15 seconds. 0 to disable.
 	 * This will only have effect on new connections, so set before issuing any requests.
@@ -127,7 +128,7 @@ private:
 	typedef std::tuple<HTTPClientPipeline, std::string, unsigned short> Pipeline;
 
 	std::list<Pipeline> m_pipelines;
-	std::map<std::string, TlsCertificate::Ptr> m_certificates;
+	std::map<std::string, std::pair<TlsCertificate::Ptr, std::string>> m_certificates;
 
 	std::chrono::seconds m_timeout_value{ 15 };
 };

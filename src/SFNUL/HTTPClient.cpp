@@ -205,7 +205,7 @@ HTTPClientPipeline::~HTTPClientPipeline() {
 	m_socket->Close();
 }
 
-void HTTPClientPipeline::LoadCertificate( TlsCertificate::Ptr certificate ) {
+void HTTPClientPipeline::LoadCertificate( TlsCertificate::Ptr certificate, const std::string& common_name ) {
 	if( !m_secure ) {
 		return;
 	}
@@ -214,6 +214,10 @@ void HTTPClientPipeline::LoadCertificate( TlsCertificate::Ptr certificate ) {
 
 	if( m_socket ) {
 		auto socket = std::static_pointer_cast<TlsConnection<TcpSocket, TlsEndpointType::CLIENT, TlsVerificationType::REQUIRED>>( m_socket );
+
+		if( !common_name.empty() ) {
+			socket->SetPeerCommonName( common_name );
+		}
 
 		socket->AddTrustedCertificate( std::move( certificate ) );
 		socket->Connect( m_remote_endpoint );
@@ -381,7 +385,7 @@ void HTTPClient::SendRequest( HTTPRequest request, const std::string& address, u
 		auto certificate_iter = m_certificates.find( address );
 
 		if( certificate_iter != std::end( m_certificates ) ) {
-			std::get<0>( *iter ).LoadCertificate( certificate_iter->second );
+			std::get<0>( *iter ).LoadCertificate( certificate_iter->second.first, certificate_iter->second.second );
 		}
 	}
 
@@ -404,8 +408,8 @@ HTTPResponse HTTPClient::GetResponse( const HTTPRequest& request, const std::str
 	return std::get<0>( *pipeline_iter ).GetResponse( request );
 }
 
-void HTTPClient::LoadCertificate( const std::string& address, TlsCertificate::Ptr certificate ) {
-	m_certificates[address] = certificate;
+void HTTPClient::LoadCertificate( const std::string& address, TlsCertificate::Ptr certificate, std::string common_name ) {
+	m_certificates[address] = std::make_pair( certificate, common_name );
 
 	auto pipeline_iter = std::find_if( std::begin( m_pipelines ), std::end( m_pipelines ),
 		[&]( Pipeline& p ) {
@@ -417,7 +421,7 @@ void HTTPClient::LoadCertificate( const std::string& address, TlsCertificate::Pt
 		return;
 	}
 
-	std::get<0>( *pipeline_iter ).LoadCertificate( std::move( certificate ) );
+	std::get<0>( *pipeline_iter ).LoadCertificate( std::move( certificate ), common_name );
 }
 
 void HTTPClient::SetTimeoutValue( const std::chrono::seconds& timeout ) {
