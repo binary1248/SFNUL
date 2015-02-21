@@ -38,9 +38,9 @@ public:
 	// SetStreamSynchronizationPeriod() based on testing of the network and
 	// state update performance.
 	Coordinate() :
-		x{ this, sfn::SynchronizationType::DYNAMIC, 300.f },
-		y{ this, sfn::SynchronizationType::DYNAMIC, 200.f },
-		color{ this, sfn::SynchronizationType::STATIC, sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 } }
+		x{ this, sfn::SynchronizationType::Dynamic, 300.f },
+		y{ this, sfn::SynchronizationType::Dynamic, 200.f },
+		color{ this, sfn::SynchronizationType::Static, sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 } }
 	{
 	}
 
@@ -58,9 +58,9 @@ public:
 	// to replicating the contained values. The underlying SyncedObject still
 	// has to be created as with the default constructor.
 	Coordinate( const Coordinate& coordinate ) :
-		x{ this, sfn::SynchronizationType::DYNAMIC, coordinate.x },
-		y{ this, sfn::SynchronizationType::DYNAMIC, coordinate.y },
-		color{ this, sfn::SynchronizationType::STATIC, coordinate.color }
+		x{ this, sfn::SynchronizationType::Dynamic, coordinate.x },
+		y{ this, sfn::SynchronizationType::Dynamic, coordinate.y },
+		color{ this, sfn::SynchronizationType::Static, coordinate.color }
 	{
 	}
 
@@ -83,9 +83,9 @@ public:
 	// object is constructed due to the constraints mentioned above.
 	Coordinate( Coordinate&& coordinate ) :
 		sfn::SyncedObject{ std::forward<sfn::SyncedObject>( coordinate ) },
-		x{ this, sfn::SynchronizationType::DYNAMIC, coordinate.x },
-		y{ this, sfn::SynchronizationType::DYNAMIC, coordinate.y },
-		color{ this, sfn::SynchronizationType::STATIC, coordinate.color }
+		x{ this, sfn::SynchronizationType::Dynamic, coordinate.x },
+		y{ this, sfn::SynchronizationType::Dynamic, coordinate.y },
+		color{ this, sfn::SynchronizationType::Static, coordinate.color }
 	{
 	}
 

@@ -2,42 +2,56 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include <iostream>
-#include <SFNUL/Config.hpp>
-#include <SFNUL/Utility.hpp>
-#include <asio/ip/icmp.hpp>
-#include <SFNUL/NetworkResource.hpp>
 #include <SFNUL/IpAddress.hpp>
+#include <SFNUL/ConfigInternal.hpp>
+#include <SFNUL/Utility.hpp>
+#include <SFNUL/NetworkResource.hpp>
+#include <SFNUL/IpAddressImpl.hpp>
+#include <SFNUL/MakeUnique.hpp>
+#include <asio/ip/icmp.hpp>
+#include <asio/ip/address.hpp>
 
 namespace sfn {
 
-IpAddress::IpAddress() {
-}
-
-/// @cond
-IpAddress::IpAddress( const asio::ip::address& asio_address ) :
-	asio::ip::address{ asio_address }
+IpAddress::IpAddress() :
+	m_impl{ make_unique<IpAddressImpl>() }
 {
 }
-/// @endcond
 
-IpAddress::IpAddress( std::string address_string ) {
+IpAddress::IpAddress( std::string address_string ) :
+	m_impl{ make_unique<IpAddressImpl>() }
+{
 	asio::error_code error;
 
-	( *this ) = from_string( address_string, error );
+	m_impl->address = asio::ip::address::from_string( address_string, error );
 
 	if( error ) {
 		ErrorMessage() << "IpAddress() Error: " << error.message() << "\n";
 	}
 }
 
-IpAddress::~IpAddress() {
+IpAddress::IpAddress( const IpAddress& address ) :
+	m_impl{ make_unique<IpAddressImpl>() }
+{
+	m_impl->address = address.m_impl->address;
+}
+
+IpAddress::~IpAddress() = default;
+
+IpAddress& IpAddress::operator=( const IpAddress& address ) {
+	m_impl->address = address.m_impl->address;
+
+	return *this;
+}
+
+bool IpAddress::operator==( const IpAddress& address ) const {
+	return ( m_impl->address == address.m_impl->address );
 }
 
 IpAddress::operator std::string() const {
 	asio::error_code error;
 
-	std::string address_string{ to_string( error ) };
+	std::string address_string{ m_impl->address.to_string( error ) };
 
 	if( error ) {
 		ErrorMessage() << "Error converting IpAddress to string: " << error.message() << "\n";
@@ -49,17 +63,17 @@ IpAddress::operator std::string() const {
 }
 
 bool IpAddress::IsIPv4() const {
-	return is_v4();
+	return m_impl->address.is_v4();
 }
 
 bool IpAddress::IsIPv6() const {
-	return is_v6();
+	return m_impl->address.is_v6();
 }
 
 std::deque<IpAddress> IpAddress::Resolve( const std::string& hostname ) {
 	NetworkResource resource;
 
-	asio::ip::icmp::resolver resolver{ resource.GetIOService() };
+	asio::ip::icmp::resolver resolver{ *static_cast<asio::io_service*>( resource.GetIOService() ) };
 	asio::ip::icmp::resolver::query query{ hostname, "" };
 
 	asio::error_code error;
@@ -75,7 +89,8 @@ std::deque<IpAddress> IpAddress::Resolve( const std::string& hostname ) {
 	}
 
 	for( ; endpoint_iterator != asio::ip::icmp::resolver::iterator{}; ++endpoint_iterator ) {
-		addresses.emplace_back( endpoint_iterator->endpoint().address() );
+		addresses.emplace_back();
+		addresses.back().m_impl->address = endpoint_iterator->endpoint().address();
 	}
 
 	return addresses;

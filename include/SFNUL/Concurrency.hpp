@@ -4,20 +4,14 @@
 
 #pragma once
 
-#include <functional>
 #include <SFNUL/Config.hpp>
-
-#if defined( SFNUL_WIN32_THREADS )
-#include <windows.h>
-#include <process.h>
-#elif defined( SFNUL_PTHREADS )
-#include <pthread.h>
-#else
-#error No supported threading facility available. Review CMake configuration for more information.
-#endif
+#include <functional>
+#include <memory>
 
 /// @cond
 namespace sfn {
+
+class ThreadImpl;
 
 class SFNUL_API Thread {
 public:
@@ -33,24 +27,7 @@ public:
 	Thread& operator=( const Thread& other ) = delete;
 	Thread& operator=( Thread&& other ) = delete;
 private:
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
-#endif
-
-#if defined( SFNUL_WIN32_THREADS )
-	static unsigned __stdcall run( void* data );
-	mutable HANDLE m_thread{};
-#elif defined( SFNUL_PTHREADS )
-	static void* run( void* data );
-	mutable pthread_t m_thread{};
-#endif
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
-
-	std::function<void()> m_function;
+	std::unique_ptr<ThreadImpl> m_impl;
 };
 
 class SFNUL_API Atomic {
@@ -89,20 +66,9 @@ protected:
 private:
 	void LockMutex() const;
 	void UnlockMutex() const;
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
-#endif
 
-#if defined( SFNUL_WIN32_THREADS )
-	mutable CRITICAL_SECTION m_mutex;
-#elif defined( SFNUL_PTHREADS )
-	mutable pthread_mutex_t m_mutex;
-#endif
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
+	class AtomicImpl;
+	std::unique_ptr<AtomicImpl> m_impl;
 };
 
 }

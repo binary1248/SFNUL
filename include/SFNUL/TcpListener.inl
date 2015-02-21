@@ -10,22 +10,15 @@ std::shared_ptr<T> TcpListener::GetPendingConnection() {
 
 	auto lock = AcquireLock();
 
-	if( m_new_connections.empty() ) {
+	if( !HasPendingConnections() ) {
 		return std::shared_ptr<T>();
 	}
 
 	auto socket = T::Create();
 
-	socket->SetInternalSocket( &( m_new_connections.front() ) );
+	socket->SetInternalSocket( GetFirstPendingConnection() );
 
-	m_new_connections.pop_front();
-
-	socket->OnConnected();
-
-	socket->m_connected = true;
-
-	socket->ReceiveHandler( asio::error_code{}, 0 );
-	socket->SendHandler( asio::error_code{}, 0 );
+	RemoveFirstPendingConnection();
 
 	return socket;
 }

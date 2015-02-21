@@ -4,12 +4,12 @@
 
 #pragma once
 
-#include <memory>
-#include <map>
 #include <SFNUL/Config.hpp>
-#include <asio/ip/udp.hpp>
 #include <SFNUL/Socket.hpp>
 #include <SFNUL/Transport.hpp>
+#include <memory>
+#include <deque>
+#include <map>
 
 namespace sfn {
 
@@ -85,18 +85,8 @@ protected:
 	/// @endcond
 
 private:
-	void SendHandler( const asio::error_code& error, std::size_t bytes_sent, asio::ip::udp::endpoint endpoint, std::shared_ptr<std::vector<char>> buffer );
-	void ReceiveHandler( const asio::error_code& error, std::size_t bytes_received, std::shared_ptr<asio::ip::udp::endpoint> endpoint_ptr );
-
-	asio::ip::udp::socket m_socket;
-
-	std::map<asio::ip::udp::endpoint, std::vector<char>> m_receive_buffer;
-
-	std::array<char, 2048> m_receive_memory;
-
-	std::size_t m_pending_data = 0;
-
-	bool m_receiving = false;
+	class UdpSocketImpl;
+	std::unique_ptr<UdpSocketImpl> m_impl;
 };
 
 }

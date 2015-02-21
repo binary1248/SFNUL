@@ -4,14 +4,14 @@
 
 #pragma once
 
-#include <list>
-#include <unordered_map>
-#include <memory>
-#include <functional>
 #include <SFNUL/Config.hpp>
 #include <SFNUL/SyncedObject.hpp>
 #include <SFNUL/Link.hpp>
 #include <SFNUL/TcpSocket.hpp>
+#include <list>
+#include <unordered_map>
+#include <memory>
+#include <functional>
 
 namespace sfn{
 
@@ -49,7 +49,7 @@ protected:
 
 class SFNUL_API SynchronizerServer : public SynchronizerBase {
 public:
-	/** Ctor.
+	/** Constructor.
 	 */
 	SynchronizerServer();
 
@@ -57,7 +57,7 @@ public:
 	 */
 	~SynchronizerServer();
 
-	/** Move Ctor.
+	/** Move Constructor.
 	 * @param synchronizer SynchronizerServer to move from.
 	 */
 	SynchronizerServer( SynchronizerServer&& synchronizer );
@@ -108,7 +108,7 @@ private:
 
 class SFNUL_API SynchronizerClient : public SynchronizerBase {
 public:
-	/** Ctor.
+	/** Constructor.
 	 */
 	SynchronizerClient();
 
@@ -116,7 +116,7 @@ public:
 	 */
 	~SynchronizerClient();
 
-	/** Move Ctor.
+	/** Move Constructor.
 	 * @param synchronizer SynchronizerClient to move from.
 	 */
 	SynchronizerClient( SynchronizerClient&& synchronizer );

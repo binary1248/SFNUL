@@ -4,9 +4,9 @@
 
 #pragma once
 
-#include <cstddef>
 #include <SFNUL/Config.hpp>
 #include <SFNUL/Transport.hpp>
+#include <cstddef>
 
 namespace sfn {
 
@@ -97,7 +97,7 @@ public:
 
 protected:
 
-	/** Ctor.
+	/** Constructor.
 	 */
 	ReliableTransport();
 

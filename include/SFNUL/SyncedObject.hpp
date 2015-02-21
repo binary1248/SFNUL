@@ -4,11 +4,11 @@
 
 #pragma once
 
+#include <SFNUL/Config.hpp>
+#include <SFNUL/SyncedType.hpp>
 #include <vector>
 #include <chrono>
 #include <memory>
-#include <SFNUL/Config.hpp>
-#include <SFNUL/SyncedType.hpp>
 
 namespace sfn {
 
@@ -29,11 +29,11 @@ public:
 	SyncedObject& operator=( SyncedObject&& object );
 
 protected:
-	/** Ctor.
+	/** Constructor.
 	 */
 	SyncedObject();
 
-	/** Move Ctor.
+	/** Move Constructor.
 	 */
 	SyncedObject( SyncedObject&& object );
 

@@ -17,8 +17,8 @@ int main() {
 
 	// Create our TLS connection over a TCP transport.
 	// If you want to skip authentication of the remote host
-	// specify sfn::TlsVerificationType::OPTIONAL.
-	auto connection = sfn::TlsConnection<sfn::TcpSocket, sfn::TlsEndpointType::CLIENT, sfn::TlsVerificationType::REQUIRED>::Create();
+	// specify sfn::TlsVerificationType::Optional.
+	auto connection = sfn::TlsConnection<sfn::TcpSocket, sfn::TlsEndpointType::Client, sfn::TlsVerificationType::Required>::Create();
 
 	// Set the Common Name we expect in the peer certificate.
 	connection->SetPeerCommonName( "*.ietf.org" );

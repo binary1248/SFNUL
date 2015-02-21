@@ -4,94 +4,33 @@
 
 #pragma once
 
-#include <list>
-#include <deque>
-#include <tuple>
-#include <map>
-#include <chrono>
-#include <http_parser.h>
 #include <SFNUL/Config.hpp>
 #include <SFNUL/HTTP.hpp>
 #include <SFNUL/TcpSocket.hpp>
 #include <SFNUL/Endpoint.hpp>
 #include <SFNUL/TlsConnection.hpp>
+#include <memory>
+#include <list>
+#include <tuple>
+#include <map>
+#include <chrono>
 
 namespace sfn {
 
-/// @cond
-
-class SFNUL_API HTTPClientPipeline {
-public:
-	HTTPClientPipeline( Endpoint endpoint, bool secure, const std::chrono::seconds& timeout );
-
-#if !defined( _MSC_VER )
-	HTTPClientPipeline( HTTPClientPipeline&& ) = default;
-#endif
-
-	~HTTPClientPipeline();
-
-	void LoadCertificate( TlsCertificate::Ptr certificate, const std::string& common_name );
-
-	void SendRequest( HTTPRequest request );
-
-	HTTPResponse GetResponse( const HTTPRequest& request );
-
-	void Update();
-
-	bool TimedOut() const;
-
-	bool HasRequests() const;
-private:
-	friend int OnMessageBegin( http_parser* parser );
-	friend int OnUrl( http_parser* parser, const char* data, std::size_t length );
-	friend int OnStatusComplete( http_parser* parser );
-	friend int OnHeaderField( http_parser* parser, const char* data, std::size_t length );
-	friend int OnHeaderValue( http_parser* parser, const char* data, std::size_t length );
-	friend int OnHeadersComplete( http_parser* parser );
-	friend int OnBody( http_parser* parser, const char* data, std::size_t length );
-	friend int OnMessageComplete( http_parser* parser );
-
-	typedef std::pair<HTTPRequest, HTTPResponse> PipelineElement;
-	typedef std::deque<PipelineElement> Pipeline;
-
-	void Reconnect();
-
-	TcpSocket::Ptr m_socket;
-
-	bool m_secure;
-	Endpoint m_remote_endpoint;
-	TlsCertificate::Ptr m_certificate;
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
-#endif
-
-	http_parser_settings m_parser_settings;
-	http_parser m_parser;
-
-#if defined( __GNUG__ )
-#pragma GCC diagnostic pop
-#endif
-
-	Pipeline m_pipeline;
-
-	HTTPRequest m_current_request;
-
-	std::string m_last_header_field;
-	bool m_header_field_complete{ false };
-
-	std::chrono::steady_clock::time_point m_last_activity{ std::chrono::steady_clock::now() };
-
-	std::chrono::seconds m_timeout_value;
-};
-
-/// @endcond
+class HTTPClientPipeline;
 
 /** A HTTP client that supports persistent connections and request pipelining.
  */
 class SFNUL_API HTTPClient {
 public:
+	/** Constructor.
+	 */
+	HTTPClient();
+
+	/** Destructor.
+	 */
+	~HTTPClient();
+
 	/** Send an HTTP request to a host identified by address, port and whether it is secured by TLS or not (HTTPS).
 	 * @param request Request to send to the host.
 	 * @param address Address of the host.
@@ -125,7 +64,7 @@ public:
 	 */
 	void Update();
 private:
-	typedef std::tuple<HTTPClientPipeline, std::string, unsigned short> Pipeline;
+	typedef std::tuple<std::unique_ptr<HTTPClientPipeline>, std::string, unsigned short> Pipeline;
 
 	std::list<Pipeline> m_pipelines;
 	std::map<std::string, std::pair<TlsCertificate::Ptr, std::string>> m_certificates;

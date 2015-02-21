@@ -2,21 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include <iostream>
 #include <SFNUL/SyncedObject.hpp>
 #include <SFNUL/Message.hpp>
 #include <SFNUL/SyncedType.hpp>
 #include <SFNUL/Synchronizer.hpp>
-
-#if !defined( _MSC_VER )
-// Until C++14 comes along...
-namespace std {
-	template<typename T, typename... Args>
-	inline std::unique_ptr<T> make_unique( Args&&... args ) {
-		return std::unique_ptr<T>( new T( std::forward<Args>( args )... ) );
-	}
-}
-#endif
+#include <SFNUL/MakeUnique.hpp>
 
 namespace sfn {
 
@@ -107,8 +97,8 @@ void SyncedObject::RegisterMember( BaseSyncedType* member ) {
 	m_members.emplace_back( member );
 	m_members.shrink_to_fit();
 
-	if( !m_last_stream_sync && ( member->GetSynchronizationType() == SynchronizationType::STREAM ) ) {
-		m_last_stream_sync = std::make_unique<std::chrono::steady_clock::time_point>( std::chrono::steady_clock::now() );
+	if( !m_last_stream_sync && ( member->GetSynchronizationType() == SynchronizationType::Stream ) ) {
+		m_last_stream_sync = make_unique<std::chrono::steady_clock::time_point>( std::chrono::steady_clock::now() );
 	}
 }
 

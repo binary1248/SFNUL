@@ -4,11 +4,9 @@
 
 #pragma once
 
-#include <memory>
 #include <SFNUL/Config.hpp>
-#include <asio/io_service.hpp>
-#include <asio/strand.hpp>
 #include <SFNUL/Concurrency.hpp>
+#include <memory>
 
 namespace sfn {
 
@@ -17,10 +15,6 @@ class IpAddress;
 /** Network resource base class.
  */
 class SFNUL_API NetworkResource : protected Atomic {
-
-private:
-	std::shared_ptr<asio::io_service> m_io_service;
-
 protected:
 	/** Constructor.
 	 */
@@ -45,14 +39,16 @@ protected:
 	/** Get the associated asio io_service.
 	 * @return associated asio io_service.
 	 */
-	asio::io_service& GetIOService() const;
+	void* GetIOService() const;
 
-	/// @cond
-	mutable asio::strand m_strand;
-	/// @endcond
+	/** Get the associated asio strand.
+	 * @return associated asio strand.
+	 */
+	void* GetStrand() const;
 
 private:
-	static std::weak_ptr<asio::io_service> m_shared_io_service;
+	class NetworkResourceImpl;
+	std::unique_ptr<NetworkResourceImpl> m_impl;
 
 	friend void Start( std::size_t threads );
 	friend void Stop();

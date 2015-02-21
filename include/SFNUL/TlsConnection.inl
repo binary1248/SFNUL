@@ -2,49 +2,25 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include <cstring>
-#include <iostream>
-#include <algorithm>
 #include <SFNUL/Utility.hpp>
 #include <SFNUL/Message.hpp>
+#include <cstring>
+#include <algorithm>
+#include <vector>
+#include <memory>
+#include <functional>
 
-#if defined( SFNUL_SYSTEM_WINDOWS )
-#include <winsock2.h>
-#else
-#include <arpa/inet.h>
-#endif
-
-#if defined( NONE )
-#undef NONE
-#endif
-
-#if defined( OPTIONAL )
-#undef OPTIONAL
-#endif
-
-#if defined( REQUIRED )
-#undef REQUIRED
-#endif
-
-#if !defined( _MSC_VER )
-// Until C++14 comes along...
-namespace std {
-template<typename T, typename... Args>
-inline std::unique_ptr<T> make_unique( Args&&... args ) {
-	return std::unique_ptr<T>( new T( std::forward<Args>( args )... ) );
+namespace {
+template<class T, sfn::TlsEndpointType U, sfn::TlsVerificationType V>
+struct TlsConnectionMaker : public sfn::TlsConnection<T, U, V> {};
 }
-}
-#endif
 
 namespace sfn {
 
-namespace {
 template<class T, TlsEndpointType U, TlsVerificationType V>
-struct TlsConnectionMaker : public TlsConnection<T, U, V> {};
-}
-
-template<class T, TlsEndpointType U, TlsVerificationType V>
-TlsConnection<T, U, V>::TlsConnection() {
+TlsConnection<T, U, V>::TlsConnection() :
+	TlsConnectionBase{ U, V }
+{
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
@@ -72,11 +48,11 @@ void TlsConnection<T, U, V>::DataCallback( const unsigned char* buffer, std::siz
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
-void TlsConnection<T, U, V>::AlertCallback( Botan::TLS::Alert, const unsigned char*, size_t ) {
+void TlsConnection<T, U, V>::AlertCallback( AlertType, const unsigned char*, size_t ) {
 }
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
-bool TlsConnection<T, U, V>::HandshakeCallback( const Botan::TLS::Session& ) {
+bool TlsConnection<T, U, V>::HandshakeCallback( SessionType ) {
 	// No session caching for now...
 	return false;
 }
@@ -96,8 +72,8 @@ void TlsConnection<T, U, V>::Shutdown() {
 
 	m_request_close = true;
 
-	if( m_tls_endpoint && m_tls_endpoint->is_active() ) {
-		m_tls_endpoint->close();
+	if( EndpointIsActive() ) {
+		CloseEndpoint();
 
 		m_local_closed = true;
 
@@ -153,8 +129,8 @@ bool TlsConnection<T, U, V>::Send( const void* data, std::size_t size ) {
 			return false;
 		}
 
-		if( m_tls_endpoint && m_tls_endpoint->is_active() ) {
-			m_tls_endpoint->send( static_cast<const unsigned char*>( data ), size );
+		if( EndpointIsActive() ) {
+			EndpointSend( static_cast<const unsigned char*>( data ), size );
 		}
 		else {
 			m_send_buffer.insert( m_send_buffer.end(), static_cast<const char*>( data ), static_cast<const char*>( data ) + size );
@@ -275,23 +251,23 @@ void TlsConnection<T, U, V>::OnReceived() {
 		received = T::Receive( m_receive_memory.data(), m_receive_memory.size() );
 
 		if( received ) {
-			m_tls_endpoint->received_data( reinterpret_cast<unsigned char*>( m_receive_memory.data() ), received );
+			EndpointReceive( reinterpret_cast<unsigned char*>( m_receive_memory.data() ), received );
 
-			if( m_tls_endpoint->is_active() && ( m_last_verification_result != TlsVerificationResult::PASSED ) && ( m_verify == TlsVerificationType::REQUIRED ) ) {
-				ErrorMessage() << "Certificate verification failed (specified REQUIRED), closing connection.\n";
+			if( EndpointIsActive() && ( GetVerificationResult() != TlsVerificationResult::Passed ) && ( m_verify == TlsVerificationType::Required ) ) {
+				ErrorMessage() << "Certificate verification failed (specified Required), closing connection.\n";
 
-				m_tls_endpoint->close();
+				CloseEndpoint();
 
 				T::Shutdown();
 			}
 			else {
-				if( m_tls_endpoint->is_active() && !m_send_buffer.empty() ) {
-					m_tls_endpoint->send( reinterpret_cast<const unsigned char*>( m_send_buffer.data() ), m_send_buffer.size() );
+				if( EndpointIsActive() && !m_send_buffer.empty() ) {
+					EndpointSend( reinterpret_cast<const unsigned char*>( m_send_buffer.data() ), m_send_buffer.size() );
 					m_send_buffer.clear();
 				}
 
-				if( m_tls_endpoint->is_active() && m_request_close ) {
-					m_tls_endpoint->close();
+				if( EndpointIsActive() && m_request_close ) {
+					CloseEndpoint();
 
 					m_local_closed = true;
 
@@ -305,6 +281,7 @@ void TlsConnection<T, U, V>::OnReceived() {
 	}
 }
 
+/// @cond
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::OnConnected() {
 	auto lock = T::AcquireLock();
@@ -312,37 +289,19 @@ void TlsConnection<T, U, V>::OnConnected() {
 	m_local_closed = false;
 	m_remote_closed = false;
 
-	if( m_type == TlsEndpointType::CLIENT ) {
-		m_tls_endpoint = std::make_unique<Botan::TLS::Client>(
-			std::bind( &TlsConnection<T, U, V>::OutputCallback, this, std::placeholders::_1, std::placeholders::_2 ),
-			std::bind( &TlsConnection<T, U, V>::DataCallback, this, std::placeholders::_1, std::placeholders::_2 ),
-			std::bind( &TlsConnection<T, U, V>::AlertCallback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3 ),
-			std::bind( &TlsConnection<T, U, V>::HandshakeCallback, this, std::placeholders::_1 ),
-			m_tls_session_manager,
-			*this, // credentials_manager
-			m_tls_policy,
-			m_rng,
-			Botan::TLS::Server_Information(),
-			Botan::TLS::Protocol_Version::latest_tls_version()
-		);
-	}
-	else if( m_type == TlsEndpointType::SERVER ) {
-		m_tls_endpoint = std::make_unique<Botan::TLS::Server>(
-			std::bind( &TlsConnection<T, U, V>::OutputCallback, this, std::placeholders::_1, std::placeholders::_2 ),
-			std::bind( &TlsConnection<T, U, V>::DataCallback, this, std::placeholders::_1, std::placeholders::_2 ),
-			std::bind( &TlsConnection<T, U, V>::AlertCallback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3 ),
-			std::bind( &TlsConnection<T, U, V>::HandshakeCallback, this, std::placeholders::_1 ),
-			m_tls_session_manager,
-			*this, // credentials_manager
-			m_tls_policy,
-			m_rng
-		);
-	}
+	SetEndpoint(
+		m_type,
+		std::bind( &TlsConnection<T, U, V>::OutputCallback, this, std::placeholders::_1, std::placeholders::_2 ),
+		std::bind( &TlsConnection<T, U, V>::DataCallback, this, std::placeholders::_1, std::placeholders::_2 ),
+		std::bind( &TlsConnection<T, U, V>::AlertCallback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3 ),
+		std::bind( &TlsConnection<T, U, V>::HandshakeCallback, this, std::placeholders::_1 )
+	);
 }
+/// @endcond
 
 template<class T, TlsEndpointType U, TlsVerificationType V>
 void TlsConnection<T, U, V>::OnDisconnected() {
-	m_tls_endpoint.reset();
+	ResetEndpoint();
 }
 
 }

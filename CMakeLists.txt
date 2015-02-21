@@ -39,8 +39,6 @@ endif()
 if( WIN32 )
 	set( BIN_EXTENSION ".exe" )
 	set( SHARE_TARGET_DIR . )
-	add_definitions( -DWIN32 )
-	add_definitions( -D_WIN32_WINNT=0x0501 )
 else()
 	set( SHARE_TARGET_DIR share/SFNUL )
 endif()
@@ -64,6 +62,7 @@ set(
 	${INC_DIR}/SFNUL.hpp
 	${INC_DIR}/SFNUL/Config.hpp
 	${INC_DIR}/SFNUL/Concurrency.hpp
+	${INC_DIR}/SFNUL/DataTypes.hpp
 	${INC_DIR}/SFNUL/Endpoint.hpp
 	${INC_DIR}/SFNUL/HTTP.hpp
 	${INC_DIR}/SFNUL/HTTPClient.hpp
@@ -88,6 +87,13 @@ set(
 	${INC_DIR}/SFNUL/Transport.hpp
 	${INC_DIR}/SFNUL/UdpSocket.hpp
 	${INC_DIR}/SFNUL/Utility.hpp
+)
+
+set(
+	INTERNALHEADERS
+	${SRC_DIR}/SFNUL/ConfigInternal.hpp
+	${SRC_DIR}/SFNUL/IpAddressImpl.hpp
+	${SRC_DIR}/SFNUL/MakeUnique.hpp
 )
 
 set(
@@ -327,10 +333,18 @@ set(
 	${HTTP_PARSER_SOURCES}
 	${BOTAN_SOURCES}
 	${HEADERS}
+	${INTERNALHEADERS}
 	${SOURCES}
 )
 
+file( READ "${INC_DIR}/SFNUL/Config.hpp" CONFIG_HPP )
+
+string( REGEX MATCH ".*#define SFNUL_MAJOR_VERSION ([0-9]+).*#define SFNUL_MINOR_VERSION ([0-9]+).*" CONFIG_HPP "${CONFIG_HPP}" )
+string( REGEX REPLACE ".*#define SFNUL_MAJOR_VERSION ([0-9]+).*" "\\1" SFNUL_MAJOR_VERSION "${CONFIG_HPP}" )
+string( REGEX REPLACE ".*#define SFNUL_MINOR_VERSION ([0-9]+).*" "\\1" SFNUL_MINOR_VERSION "${CONFIG_HPP}" )
+
 include_directories( ${INC_DIR} )
+include_directories( ${SRC_DIR} )
 include_directories( SYSTEM "${PROJECT_SOURCE_DIR}/extlibs/asio/asio/include" )
 include_directories( SYSTEM "${PROJECT_SOURCE_DIR}/extlibs/botan/include" )
 include_directories( SYSTEM "${PROJECT_SOURCE_DIR}/extlibs/http-parser" )
@@ -416,23 +430,6 @@ install(
 install(
 	DIRECTORY include
 	DESTINATION .
-)
-
-install(
-	DIRECTORY extlibs/asio/asio/include
-	DESTINATION .
-	REGEX "^.*(\\.git|\\.gitignore|\\.am)$" EXCLUDE
-)
-
-install(
-	DIRECTORY extlibs/botan/include
-	DESTINATION .
-	REGEX "^.*(\\.git|\\.gitignore|\\.am)$" EXCLUDE
-)
-
-install(
-	FILES extlibs/http-parser/http_parser.h
-	DESTINATION ./include
 )
 
 install(

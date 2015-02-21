@@ -2,12 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include <cassert>
-#include <iostream>
-#include <SFNUL/Endpoint.hpp>
 #include <SFNUL/Link.hpp>
+#include <SFNUL/Endpoint.hpp>
 #include <SFNUL/Synchronizer.hpp>
 #include <SFNUL/Message.hpp>
+#include <cassert>
 
 namespace sfn {
 
@@ -177,8 +176,10 @@ bool LinkBase::Send( stream_id_type stream_id, const Message& message ) {
 	return Send( stream_id, &data_block[0], sizeof( message_size ) + static_cast<std::size_t>( message_size ) );
 }
 
+/// @cond
 void LinkBase::SetInternalSocket( void* /*internal_socket*/ ) {
 }
+/// @endcond
 
 void LinkBase::ClearBuffers() {
 	return GetInternalTransport()->ClearBuffers();

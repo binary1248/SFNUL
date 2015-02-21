@@ -4,11 +4,10 @@
 
 #pragma once
 
-#include <memory>
 #include <SFNUL/Config.hpp>
-#include <asio/ip/tcp.hpp>
 #include <SFNUL/Socket.hpp>
 #include <SFNUL/ReliableTransport.hpp>
+#include <memory>
 
 namespace sfn {
 
@@ -142,24 +141,8 @@ protected:
 	/// @endcond
 
 private:
-	void SendHandler( const asio::error_code& error, std::size_t bytes_sent );
-	void ReceiveHandler( const asio::error_code& error, std::size_t bytes_received );
-
-	asio::ip::tcp::socket m_socket;
-
-	std::vector<char> m_send_buffer;
-	std::vector<char> m_receive_buffer;
-
-	std::array<char, 2048> m_send_memory;
-	std::array<char, 2048> m_receive_memory;
-
-	bool m_connected = false;
-	bool m_request_shutdown = false;
-	bool m_fin_sent = false;
-	bool m_fin_received = false;
-
-	bool m_receiving = false;
-	bool m_sending = false;
+	class TcpSocketImpl;
+	std::unique_ptr<TcpSocketImpl> m_impl;
 
 	friend class TcpListener;
 };

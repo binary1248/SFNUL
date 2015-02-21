@@ -3,77 +3,135 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <SFNUL/Concurrency.hpp>
+#include <SFNUL/ConfigInternal.hpp>
+#include <SFNUL/MakeUnique.hpp>
+
+#if defined( SFNUL_WIN32_THREADS )
+	#include <windows.h>
+	#include <process.h>
+#elif defined( SFNUL_PTHREADS )
+	#include <pthread.h>
+#else
+	#error No supported threading facility available. Review CMake configuration for more information.
+#endif
 
 /// @cond
 namespace sfn {
 
-Thread::Thread( std::function<void()> thread_function ) :
-	m_function{ thread_function }
-{
-#if defined( SFNUL_WIN32_THREADS )
-	m_thread = reinterpret_cast<HANDLE>( _beginthreadex( nullptr,	0, &Thread::run, this, 0, nullptr	) );
-#elif defined( SFNUL_PTHREADS )
-	pthread_create( &m_thread, nullptr, &Thread::run, this );
+#if defined( __GNUG__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #endif
-}
 
-Thread::~Thread() {
 #if defined( SFNUL_WIN32_THREADS )
-	if( m_thread ) {
-		WaitForSingleObject( m_thread, INFINITE );
-		CloseHandle( m_thread );
+unsigned __stdcall run( void* data );
+#elif defined( SFNUL_PTHREADS )
+void* run( void* data );
+#endif
+
+class ThreadImpl {
+public:
+#if defined( SFNUL_WIN32_THREADS )
+	ThreadImpl( std::function<void()> thread_function ) :
+		function{ thread_function }
+	{
+		thread = reinterpret_cast<HANDLE>( _beginthreadex( nullptr,	0, &run, this, 0, nullptr	) );
 	}
+
+	~ThreadImpl() {
+		if( thread ) {
+			WaitForSingleObject( thread, INFINITE );
+			CloseHandle( thread );
+		}
+	}
+
+	mutable HANDLE thread{};
 #elif defined( SFNUL_PTHREADS )
-	pthread_join( m_thread, nullptr );
+	ThreadImpl( std::function<void()> thread_function ) :
+		function{ thread_function }
+	{
+		pthread_create( &thread, nullptr, &run, this );
+	}
+
+	~ThreadImpl() {
+		pthread_join( thread, nullptr );
+	}
+
+	mutable pthread_t thread{};
 #endif
-}
+
+	std::function<void()> function;
+};
 
 #if defined( SFNUL_WIN32_THREADS )
-unsigned __stdcall Thread::run( void* data ) {
-	static_cast<Thread*>( data )->m_function();
+unsigned __stdcall run( void* data ) {
+	static_cast<sfn::ThreadImpl*>( data )->function();
 	_endthread();
 	return 0;
 }
 #elif defined( SFNUL_PTHREADS )
-void* Thread::run( void* data ) {
-	static_cast<Thread*>( data )->m_function();
+void* run( void* data ) {
+	static_cast<sfn::ThreadImpl*>( data )->function();
 	return nullptr;
 }
 #endif
 
-Atomic::Atomic() {
-#if defined( SFNUL_WIN32_THREADS )
-	InitializeCriticalSection( &m_mutex );
-#elif defined( SFNUL_PTHREADS )
-	pthread_mutexattr_t mutex_attr;
-	pthread_mutexattr_init( &mutex_attr );
-	pthread_mutexattr_settype( &mutex_attr, PTHREAD_MUTEX_RECURSIVE );
-	pthread_mutex_init( &m_mutex, &mutex_attr );
-	pthread_mutexattr_destroy( &mutex_attr );
-#endif
+Thread::Thread( std::function<void()> thread_function ) :
+	m_impl{ make_unique<ThreadImpl>( thread_function ) }
+{
 }
 
-Atomic::~Atomic() {
+Thread::~Thread() = default;
+
+class Atomic::AtomicImpl {
+public:
 #if defined( SFNUL_WIN32_THREADS )
-	DeleteCriticalSection( &m_mutex );
+	AtomicImpl() {
+		InitializeCriticalSection( &mutex );
+	}
+
+	~AtomicImpl() {
+		DeleteCriticalSection( &mutex );
+	}
+
+	mutable CRITICAL_SECTION mutex;
 #elif defined( SFNUL_PTHREADS )
-	pthread_mutex_destroy( &m_mutex );
+	AtomicImpl() {
+		pthread_mutexattr_t mutex_attr;
+		pthread_mutexattr_init( &mutex_attr );
+		pthread_mutexattr_settype( &mutex_attr, PTHREAD_MUTEX_RECURSIVE );
+		pthread_mutex_init( &mutex, &mutex_attr );
+		pthread_mutexattr_destroy( &mutex_attr );
+	}
+
+	~AtomicImpl() {
+		pthread_mutex_destroy( &mutex );
+	}
+
+	mutable pthread_mutex_t mutex;
 #endif
+};
+
+Atomic::Atomic() :
+	m_impl{ make_unique<AtomicImpl>() }
+{
 }
+
+Atomic::~Atomic() = default;
 
 void Atomic::LockMutex() const {
 #if defined( SFNUL_WIN32_THREADS )
-	EnterCriticalSection( &m_mutex );
+	EnterCriticalSection( &m_impl->mutex );
 #elif defined( SFNUL_PTHREADS )
-	pthread_mutex_lock( &m_mutex );
+	pthread_mutex_lock( &m_impl->mutex );
 #endif
 }
 
 void Atomic::UnlockMutex() const {
 #if defined( SFNUL_WIN32_THREADS )
-	LeaveCriticalSection( &m_mutex );
+	LeaveCriticalSection( &m_impl->mutex );
 #elif defined( SFNUL_PTHREADS )
-	pthread_mutex_unlock( &m_mutex );
+	pthread_mutex_unlock( &m_impl->mutex );
 #endif
 }
 
@@ -90,6 +148,10 @@ Atomic::ScopedLock::~ScopedLock() {
 Atomic::ScopedLock Atomic::AcquireLock() const {
 	return ScopedLock{ const_cast<Atomic*>( this ) };
 }
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic pop
+#endif
 
 }
 /// @endcond

@@ -31,7 +31,7 @@ public:
 
 protected:
 
-	/** Ctor.
+	/** Constructor.
 	 */
 	Transport();
 

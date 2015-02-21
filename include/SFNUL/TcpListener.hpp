@@ -4,11 +4,10 @@
 
 #pragma once
 
+#include <SFNUL/Config.hpp>
+#include <SFNUL/Socket.hpp>
 #include <memory>
 #include <deque>
-#include <SFNUL/Config.hpp>
-#include <asio/ip/tcp.hpp>
-#include <SFNUL/Socket.hpp>
 
 namespace sfn {
 
@@ -23,7 +22,7 @@ public:
 	typedef std::shared_ptr<TcpListener> Ptr; //!< Shared pointer.
 
 	/// @cond
-	static const int default_backlog = asio::ip::tcp::acceptor::max_connections;
+	static const int default_backlog = 128;
 	/// @endcond
 
 	/** Create a TCP listener.
@@ -50,6 +49,11 @@ public:
 	 */
 	Endpoint GetEndpoint() const;
 
+	/** Check if there are any pending connections.
+	 * @return true if there are any pending connections.
+	 */
+	bool HasPendingConnections() const;
+
 	/** Gets the next pending connection in queue.
 	 * @return TcpSocket::Ptr of the next pending connection in queue.
 	 */
@@ -62,13 +66,11 @@ protected:
 	TcpListener();
 
 private:
-	void AcceptHandler( const asio::error_code& error, std::shared_ptr<asio::ip::tcp::socket> socket );
+	void* GetFirstPendingConnection();
+	void RemoveFirstPendingConnection();
 
-	asio::ip::tcp::acceptor m_acceptor;
-
-	std::deque<asio::ip::tcp::socket> m_new_connections;
-
-	bool m_listening = false;
+	class TcpListenerImpl;
+	std::unique_ptr<TcpListenerImpl> m_impl;
 };
 
 }

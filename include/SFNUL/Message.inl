@@ -17,8 +17,6 @@
 #include <forward_list>
 #endif
 
-namespace sfn {
-
 namespace {
 
 // We assume that anyone who is smart enough to implement a class with
@@ -157,6 +155,8 @@ SFNUL_API void InsertAtEnd( T& container, typename T::value_type&& value ) {
 #endif
 
 }
+
+namespace sfn {
 
 template<typename T, typename std::enable_if<std::is_trivial<T>::value, int>::type = 0>
 SFNUL_API Message& operator<<( Message& message, const T& input ) {

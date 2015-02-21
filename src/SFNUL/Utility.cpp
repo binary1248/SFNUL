@@ -3,15 +3,17 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <SFNUL/Utility.hpp>
+#include <sstream>
+#include <iostream>
 
 namespace sfn {
 
 std::ostringstream discard_message;
 
 #if defined( SFNUL_DEBUG )
-MessageLevel message_level = MessageLevel::DEBUG;
+MessageLevel message_level = MessageLevel::Debug;
 #else
-MessageLevel message_level = MessageLevel::ERROR;
+MessageLevel message_level = MessageLevel::Error;
 #endif
 
 // Maximum bytes that SFNUL will queue before waiting for OS buffer to empty.
@@ -23,7 +25,7 @@ void SetMessageLevel( MessageLevel level ) {
 }
 
 std::ostream& ErrorMessage() {
-	if( message_level >= MessageLevel::ERROR ) {
+	if( message_level >= MessageLevel::Error ) {
 		std::cerr << "SFNUL Error: ";
 		return std::cerr;
 	}
@@ -33,7 +35,7 @@ std::ostream& ErrorMessage() {
 }
 
 std::ostream& WarningMessage() {
-	if( message_level >= MessageLevel::WARNING ) {
+	if( message_level >= MessageLevel::Warning ) {
 		std::cerr << "SFNUL Warning: ";
 		return std::cerr;
 	}
@@ -43,7 +45,7 @@ std::ostream& WarningMessage() {
 }
 
 std::ostream& InformationMessage() {
-	if( message_level >= MessageLevel::INFORMATION ) {
+	if( message_level >= MessageLevel::Information ) {
 		std::cerr << "SFNUL Information: ";
 		return std::cerr;
 	}
@@ -53,7 +55,7 @@ std::ostream& InformationMessage() {
 }
 
 std::ostream& DebugMessage() {
-	if( message_level >= MessageLevel::DEBUG ) {
+	if( message_level >= MessageLevel::Debug ) {
 		std::cerr << "SFNUL Debug: ";
 		return std::cerr;
 	}

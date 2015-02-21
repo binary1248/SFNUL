@@ -2,22 +2,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include <iostream>
-#include <cassert>
-#include <algorithm>
-#include <SFNUL/Utility.hpp>
 #include <SFNUL/Synchronizer.hpp>
+#include <SFNUL/Utility.hpp>
 #include <SFNUL/TcpSocket.hpp>
 #include <SFNUL/Link.hpp>
 #include <SFNUL/Message.hpp>
-
-// Until C++14 comes along...
-namespace std {
-template<typename T, typename... Args>
-inline std::unique_ptr<T> make_unique( Args&&... args ) {
-	return std::unique_ptr<T>( new T( std::forward<Args>( args )... ) );
-}
-}
+#include <SFNUL/MakeUnique.hpp>
+#include <cassert>
+#include <algorithm>
 
 namespace sfn {
 
@@ -104,7 +96,7 @@ bool SynchronizerServer::AddClient( std::weak_ptr<Link<TcpSocket>> client_link )
 		m_links.emplace_back( client_link );
 
 		for( auto o : m_objects ) {
-			auto message = o->Serialize( SynchronizationType::STATIC );
+			auto message = o->Serialize( SynchronizationType::Static );
 			o->GetID() >> message;
 			o->GetTypeID() >> message;
 			sync_type::create >> message;
@@ -212,13 +204,13 @@ void SynchronizerServer::Send() {
 
 		if( u.second == sync_type::create ) {
 			auto object = GetObjectByID( u.first );
-			message = object->Serialize( SynchronizationType::STATIC );
+			message = object->Serialize( SynchronizationType::Static );
 			u.first >> message;
 			object->GetTypeID() >> message;
 			sync_type::create >> message;
 		}
 		else if( u.second == sync_type::update ) {
-			message = GetObjectByID( u.first )->Serialize( SynchronizationType::DYNAMIC );
+			message = GetObjectByID( u.first )->Serialize( SynchronizationType::Dynamic );
 			u.first >> message;
 			sync_type::update >> message;
 		}

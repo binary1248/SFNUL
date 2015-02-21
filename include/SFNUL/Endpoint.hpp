@@ -5,7 +5,6 @@
 #pragma once
 
 #include <SFNUL/Config.hpp>
-#include <asio/ip/basic_endpoint.hpp>
 #include <SFNUL/IpAddress.hpp>
 
 namespace sfn {
@@ -55,18 +54,6 @@ public:
 	void SetPort( unsigned short port );
 
 private:
-	/** Construct an endpoint from an asio basic_endpoint<T>.
-	 * @param endpoint asio basic_endpoint<T>
-	 */
-	template<typename T>
-	Endpoint( asio::ip::basic_endpoint<T> endpoint );
-
-	/** Convert to asio basic_endpoint<T>.
-	 * @return asio basic_endpoint<T>
-	 */
-	template<typename T>
-	asio::ip::basic_endpoint<T> GetInternalEndpoint() const;
-
 	IpAddress m_address;
 	unsigned short m_port = 0;
 
@@ -74,18 +61,6 @@ private:
 	friend class TcpSocket;
 	friend class UdpSocket;
 };
-
-template<typename T>
-Endpoint::Endpoint( asio::ip::basic_endpoint<T> endpoint ) :
-	m_address{ endpoint.address() },
-	m_port{ endpoint.port() }
-{
-}
-
-template<typename T>
-asio::ip::basic_endpoint<T> Endpoint::GetInternalEndpoint() const {
-	return asio::ip::basic_endpoint<T>{ m_address, m_port };
-}
 
 bool operator==( const Endpoint& left, const Endpoint& right );
 

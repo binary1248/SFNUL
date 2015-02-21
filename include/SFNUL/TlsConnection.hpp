@@ -4,29 +4,14 @@
 
 #pragma once
 
+#include <SFNUL/Config.hpp>
 #include <memory>
 #include <vector>
 #include <type_traits>
 #include <string>
 #include <array>
-#include <botan/tls_client.h>
-#include <botan/tls_server.h>
-#include <botan/pkcs8.h>
-#include <botan/auto_rng.h>
-#include <botan/init.h>
-#include <SFNUL/Config.hpp>
-
-#if defined( NONE )
-#undef NONE
-#endif
-
-#if defined( OPTIONAL )
-#undef OPTIONAL
-#endif
-
-#if defined( REQUIRED )
-#undef REQUIRED
-#endif
+#include <cstdint>
+#include <functional>
 
 namespace sfn {
 
@@ -35,22 +20,22 @@ class Endpoint;
 class Message;
 
 enum class TlsEndpointType : unsigned char {
-	CLIENT = 0,
-	SERVER
+	Client = 0,
+	Server
 };
 
 enum class TlsVerificationType : unsigned char {
-	NONE = 0,
-	OPTIONAL,
-	REQUIRED
+	None = 0,
+	Optional,
+	Required
 };
 
 enum class TlsVerificationResult : unsigned char {
-	PASSED = 0,
-	EXPIRED = 1 << 0,
-	REVOKED = 1 << 1,
-	CN_MISMATCH = 1 << 2,
-	NOT_TRUSTED = 1 << 3
+	Passed = 1 << 0,
+	Expired = 1 << 1,
+	Revoked = 1 << 2,
+	CnMismatch = 1 << 3,
+	NotTrusted = 1 << 4
 };
 
 #if defined( _MSC_VER )
@@ -71,29 +56,31 @@ inline TlsVerificationResult& operator|=( TlsVerificationResult& left, TlsVerifi
 	return left = left | right;
 }
 
-class SFNUL_API BotanResource {
+class SFNUL_API TlsResource {
 
 protected:
-	BotanResource();
-	~BotanResource() = default;
+	TlsResource();
+	~TlsResource() = default;
 private:
-	static std::weak_ptr<Botan::LibraryInitializer> m_library_initializer;
+	class LibraryImpl;
+	std::shared_ptr<LibraryImpl> m_library;
 
-	std::shared_ptr<Botan::LibraryInitializer> m_library_initializer_reference;
+	friend class TlsKey;
+	friend class TlsConnectionBase;
 };
 
 template<class T, TlsEndpointType U, TlsVerificationType V> class TlsConnection;
 
 /** TLS Certificate class.
  */
-class SFNUL_API TlsCertificate : protected BotanResource {
+class SFNUL_API TlsCertificate : protected TlsResource {
 
 public:
 	typedef std::shared_ptr<TlsCertificate> Ptr; //!< Shared pointer.
 
 	/** Dtor.
 	 */
-	~TlsCertificate() = default;
+	~TlsCertificate();
 
 	/** Create a TlsCertificate from a certificate string.
 	 * @param certificate std::string containing the Base 64 DER encoded certificate.
@@ -102,28 +89,29 @@ public:
 	static Ptr Create( const std::string& certificate );
 
 protected:
-	/** Ctor.
+	/** Constructor.
 	 */
-	TlsCertificate() = default;
+	TlsCertificate();
 
 private:
 	void LoadCertificate( const std::string& certificate );
 
-	std::unique_ptr<Botan::X509_Certificate> m_certificate;
+	class TlsCertificateImpl;
+	std::unique_ptr<TlsCertificateImpl> m_impl;
 
 	friend class TlsConnectionBase;
 };
 
 /** TLS Key class.
  */
-class SFNUL_API TlsKey : protected BotanResource {
+class SFNUL_API TlsKey : protected TlsResource {
 
 public:
 	typedef std::shared_ptr<TlsKey> Ptr; //!< Shared pointer.
 
 	/** Dtor.
 	 */
-	~TlsKey() = default;
+	~TlsKey();
 
 	/** Create a TlsKey from a key string and optional password.
 	 * @param key std::string containing the PKCS8 key.
@@ -133,22 +121,22 @@ public:
 	static Ptr Create( const std::string& key, const std::string& password = std::string{} );
 
 protected:
-	/** Ctor.
+	/** Constructor.
 	 */
-	TlsKey() = default;
+	TlsKey();
 
 private:
 	void LoadKey( const std::string& key, const std::string& password );
 
-	Botan::AutoSeeded_RNG m_rng;
-	Botan::Private_Key* m_key;
+	class TlsKeyImpl;
+	std::unique_ptr<TlsKeyImpl> m_impl;
 
 	friend class TlsConnectionBase;
 };
 
 /** TLS connection base.
  */
-class SFNUL_API TlsConnectionBase : public Botan::Credentials_Manager, protected BotanResource {
+class SFNUL_API TlsConnectionBase : protected TlsResource {
 
 public:
 	/** Add a trusted CA certificate to the certificate store to verify the peer against.
@@ -175,41 +163,32 @@ public:
 	TlsVerificationResult GetVerificationResult() const;
 
 protected:
-	TlsConnectionBase() = default;
-	virtual ~TlsConnectionBase() = default;
+	TlsConnectionBase( TlsEndpointType type, TlsVerificationType verify );
+	virtual ~TlsConnectionBase();
 
-	std::vector<Botan::Certificate_Store*> trusted_certificate_authorities( const std::string& type, const std::string& /*context*/ ) override;
-	void verify_certificate_chain( const std::string& type, const std::string& hostname, const std::vector<Botan::X509_Certificate>& certificate_chain ) override;
+	/// @cond
+	typedef const void* AlertType;
+	typedef const void* SessionType;
 
-	std::vector<Botan::X509_Certificate> cert_chain( const std::vector<std::string>& cert_key_types, const std::string& /*type*/, const std::string& /*context*/ ) override;
-	Botan::Private_Key* private_key_for( const Botan::X509_Certificate& /*cert*/, const std::string& /*type*/, const std::string& /*context*/ ) override;
+	typedef std::function<void (const std::uint8_t*, std::size_t)> OutputFunction;
+	typedef std::function<void (const std::uint8_t*, std::size_t)> DataFunction;
+	typedef std::function<void (AlertType, const std::uint8_t*, std::size_t)> AlertFunction;
+	typedef std::function<bool (SessionType)> HandshakeFunction;
 
-	Botan::SymmetricKey psk( const std::string& /*type*/, const std::string& /*context*/, const std::string& identity ) override;
-	std::string psk_identity( const std::string& /*type*/, const std::string& /*context*/, const std::string& /*identity_hint*/ ) override;
-	std::string psk_identity_hint( const std::string& /*type*/, const std::string& /*context*/ ) override;
+	void SetEndpoint( TlsEndpointType type, OutputFunction output_callback, DataFunction data_callback, AlertFunction alert_callback, HandshakeFunction handshake_callback );
+	bool EndpointIsActive() const;
+	void CloseEndpoint();
+	void ResetEndpoint();
+	void EndpointSend( const unsigned char* data, std::size_t size );
+	void EndpointReceive( const unsigned char* data, std::size_t size );
+	/// @endcond
 
-	bool attempt_srp( const std::string& /*type*/, const std::string& /*context*/ ) override;
-	std::string srp_identifier( const std::string& /*type*/, const std::string& /*context*/ ) override;
-	std::string srp_password( const std::string& /*type*/, const std::string& /*context*/, const std::string& /*identifier*/ ) override;
-	bool srp_verifier( const std::string& /*type*/, const std::string& context, const std::string& /*identifier*/, std::string& /*group_name*/, Botan::BigInt& /*verifier*/, std::vector<unsigned char>& /*salt*/, bool /*generate_fake_on_unknown*/ ) override;
-
-	Botan::AutoSeeded_RNG m_rng;
-	Botan::TLS::Policy m_tls_policy;
-	Botan::TLS::Session_Manager_In_Memory m_tls_session_manager{ m_rng };
-
-	Botan::SymmetricKey m_session_ticket_key;
-
-	TlsVerificationResult m_last_verification_result{ TlsVerificationResult::NOT_TRUSTED };
-
-	bool require_certificate_key = false;
+	TlsEndpointType m_type;
+	TlsVerificationType m_verify;
 
 private:
-	std::vector<std::unique_ptr<Botan::Certificate_Store>> m_certificate_stores;
-
-	TlsCertificate::Ptr m_server_cert;
-	TlsKey::Ptr m_key;
-
-	std::string m_common_name;
+	class TlsConnectionBaseImpl;
+	std::unique_ptr<TlsConnectionBaseImpl> m_impl;
 };
 
 /** TLS connection class.
@@ -234,33 +213,33 @@ public:
 	/** Asynchronously connect to a remote endpoint.
 	 * @param endpoint Remote endpoint.
 	 */
-	virtual void Connect( const Endpoint& endpoint ) override;
+	void Connect( const Endpoint& endpoint ) override;
 
 	/** Shutdown the connection for sending. This is required for graceful connection termination.
 	 */
-	virtual void Shutdown() override;
+	void Shutdown() override;
 
 	/** Check if the local system has shut the connection down for sending.
 	 * @return true if the local system has shut the connection down for sending.
 	 */
-	virtual bool LocalHasShutdown() const override;
+	bool LocalHasShutdown() const override;
 
 	/** Check if the remote system has shut the connection down for sending.
 	 * @return true if the remote system has shut the connection down for sending.
 	 */
-	virtual bool RemoteHasShutdown() const override;
+	bool RemoteHasShutdown() const override;
 
 	/** Check if the TLS connection is operational.
 	 * @return true if the TLS connection is operational.
 	 */
-	virtual bool IsConnected() const override;
+	bool IsConnected() const override;
 
 	/** Close the connection. This frees up the operating system resources assigned to the connection.
 	 */
-	virtual void Close() override;
+	void Close() override;
 
 	/// @cond
-	virtual void Reset() override;
+	void Reset() override;
 	/// @endcond
 
 	/** Queue data up for asynchronous sending over the connection.
@@ -268,74 +247,64 @@ public:
 	 * @param size Size of the block of memory containing the data to queue.
 	 * @return true if the data could be queued. If false is returned, retry again later.
 	 */
-	virtual bool Send( const void* data, std::size_t size ) override;
+	bool Send( const void* data, std::size_t size ) override;
 
 	/** Dequeue data that was asynchronously received over the connection.
 	 * @param data Pointer to a block of memory that will contain the data to dequeue.
 	 * @param size Size of the block of memory that will contain the data to dequeue.
 	 * @return Number of bytes of data that was actually dequeued.
 	 */
-	virtual std::size_t Receive( void* data, std::size_t size ) override;
+	std::size_t Receive( void* data, std::size_t size ) override;
 
 	/** Queue a Message up for asynchronous sending over the connection.
 	 * @param message Message to queue.
 	 * @return true if the message could be queued. If false is returned, retry again later.
 	 */
-	virtual bool Send( const Message& message ) override;
+	bool Send( const Message& message ) override;
 
 	/** Dequeue an Message that was asynchronously received over the connection.
 	 * @param message Message to dequeue into.
 	 * @return Size of the Message that was dequeued. This includes the size field of the Message. If no Message could be dequeued, this method will return 0.
 	 */
-	virtual std::size_t Receive( Message& message ) override;
+	std::size_t Receive( Message& message ) override;
 
 	/** Clear the send and receive queues of this socket.
 	 */
-	virtual void ClearBuffers() override;
+	void ClearBuffers() override;
 
 	/** Get the number of bytes queued for sending.
 	 * @return Number of bytes queued for sending.
 	 */
-	virtual std::size_t BytesToSend() const override;
+	std::size_t BytesToSend() const override;
 
 	/** Get the number of bytes queued for receiving.
 	 * @return Number of bytes queued for receiving.
 	 */
-	virtual std::size_t BytesToReceive() const override;
+	std::size_t BytesToReceive() const override;
 
-	/** Used to inform subclasses that the transport has connected.
-	 */
-	virtual void OnConnected() override;
+	/// @cond
+	void OnConnected() override;
+	/// @endcond
 
 protected:
-	/** Ctor.
+	/** Constructor.
 	 */
 	TlsConnection();
 
-	/** Used to inform subclasses that the transport has received data.
-	 */
-	virtual void OnReceived() override;
-
-	/** Used to inform subclasses that the transport has disconnected.
-	 */
-	virtual void OnDisconnected() override;
-
 private:
+	void OnReceived() override;
+	void OnDisconnected() override;
+
 	void OutputCallback( const unsigned char* buffer, std::size_t size );
 	void DataCallback( const unsigned char* buffer, std::size_t size );
-	void AlertCallback( Botan::TLS::Alert, const unsigned char*, size_t );
-	bool HandshakeCallback( const Botan::TLS::Session& );
-
-	const static TlsEndpointType m_type = U;
-	const static TlsVerificationType m_verify = V;
+	void AlertCallback( AlertType, const unsigned char*, size_t );
+	bool HandshakeCallback( SessionType );
 
 	std::vector<char> m_send_buffer;
 	std::vector<char> m_receive_buffer;
 
 	std::array<char, 2048> m_send_memory;
 	std::array<char, 2048> m_receive_memory;
-
-	std::unique_ptr<Botan::TLS::Channel> m_tls_endpoint;
 
 	bool m_request_close = false;
 	bool m_remote_closed = false;

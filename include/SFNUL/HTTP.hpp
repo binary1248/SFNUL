@@ -4,10 +4,10 @@
 
 #pragma once
 
+#include <SFNUL/Config.hpp>
 #include <unordered_map>
 #include <string>
 #include <vector>
-#include <SFNUL/Config.hpp>
 
 namespace sfn {
 
@@ -82,7 +82,7 @@ protected:
  */
 class SFNUL_API HTTPRequest : public HTTPMessage {
 public:
-	/** Ctor.
+	/** Constructor.
 	 */
 	HTTPRequest();
 

@@ -51,7 +51,7 @@ public:
 	const static object_type_id_type type_id;
 
 	ChatLog() :
-		m_chat_messages{ this, sfn::SynchronizationType::DYNAMIC }
+		m_chat_messages{ this, sfn::SynchronizationType::Dynamic }
 	{
 	}
 
@@ -100,8 +100,8 @@ public:
 	const static object_type_id_type type_id;
 
 	Bullet( const std::tuple<sf::Vector2f, sf::Vector2f, bool>& data ) :
-		m_position{ this, sfn::SynchronizationType::STREAM, std::get<0>( data ) },
-		m_velocity{ this, sfn::SynchronizationType::DYNAMIC, std::get<1>( data ) }
+		m_position{ this, sfn::SynchronizationType::Stream, std::get<0>( data ) },
+		m_velocity{ this, sfn::SynchronizationType::Dynamic, std::get<1>( data ) }
 	{
 	}
 
@@ -154,12 +154,12 @@ public:
 	const static object_type_id_type type_id;
 
 	Player( std::shared_ptr<sfn::Link<sfn::TcpSocket>> player_link ) :
-		m_position{ this, sfn::SynchronizationType::STREAM, { 300.f + position_dist( gen ), 200.f + position_dist( gen ) } },
-		m_velocity{ this, sfn::SynchronizationType::STREAM, { 0.f, 0.f } },
-		m_acceleration{ this, sfn::SynchronizationType::DYNAMIC, 0.f },
-		m_rotation{ this, sfn::SynchronizationType::STREAM, 0.f },
-		m_rotational_velocity{ this, sfn::SynchronizationType::DYNAMIC, 0.f },
-		m_color{ this, sfn::SynchronizationType::STATIC, sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 } },
+		m_position{ this, sfn::SynchronizationType::Stream, { 300.f + position_dist( gen ), 200.f + position_dist( gen ) } },
+		m_velocity{ this, sfn::SynchronizationType::Stream, { 0.f, 0.f } },
+		m_acceleration{ this, sfn::SynchronizationType::Dynamic, 0.f },
+		m_rotation{ this, sfn::SynchronizationType::Stream, 0.f },
+		m_rotational_velocity{ this, sfn::SynchronizationType::Dynamic, 0.f },
+		m_color{ this, sfn::SynchronizationType::Static, sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 } },
 		m_link{ player_link }
 	{
 	}

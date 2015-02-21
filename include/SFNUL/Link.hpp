@@ -4,9 +4,10 @@
 
 #pragma once
 
-#include <memory>
 #include <SFNUL/Config.hpp>
 #include <SFNUL/ReliableTransport.hpp>
+#include <SFNUL/DataTypes.hpp>
+#include <memory>
 
 namespace sfn {
 
@@ -125,6 +126,7 @@ public:
 	virtual std::size_t BytesToReceive() const override;
 
 protected:
+	/// @cond
 	LinkBase() = default;
 	~LinkBase() = default;
 
@@ -134,6 +136,7 @@ protected:
 	virtual const ReliableTransport* GetInternalTransport() const = 0;
 
 	bool m_segment_active{ false };
+	/// @endcond
 
 private:
 	typedef Uint32 segment_size_type;
@@ -147,7 +150,13 @@ class SFNUL_API Link : public LinkBase {
 	static_assert( std::is_base_of<ReliableTransport, T>::value, "Links can only be set up over reliable transports." );
 
 public:
+	/** Constructor.
+	 */
 	Link();
+
+	/** Constructor.
+	 * @param transport Underlying transport.
+	 */
 	Link( std::shared_ptr<T> transport );
 
 	void SetTransport( std::shared_ptr<T> transport );

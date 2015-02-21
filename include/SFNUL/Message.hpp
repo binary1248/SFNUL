@@ -4,9 +4,10 @@
 
 #pragma once
 
+#include <SFNUL/Config.hpp>
+#include <SFNUL/DataTypes.hpp>
 #include <deque>
 #include <vector>
-#include <SFNUL/Config.hpp>
 
 namespace sfn {
 

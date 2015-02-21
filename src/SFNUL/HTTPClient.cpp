@@ -2,16 +2,272 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include <iostream>
-#include <algorithm>
 #include <SFNUL/HTTPClient.hpp>
 #include <SFNUL/IpAddress.hpp>
 #include <SFNUL/Endpoint.hpp>
 #include <SFNUL/TlsConnection.hpp>
+#include <SFNUL/MakeUnique.hpp>
+#include <http_parser.h>
+#include <algorithm>
+#include <deque>
 
 namespace sfn {
 
-/// @cond
+int OnMessageBegin( http_parser* parser );
+int OnUrl( http_parser* parser, const char* data, std::size_t length );
+int OnStatus( http_parser* parser, const char* data, std::size_t length );
+int OnHeaderField( http_parser* parser, const char* data, std::size_t length );
+int OnHeaderValue( http_parser* parser, const char* data, std::size_t length );
+int OnHeadersComplete( http_parser* parser );
+int OnBody( http_parser* parser, const char* data, std::size_t length );
+int OnMessageComplete( http_parser* parser );
+
+class HTTPClientPipeline {
+public:
+	HTTPClientPipeline( Endpoint endpoint, bool secure, const std::chrono::seconds& timeout ) :
+		m_secure{ secure },
+		m_remote_endpoint{ endpoint },
+		m_timeout_value{ timeout }
+	{
+		if( !secure ) {
+			m_socket = TcpSocket::Create();
+			m_socket->Connect( endpoint );
+		}
+		else {
+			m_socket = TlsConnection<TcpSocket, TlsEndpointType::Client, TlsVerificationType::Required>::Create();
+		}
+
+		http_parser_init( &m_parser, HTTP_RESPONSE );
+
+		m_parser_settings.on_message_begin = OnMessageBegin;
+		m_parser_settings.on_url = OnUrl;
+		m_parser_settings.on_status = OnStatus;
+		m_parser_settings.on_header_field = OnHeaderField;
+		m_parser_settings.on_header_value = OnHeaderValue;
+		m_parser_settings.on_headers_complete = OnHeadersComplete;
+		m_parser_settings.on_body = OnBody;
+		m_parser_settings.on_message_complete = OnMessageComplete;
+	}
+
+#if !defined( _MSC_VER )
+	HTTPClientPipeline( HTTPClientPipeline&& ) = default;
+#endif
+
+	~HTTPClientPipeline() {
+		if( !m_socket ) {
+			return;
+		}
+
+		auto shutdown_start = std::chrono::steady_clock::now();
+
+		m_socket->Shutdown();
+
+		while( !m_socket->LocalHasShutdown() && ( ( std::chrono::steady_clock::now() - shutdown_start ) < std::chrono::seconds{ 1 } ) ) {
+		}
+
+		if( ( std::chrono::steady_clock::now() - shutdown_start ) >= std::chrono::seconds{ 1 } ) {
+			InformationMessage() << "HTTP Connection shutdown timed out.\n";
+		}
+
+		m_socket->ClearBuffers();
+		m_socket->Reset();
+		m_socket->Close();
+	}
+
+	void LoadCertificate( TlsCertificate::Ptr certificate, const std::string& common_name ) {
+		if( !m_secure ) {
+			return;
+		}
+
+		m_certificate = certificate;
+
+		if( m_socket ) {
+			auto socket = std::static_pointer_cast<TlsConnection<TcpSocket, TlsEndpointType::Client, TlsVerificationType::Required>>( m_socket );
+
+			if( !common_name.empty() ) {
+				socket->SetPeerCommonName( common_name );
+			}
+
+			socket->AddTrustedCertificate( std::move( certificate ) );
+			socket->Connect( m_remote_endpoint );
+		}
+	}
+
+	void SendRequest( HTTPRequest request ) {
+		if( m_pipeline.empty() ) {
+			m_current_request = request;
+		}
+
+		auto request_string = request.ToString();
+
+		m_socket->Send( request_string.c_str(), request_string.length() );
+		m_last_activity = std::chrono::steady_clock::now();
+
+		m_pipeline.emplace_back( std::move( request ), HTTPResponse{} );
+	}
+
+	HTTPResponse GetResponse( const HTTPRequest& request ) {
+		auto iter( std::begin( m_pipeline ) );
+
+		for( ; iter != std::end( m_pipeline ); ++iter ) {
+			if( iter->first == request ) {
+				break;
+			}
+		}
+
+		if( iter == std::end( m_pipeline ) ) {
+			return HTTPResponse{};
+		}
+
+		if( !iter->second.IsComplete() ) {
+			return iter->second;
+		}
+
+		auto result = std::move( iter->second );
+
+		m_pipeline.erase( iter );
+
+		return result;
+	}
+
+	void Update() {
+		if( TimedOut() ) {
+			if( HasRequests() ) {
+				m_last_activity = std::chrono::steady_clock::now();
+				Reconnect();
+			}
+
+			return;
+		}
+
+		std::vector<char> data( m_socket->BytesToReceive() );
+
+		std::size_t received = 0;
+
+		while( ( received = m_socket->Receive( data.data(), data.size() ) ) ) {
+			if( received ) {
+				m_last_activity = std::chrono::steady_clock::now();
+			}
+			else {
+				return;
+			}
+
+			m_parser.data = this;
+
+			auto parsed = http_parser_execute( &m_parser, &m_parser_settings, data.data(), received );
+
+			if( parsed != received ) {
+				ErrorMessage() << "HTTP Parser parsed " << parsed << " of " << received << " bytes.\n";
+				ErrorMessage() << "HTTP Parser error: " << http_errno_description( HTTP_PARSER_ERRNO( &m_parser ) ) << ".\n";
+				return;
+			}
+
+			auto new_buffer_size = m_socket->BytesToReceive();
+
+			if( new_buffer_size > data.size() ) {
+				data.resize( new_buffer_size );
+			}
+		}
+
+		if( m_socket->RemoteHasShutdown() && !m_socket->LocalHasShutdown() ) {
+			http_parser_execute( &m_parser, &m_parser_settings, nullptr, 0 );
+			Reconnect();
+		}
+	}
+
+	bool TimedOut() const {
+		return ( m_timeout_value != std::chrono::seconds{ 0 } ) && ( ( std::chrono::steady_clock::now() - m_last_activity ) > m_timeout_value );
+	}
+
+	bool HasRequests() const {
+		return !m_pipeline.empty();
+	}
+private:
+	friend int OnMessageBegin( http_parser* parser );
+	friend int OnUrl( http_parser* parser, const char* data, std::size_t length );
+	friend int OnStatus( http_parser* parser, const char* data, std::size_t length );
+	friend int OnHeaderField( http_parser* parser, const char* data, std::size_t length );
+	friend int OnHeaderValue( http_parser* parser, const char* data, std::size_t length );
+	friend int OnHeadersComplete( http_parser* parser );
+	friend int OnBody( http_parser* parser, const char* data, std::size_t length );
+	friend int OnMessageComplete( http_parser* parser );
+
+	typedef std::pair<HTTPRequest, HTTPResponse> PipelineElement;
+	typedef std::deque<PipelineElement> Pipeline;
+
+	void Reconnect() {
+		m_socket->Shutdown();
+
+		auto send_start = std::chrono::steady_clock::now();
+
+		while( !m_socket->LocalHasShutdown() && ( ( std::chrono::steady_clock::now() - send_start ) < std::chrono::seconds{ 1 } ) ) {
+		}
+
+		m_socket->ClearBuffers();
+		m_socket->Reset();
+		m_socket->Close();
+
+		if( !m_secure ) {
+			m_socket = TcpSocket::Create();
+		}
+		else {
+			m_socket = TlsConnection<TcpSocket, TlsEndpointType::Client, TlsVerificationType::Required>::Create();
+
+			auto socket = std::static_pointer_cast<TlsConnection<TcpSocket, TlsEndpointType::Client, TlsVerificationType::Required>>( m_socket );
+
+			socket->AddTrustedCertificate( m_certificate );
+		}
+
+		m_socket->Connect( m_remote_endpoint );
+
+		std::memset( &m_parser, 0, sizeof( http_parser ) );
+		http_parser_init( &m_parser, HTTP_RESPONSE );
+
+		bool current_set = false;
+
+		for( auto& e : m_pipeline ) {
+			if( !e.second.IsComplete() ) {
+				if( !current_set ) {
+					current_set = true;
+					m_current_request = e.first;
+				}
+
+				auto request_string( e.first.ToString() );
+
+				m_socket->Send( request_string.c_str(), request_string.length() );
+			}
+		}
+	}
+
+	TcpSocket::Ptr m_socket;
+
+	bool m_secure;
+	Endpoint m_remote_endpoint;
+	TlsCertificate::Ptr m_certificate;
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
+
+	http_parser_settings m_parser_settings;
+	http_parser m_parser;
+
+#if defined( __GNUG__ )
+#pragma GCC diagnostic pop
+#endif
+
+	Pipeline m_pipeline;
+
+	HTTPRequest m_current_request;
+
+	std::string m_last_header_field;
+	bool m_header_field_complete{ false };
+
+	std::chrono::steady_clock::time_point m_last_activity{ std::chrono::steady_clock::now() };
+
+	std::chrono::seconds m_timeout_value;
+};
 
 int OnMessageBegin( http_parser* /*parser*/ ) {
 	//HTTPClientPipeline& pipeline( *static_cast<HTTPClientPipeline*>( parser->data ) );
@@ -25,14 +281,14 @@ int OnUrl( http_parser* /*parser*/, const char* /*data*/, std::size_t /*length*/
 	return 0;
 }
 
-int OnStatusComplete( http_parser* /*parser*/ ) {
+int OnStatus( http_parser* /*parser*/, const char* /*data*/, std::size_t /*length*/ ) {
 	//HTTPClientPipeline& pipeline( *static_cast<HTTPClientPipeline*>( parser->data ) );
 
 	return 0;
 }
 
 int OnHeaderField( http_parser* parser, const char* data, std::size_t length ) {
-	HTTPClientPipeline& pipeline( *static_cast<HTTPClientPipeline*>( parser->data ) );
+	sfn::HTTPClientPipeline& pipeline( *static_cast<sfn::HTTPClientPipeline*>( parser->data ) );
 
 	// If this is a new header, clear the saved field name and set complete to false.
 	if( pipeline.m_header_field_complete ) {
@@ -159,206 +415,9 @@ int OnMessageComplete( http_parser* parser ) {
 	return 0;
 }
 
-HTTPClientPipeline::HTTPClientPipeline( Endpoint endpoint, bool secure, const std::chrono::seconds& timeout ) :
-	m_secure{ secure },
-	m_remote_endpoint{ endpoint },
-	m_timeout_value{ timeout }
-{
-	if( !secure ) {
-		m_socket = TcpSocket::Create();
-		m_socket->Connect( endpoint );
-	}
-	else {
-		m_socket = TlsConnection<TcpSocket, TlsEndpointType::CLIENT, TlsVerificationType::REQUIRED>::Create();
-	}
+HTTPClient::HTTPClient() = default;
 
-	http_parser_init( &m_parser, HTTP_RESPONSE );
-
-	m_parser_settings.on_message_begin = OnMessageBegin;
-	m_parser_settings.on_url = OnUrl;
-	m_parser_settings.on_status_complete = OnStatusComplete;
-	m_parser_settings.on_header_field = OnHeaderField;
-	m_parser_settings.on_header_value = OnHeaderValue;
-	m_parser_settings.on_headers_complete = OnHeadersComplete;
-	m_parser_settings.on_body = OnBody;
-	m_parser_settings.on_message_complete = OnMessageComplete;
-}
-
-HTTPClientPipeline::~HTTPClientPipeline() {
-	if( !m_socket ) {
-		return;
-	}
-
-	auto shutdown_start = std::chrono::steady_clock::now();
-
-	m_socket->Shutdown();
-
-	while( !m_socket->LocalHasShutdown() && ( ( std::chrono::steady_clock::now() - shutdown_start ) < std::chrono::seconds{ 1 } ) ) {
-	}
-
-	if( ( std::chrono::steady_clock::now() - shutdown_start ) >= std::chrono::seconds{ 1 } ) {
-		InformationMessage() << "HTTP Connection shutdown timed out.\n";
-	}
-
-	m_socket->ClearBuffers();
-	m_socket->Reset();
-	m_socket->Close();
-}
-
-void HTTPClientPipeline::LoadCertificate( TlsCertificate::Ptr certificate, const std::string& common_name ) {
-	if( !m_secure ) {
-		return;
-	}
-
-	m_certificate = certificate;
-
-	if( m_socket ) {
-		auto socket = std::static_pointer_cast<TlsConnection<TcpSocket, TlsEndpointType::CLIENT, TlsVerificationType::REQUIRED>>( m_socket );
-
-		if( !common_name.empty() ) {
-			socket->SetPeerCommonName( common_name );
-		}
-
-		socket->AddTrustedCertificate( std::move( certificate ) );
-		socket->Connect( m_remote_endpoint );
-	}
-}
-
-void HTTPClientPipeline::SendRequest( HTTPRequest request ) {
-	if( m_pipeline.empty() ) {
-		m_current_request = request;
-	}
-
-	auto request_string = request.ToString();
-
-	m_socket->Send( request_string.c_str(), request_string.length() );
-	m_last_activity = std::chrono::steady_clock::now();
-
-	m_pipeline.emplace_back( std::move( request ), HTTPResponse{} );
-}
-
-HTTPResponse HTTPClientPipeline::GetResponse( const HTTPRequest& request ) {
-	auto iter( std::begin( m_pipeline ) );
-
-	for( ; iter != std::end( m_pipeline ); ++iter ) {
-		if( iter->first == request ) {
-			break;
-		}
-	}
-
-	if( iter == std::end( m_pipeline ) ) {
-		return HTTPResponse{};
-	}
-
-	if( !iter->second.IsComplete() ) {
-		return iter->second;
-	}
-
-	auto result = std::move( iter->second );
-
-	m_pipeline.erase( iter );
-
-	return result;
-}
-
-void HTTPClientPipeline::Update() {
-	if( TimedOut() ) {
-		if( HasRequests() ) {
-			m_last_activity = std::chrono::steady_clock::now();
-			Reconnect();
-		}
-
-		return;
-	}
-
-	std::vector<char> data( m_socket->BytesToReceive() );
-
-	std::size_t received = 0;
-
-	while( ( received = m_socket->Receive( data.data(), data.size() ) ) ) {
-		if( received ) {
-			m_last_activity = std::chrono::steady_clock::now();
-		}
-		else {
-			return;
-		}
-
-		m_parser.data = this;
-
-		auto parsed = http_parser_execute( &m_parser, &m_parser_settings, data.data(), received );
-
-		if( parsed != received ) {
-			ErrorMessage() << "HTTP Parser parsed " << parsed << " of " << received << " bytes.\n";
-			ErrorMessage() << "HTTP Parser error: " << http_errno_description( HTTP_PARSER_ERRNO( &m_parser ) ) << ".\n";
-			return;
-		}
-
-		auto new_buffer_size = m_socket->BytesToReceive();
-
-		if( new_buffer_size > data.size() ) {
-			data.resize( new_buffer_size );
-		}
-	}
-
-	if( m_socket->RemoteHasShutdown() && !m_socket->LocalHasShutdown() ) {
-		http_parser_execute( &m_parser, &m_parser_settings, nullptr, 0 );
-		Reconnect();
-	}
-}
-
-void HTTPClientPipeline::Reconnect() {
-	m_socket->Shutdown();
-
-	auto send_start = std::chrono::steady_clock::now();
-
-	while( !m_socket->LocalHasShutdown() && ( ( std::chrono::steady_clock::now() - send_start ) < std::chrono::seconds{ 1 } ) ) {
-	}
-
-	m_socket->ClearBuffers();
-	m_socket->Reset();
-	m_socket->Close();
-
-	if( !m_secure ) {
-		m_socket = TcpSocket::Create();
-	}
-	else {
-		m_socket = TlsConnection<TcpSocket, TlsEndpointType::CLIENT, TlsVerificationType::REQUIRED>::Create();
-
-		auto socket = std::static_pointer_cast<TlsConnection<TcpSocket, TlsEndpointType::CLIENT, TlsVerificationType::REQUIRED>>( m_socket );
-
-		socket->AddTrustedCertificate( m_certificate );
-	}
-
-	m_socket->Connect( m_remote_endpoint );
-
-	std::memset( &m_parser, 0, sizeof( http_parser ) );
-	http_parser_init( &m_parser, HTTP_RESPONSE );
-
-	bool current_set = false;
-
-	for( auto& e : m_pipeline ) {
-		if( !e.second.IsComplete() ) {
-			if( !current_set ) {
-				current_set = true;
-				m_current_request = e.first;
-			}
-
-			auto request_string( e.first.ToString() );
-
-			m_socket->Send( request_string.c_str(), request_string.length() );
-		}
-	}
-}
-
-bool HTTPClientPipeline::TimedOut() const {
-	return ( m_timeout_value != std::chrono::seconds{ 0 } ) && ( ( std::chrono::steady_clock::now() - m_last_activity ) > m_timeout_value );
-}
-
-bool HTTPClientPipeline::HasRequests() const {
-	return !m_pipeline.empty();
-}
-
-/// @endcond
+HTTPClient::~HTTPClient() = default;
 
 void HTTPClient::SendRequest( HTTPRequest request, const std::string& address, unsigned short port, bool secure ) {
 	auto addresses = sfn::IpAddress::Resolve( address );
@@ -377,7 +436,7 @@ void HTTPClient::SendRequest( HTTPRequest request, const std::string& address, u
 	);
 
 	if( iter == std::end( m_pipelines ) ) {
-		m_pipelines.emplace_back( HTTPClientPipeline{ std::move( endpoint ), secure, m_timeout_value }, address, port );
+		m_pipelines.emplace_back( make_unique<HTTPClientPipeline>( std::move( endpoint ), secure, m_timeout_value ), address, port );
 
 		iter = std::end( m_pipelines );
 		--iter;
@@ -385,12 +444,12 @@ void HTTPClient::SendRequest( HTTPRequest request, const std::string& address, u
 		auto certificate_iter = m_certificates.find( address );
 
 		if( certificate_iter != std::end( m_certificates ) ) {
-			std::get<0>( *iter ).LoadCertificate( certificate_iter->second.first, certificate_iter->second.second );
+			std::get<0>( *iter )->LoadCertificate( certificate_iter->second.first, certificate_iter->second.second );
 		}
 	}
 
 	auto str = request.ToString();
-	std::get<0>( *iter ).SendRequest( request );
+	std::get<0>( *iter )->SendRequest( request );
 }
 
 
@@ -405,7 +464,7 @@ HTTPResponse HTTPClient::GetResponse( const HTTPRequest& request, const std::str
 		return HTTPResponse{};
 	}
 
-	return std::get<0>( *pipeline_iter ).GetResponse( request );
+	return std::get<0>( *pipeline_iter )->GetResponse( request );
 }
 
 void HTTPClient::LoadCertificate( const std::string& address, TlsCertificate::Ptr certificate, std::string common_name ) {
@@ -421,7 +480,7 @@ void HTTPClient::LoadCertificate( const std::string& address, TlsCertificate::Pt
 		return;
 	}
 
-	std::get<0>( *pipeline_iter ).LoadCertificate( std::move( certificate ), common_name );
+	std::get<0>( *pipeline_iter )->LoadCertificate( std::move( certificate ), common_name );
 }
 
 void HTTPClient::SetTimeoutValue( const std::chrono::seconds& timeout ) {
@@ -430,10 +489,10 @@ void HTTPClient::SetTimeoutValue( const std::chrono::seconds& timeout ) {
 
 void HTTPClient::Update() {
 	for( auto iter = std::begin( m_pipelines ); iter != std::end( m_pipelines ); ) {
-		std::get<0>( *iter ).Update();
+		std::get<0>( *iter )->Update();
 
-		if( std::get<0>( *iter ).TimedOut() ) {
-			if( !std::get<0>( *iter ).HasRequests() ) {
+		if( std::get<0>( *iter )->TimedOut() ) {
+			if( !std::get<0>( *iter )->HasRequests() ) {
 				iter = m_pipelines.erase( iter );
 			}
 		}

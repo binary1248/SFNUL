@@ -4,9 +4,10 @@
 
 #pragma once
 
-#include <chrono>
-#include <ostream>
 #include <SFNUL/Config.hpp>
+#include <SFNUL/DataTypes.hpp>
+#include <chrono>
+#include <iosfwd>
 
 namespace sfn {
 
@@ -14,12 +15,12 @@ class SyncedObject;
 class Message;
 
 enum class SynchronizationType : unsigned char {
-	STATIC = 0,
-	DYNAMIC = 1,
-	STREAM = 2
+	Static = 0,
+	Dynamic = 1,
+	Stream = 2
 };
 
-/** Set the period to wait for between synchronizations of STREAM SyncedTypes.
+/** Set the period to wait for between synchronizations of Stream SyncedTypes.
  * @param period Period to wait for.
  */
 SFNUL_API void SetStreamSynchronizationPeriod( const std::chrono::milliseconds& period );
@@ -55,7 +56,7 @@ public:
 protected:
 	friend class SyncedObject;
 
-	friend void SetStreamSynchronizationPeriod( const std::chrono::milliseconds& milliseconds );
+	friend void SetStreamSynchronizationPeriod( const std::chrono::milliseconds& period );
 
 	BaseSyncedType( SyncedObject* owner, SynchronizationType sync_type );
 
@@ -90,7 +91,7 @@ private:
 	typedef decltype( &m_value ) address_type;
 
 public:
-	explicit SyncedType( SyncedObject* owner, SynchronizationType sync_type = SynchronizationType::DYNAMIC );
+	explicit SyncedType( SyncedObject* owner, SynchronizationType sync_type = SynchronizationType::Dynamic );
 
 	explicit SyncedType( SyncedObject* owner, SynchronizationType sync_type, const value_type& value );
 
@@ -112,7 +113,7 @@ public:
 	template<typename S>
 	auto operator[]( S other ) -> decltype( value_type{}[other] );
 
-	operator value_type() const;
+	operator T() const;
 
 	auto operator->() const -> address_type;
 
@@ -279,6 +280,23 @@ auto operator>>=( S& other, const SyncedType<T>& synced_type ) -> decltype( othe
 
 template<typename T>
 std::ostream& operator<<( std::ostream& stream, const SyncedType<T>& synced_type );
+
+typedef SyncedType<Uint8> SyncedBool;
+
+typedef SyncedType<Int8> SyncedInt8;
+typedef SyncedType<Uint8> SyncedUint8;
+
+typedef SyncedType<Int16> SyncedInt16;
+typedef SyncedType<Uint16> SyncedUint16;
+
+typedef SyncedType<Int32> SyncedInt32;
+typedef SyncedType<Uint32> SyncedUint32;
+
+typedef SyncedType<Int64> SyncedInt64;
+typedef SyncedType<Uint64> SyncedUint64;
+
+typedef SyncedType<float> SyncedFloat;
+typedef SyncedType<double> SyncedDouble;
 
 }
 

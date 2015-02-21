@@ -17,7 +17,7 @@ int main() {
 	sfn::Start( 3 );
 
 	// Just to make our lives easier...
-	typedef sfn::TlsConnection<sfn::TcpSocket, sfn::TlsEndpointType::SERVER, sfn::TlsVerificationType::NONE> Connection;
+	typedef sfn::TlsConnection<sfn::TcpSocket, sfn::TlsEndpointType::Server, sfn::TlsVerificationType::None> Connection;
 
 	// A place to store all active connections.
 	std::deque<Connection::Ptr> connections;
