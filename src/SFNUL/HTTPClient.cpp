@@ -281,8 +281,25 @@ int OnUrl( http_parser* /*parser*/, const char* /*data*/, std::size_t /*length*/
 	return 0;
 }
 
-int OnStatus( http_parser* /*parser*/, const char* /*data*/, std::size_t /*length*/ ) {
-	//HTTPClientPipeline& pipeline( *static_cast<HTTPClientPipeline*>( parser->data ) );
+int OnStatus( http_parser* parser, const char* data, std::size_t length ) {
+	HTTPClientPipeline& pipeline( *static_cast<HTTPClientPipeline*>( parser->data ) );
+
+	auto iter( std::begin( pipeline.m_pipeline ) );
+
+	for( ; iter != std::end( pipeline.m_pipeline ); ++iter ) {
+		if( iter->first == pipeline.m_current_request ) {
+			break;
+		}
+	}
+
+	if( iter == std::end( pipeline.m_pipeline ) ) {
+		ErrorMessage() << "HTTP Parser could not find pipeline element to update.\n";
+		return 1;
+	}
+
+	HTTPResponse& response( iter->second );
+
+	response.SetStatus( response.GetStatus() + std::string( data, length ) );
 
 	return 0;
 }

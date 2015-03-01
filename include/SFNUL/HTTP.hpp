@@ -130,12 +130,12 @@ public:
 	 */
 	void SetHTTPVersion( std::string version );
 
-	/** Get the HTTP status of this response in string form. e.g. "200 OK"
+	/** Get the HTTP status of this response in string form. e.g. "OK" for 200
 	 * @return The HTTP status of this response in string form.
 	 */
 	const std::string& GetStatus() const;
 
-	/** Set the HTTP status of this response in string form. e.g. "200 OK"
+	/** Set the HTTP status of this response in string form. e.g. "OK" for 200
 	 * @param status The HTTP status of this response in string form.
 	 */
 	void SetStatus( std::string status );
