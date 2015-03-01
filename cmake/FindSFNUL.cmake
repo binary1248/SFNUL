@@ -205,20 +205,12 @@ mark_as_advanced(
 if( SFNUL_STATIC_LIBRARIES )
 	set( SFNUL_DEPENDENCIES )
 	set( SFNUL_MISSING_DEPENDENCIES )
-	
-	find_package( Threads REQUIRED )
-	
-	if( CMAKE_USE_WIN32_THREADS_INIT )
-		# We are using Win32 threads.
-		message( STATUS "Using Win32 threads." )
-	elseif( CMAKE_USE_PTHREADS_INIT )
-		# We are using pthreads.
-		message( STATUS "Using pthreads." )
-	else()
-		message( FATAL_ERROR "Didn't find Win32 threads or pthreads. Other threading libraries are currently unsupported." )
+
+	find_package( Threads QUIET )
+
+	if( CMAKE_THREAD_LIBS_INIT )
+		set( SFNUL_DEPENDENCIES ${SFNUL_DEPENDENCIES} ${CMAKE_THREAD_LIBS_INIT} )
 	endif()
-	
-	set( SFNUL_DEPENDENCIES ${SFNUL_DEPENDENCIES} ${CMAKE_THREAD_LIBS_INIT} )
 
 	if( ${CMAKE_SYSTEM_NAME} MATCHES "Windows" )
 		set( SFNUL_DEPENDENCIES ${SFNUL_DEPENDENCIES} "ws2_32" )

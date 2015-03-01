@@ -32,7 +32,7 @@
 #define ASIO_HEADER_ONLY
 
 // Use Win32 threads on Windows and pthreads elsewhere unless explicitly requested.
-#if !defined( SFNUL_WIN32_THREADS ) && !defined( SFNUL_PTHREADS )
+#if !defined( SFNUL_USE_STD_THREAD ) && !defined( SFNUL_WIN32_THREADS ) && !defined( SFNUL_PTHREADS )
 	#if defined( SFNUL_SYSTEM_WINDOWS )
 		#define SFNUL_WIN32_THREADS
 	#else

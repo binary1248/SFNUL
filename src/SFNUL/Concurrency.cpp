@@ -6,7 +6,10 @@
 #include <SFNUL/ConfigInternal.hpp>
 #include <SFNUL/MakeUnique.hpp>
 
-#if defined( SFNUL_WIN32_THREADS )
+#if defined( SFNUL_USE_STD_THREAD )
+	#include <thread>
+	#include <mutex>
+#elif defined( SFNUL_WIN32_THREADS )
 	#include <windows.h>
 	#include <process.h>
 #elif defined( SFNUL_PTHREADS )
@@ -23,15 +26,28 @@ namespace sfn {
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
-#if defined( SFNUL_WIN32_THREADS )
-unsigned __stdcall run( void* data );
-#elif defined( SFNUL_PTHREADS )
-void* run( void* data );
+#if !defined( SFNUL_USE_STD_THREAD )
+	#if defined( SFNUL_WIN32_THREADS )
+	unsigned __stdcall run( void* data );
+	#elif defined( SFNUL_PTHREADS )
+	void* run( void* data );
+	#endif
 #endif
 
 class ThreadImpl {
 public:
-#if defined( SFNUL_WIN32_THREADS )
+#if defined( SFNUL_USE_STD_THREAD )
+	ThreadImpl( std::function<void()> thread_function ) :
+		thread{ thread_function }
+	{
+	}
+
+	~ThreadImpl() {
+		thread.join();
+	}
+
+	mutable std::thread thread;
+#elif defined( SFNUL_WIN32_THREADS )
 	ThreadImpl( std::function<void()> thread_function ) :
 		function{ thread_function }
 	{
@@ -63,17 +79,19 @@ public:
 	std::function<void()> function;
 };
 
-#if defined( SFNUL_WIN32_THREADS )
-unsigned __stdcall run( void* data ) {
-	static_cast<sfn::ThreadImpl*>( data )->function();
-	_endthread();
-	return 0;
-}
-#elif defined( SFNUL_PTHREADS )
-void* run( void* data ) {
-	static_cast<sfn::ThreadImpl*>( data )->function();
-	return nullptr;
-}
+#if !defined( SFNUL_USE_STD_THREAD )
+	#if defined( SFNUL_WIN32_THREADS )
+	unsigned __stdcall run( void* data ) {
+		static_cast<sfn::ThreadImpl*>( data )->function();
+		_endthread();
+		return 0;
+	}
+	#elif defined( SFNUL_PTHREADS )
+	void* run( void* data ) {
+		static_cast<sfn::ThreadImpl*>( data )->function();
+		return nullptr;
+	}
+	#endif
 #endif
 
 Thread::Thread( std::function<void()> thread_function ) :
@@ -85,13 +103,31 @@ Thread::~Thread() = default;
 
 class Atomic::AtomicImpl {
 public:
-#if defined( SFNUL_WIN32_THREADS )
+#if defined( SFNUL_USE_STD_THREAD )
+	void Lock() const {
+		mutex.lock();
+	}
+
+	void Unlock() const {
+		mutex.unlock();
+	}
+
+	mutable std::recursive_mutex mutex;
+#elif defined( SFNUL_WIN32_THREADS )
 	AtomicImpl() {
 		InitializeCriticalSection( &mutex );
 	}
 
 	~AtomicImpl() {
 		DeleteCriticalSection( &mutex );
+	}
+
+	void Lock() const {
+		EnterCriticalSection( &mutex );
+	}
+
+	void Unlock() const {
+		LeaveCriticalSection( &mutex );
 	}
 
 	mutable CRITICAL_SECTION mutex;
@@ -108,6 +144,14 @@ public:
 		pthread_mutex_destroy( &mutex );
 	}
 
+	void Lock() const {
+		pthread_mutex_lock( &mutex );
+	}
+
+	void Unlock() const {
+		pthread_mutex_unlock( &mutex );
+	}
+
 	mutable pthread_mutex_t mutex;
 #endif
 };
@@ -120,19 +164,11 @@ Atomic::Atomic() :
 Atomic::~Atomic() = default;
 
 void Atomic::LockMutex() const {
-#if defined( SFNUL_WIN32_THREADS )
-	EnterCriticalSection( &m_impl->mutex );
-#elif defined( SFNUL_PTHREADS )
-	pthread_mutex_lock( &m_impl->mutex );
-#endif
+	m_impl->Lock();
 }
 
 void Atomic::UnlockMutex() const {
-#if defined( SFNUL_WIN32_THREADS )
-	LeaveCriticalSection( &m_impl->mutex );
-#elif defined( SFNUL_PTHREADS )
-	pthread_mutex_unlock( &m_impl->mutex );
-#endif
+	m_impl->Unlock();
 }
 
 Atomic::ScopedLock::ScopedLock( Atomic* atomic ) :

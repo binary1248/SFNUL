@@ -17,22 +17,37 @@ set( SFNUL_BUILD_EXAMPLES true CACHE BOOL "Build SFNUL examples." )
 set( SFNUL_BUILD_SFML_EXAMPLES false CACHE BOOL "Build SFNUL examples that use SFML for visualisation." )
 set( SFNUL_BUILD_DOC false CACHE BOOL "Generate the SFNUL API documentation." )
 set( SFNUL_ENDIAN_SWAP false CACHE BOOL "Swap endianness of integral values. Enable if building for specific hardware." )
+set( SFNUL_USE_STD_THREAD false CACHE BOOL "Use std::thread instead of platform-specific threading. (std::thread and std::recursive_mutex need to be fully supported)" )
 
 if( MSVC )
 	set( SFNUL_USE_STATIC_STD_LIBS false CACHE BOOL "True to link the runtime library statically, false to link them dynamically." )
 endif()
 
 # Find packages.
-find_package( Threads REQUIRED )
+find_package( Threads QUIET )
 
-if( CMAKE_USE_WIN32_THREADS_INIT )
-	# We are using Win32 threads.
-	message( STATUS "Using Win32 threads." )
-elseif( CMAKE_USE_PTHREADS_INIT )
-	# We are using pthreads.
-	message( STATUS "Using pthreads." )
+if( NOT SFNUL_USE_STD_THREAD )
+	if( CMAKE_USE_WIN32_THREADS_INIT )
+		# We are using Win32 threads.
+		message( STATUS "Using Win32 threads." )
+	elseif( CMAKE_USE_PTHREADS_INIT )
+		# We are using pthreads.
+		message( STATUS "Using pthreads." )
+	else()
+		message( FATAL_ERROR "Not using std::thread and didn't find Win32 threads or pthreads. Other threading libraries are currently unsupported." )
+	endif()
 else()
-	message( FATAL_ERROR "Didn't find Win32 threads or pthreads. Other threading libraries are currently unsupported." )
+	if( CMAKE_USE_WIN32_THREADS_INIT )
+		# We are using Win32 std::thread implementation.
+		message( STATUS "Using std::thread (Win32 implementation)." )
+	elseif( CMAKE_USE_PTHREADS_INIT )
+		# We are using pthreads std::thread implementation.
+		message( STATUS "Using std::thread (pthreads implementation)." )
+	else()
+		message( STATUS "Using std::thread and wasn't able to detect underlying implementation. Errors may occur." )
+	endif()
+
+	add_definitions( -DSFNUL_USE_STD_THREAD )
 endif()
 
 # Make Windows happy.
@@ -407,7 +422,9 @@ elseif( APPLE )
 	target_link_libraries( sfnul ${COREFOUNDATION_LIBRARY} )
 endif()
 
-target_link_libraries( sfnul ${CMAKE_THREAD_LIBS_INIT} )
+if( CMAKE_THREAD_LIBS_INIT )
+	target_link_libraries( sfnul ${CMAKE_THREAD_LIBS_INIT} )
+endif()
 
 ### EXAMPLES ###
 add_subdirectory( "examples" )

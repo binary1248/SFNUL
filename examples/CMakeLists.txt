@@ -85,7 +85,6 @@ if( SFNUL_BUILD_SFML_EXAMPLES )
 
 	# A bit of non-trivial information.
 	message( STATUS "If using SFML as a static library remember to set SFML_STATIC_LIBRARIES." )
-	message( STATUS "If setting SFML_STATIC_LIBRARIES, display the advanced variables and remove all SFML_XXX_LIBRARY_YYY entries so that they get repopulated." )
 
 	# Automatically grab SFML_ROOT from the environment if it exists, or force the user to specify it if it doesn't.
 	set( SFML_ROOT "$ENV{SFML_ROOT}" CACHE PATH "SFML root directory." )
