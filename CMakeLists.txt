@@ -324,18 +324,21 @@ if( WIN32 )
 		BOTAN_SOURCES
 		${BOTAN_SOURCES}
 		${BOTAN_SRC_DIR}/lib/entropy/win32_stats/es_win32.cpp
+		${BOTAN_SRC_DIR}/lib/entropy/cryptoapi_rng/es_capi.cpp
 	)
 	
 	add_definitions( -DBOTAN_HAS_ENTROPY_SRC_WIN32=20131128 )
+	add_definitions( -DBOTAN_HAS_ENTROPY_SRC_CAPI=20131128 )
 else()
 	set(
 		BOTAN_SOURCES
 		${BOTAN_SOURCES}
-		${BOTAN_SRC_DIR}/lib/entropy/unix_procs/unix_proc_sources.cpp
-		${BOTAN_SRC_DIR}/lib/entropy/unix_procs/unix_procs.cpp
+		${BOTAN_SRC_DIR}/lib/entropy/dev_random/dev_random.cpp
+		${BOTAN_SRC_DIR}/lib/entropy/egd/es_egd.cpp
 	)
 	
-	add_definitions( -DBOTAN_HAS_ENTROPY_SRC_UNIX_PROCESS_RUNNER=20131128 )
+	add_definitions( -DBOTAN_HAS_ENTROPY_SRC_DEV_RANDOM=20131128 )
+	add_definitions( -DBOTAN_HAS_ENTROPY_SRC_EGD=20131128 )
 endif()
 
 set(
