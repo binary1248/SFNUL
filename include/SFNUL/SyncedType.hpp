@@ -32,27 +32,15 @@ SFNUL_API std::chrono::milliseconds GetStreamSynchronizationPeriod();
 
 class SFNUL_API BaseSyncedType {
 public:
-	/** Copy assignment operator
-	 * @param other BaseSyncedType to assign from.
-	 * @return *this
-	 */
-	BaseSyncedType& operator=( const BaseSyncedType& other );
-
-	/** Move assignment operator
-	 * @param other BaseSyncedType to move from.
-	 * @return *this
-	 */
-	BaseSyncedType& operator=( BaseSyncedType&& other );
-
 	/** Check if this object has been modified.
 	 * @return true if this object has been modified.
 	 */
-	bool GetModified() const;
+	virtual bool GetModified() const = 0;
 
 	/** Set whether this object has been modified.
 	 * @param modified true to set that this object has been modified, false otherwise.
 	 */
-	void SetModified( bool modified );
+	virtual void SetModified( bool modified ) = 0;
 
 	/** Get the synchronization type set for this object.
 	 */
@@ -69,27 +57,29 @@ protected:
 
 	BaseSyncedType( BaseSyncedType&& other ) = delete;
 
+	BaseSyncedType& operator=( const BaseSyncedType& other );
+
+	BaseSyncedType& operator=( BaseSyncedType&& other );
+
 	virtual void Serialize( Message& message, SynchronizationType sync_type ) = 0;
 
 	virtual void Deserialize( Message& message, SynchronizationType sync_type ) = 0;
 
-private:
-	SyncedObject* m_owner = nullptr;
-
-	bool m_modified = true;
+	void NotifyChanged( SyncedObject* owner );
 };
 
 template<typename T, SynchronizationType U = SynchronizationType::Dynamic>
-class SFNUL_API SyncedType : public BaseSyncedType {
+class SFNUL_API SyncedType final : public BaseSyncedType {
+private:
+	SyncedObject* m_owner = nullptr;
+	T m_value;
+	bool m_modified = true;
+
 public:
 	typedef T value_type;
 
-private:
-	value_type m_value;
-
 	typedef decltype( &m_value ) address_type;
 
-public:
 	explicit SyncedType( SyncedObject* owner );
 
 	explicit SyncedType( SyncedObject* owner, const value_type& value );
@@ -119,6 +109,10 @@ public:
 	auto operator->() -> address_type;
 
 private:
+	bool GetModified() const override;
+
+	void SetModified( bool modified ) override;
+
 	SynchronizationType GetSynchronizationType() const override;
 
 	void Serialize( Message& message, SynchronizationType sync_type ) override;

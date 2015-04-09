@@ -10,6 +10,7 @@ namespace sfn {
 template<typename T, SynchronizationType U>
 SyncedType<T, U>::SyncedType( SyncedObject* owner ) :
 	BaseSyncedType( owner, U == SynchronizationType::Stream ),
+	m_owner( owner ),
 	m_value()
 {
 }
@@ -17,6 +18,7 @@ SyncedType<T, U>::SyncedType( SyncedObject* owner ) :
 template<typename T, SynchronizationType U>
 SyncedType<T, U>::SyncedType( SyncedObject* owner, const T& value ) :
 	BaseSyncedType( owner, U == SynchronizationType::Stream ),
+	m_owner( owner ),
 	m_value( value )
 {
 }
@@ -24,6 +26,7 @@ SyncedType<T, U>::SyncedType( SyncedObject* owner, const T& value ) :
 template<typename T, SynchronizationType U>
 SyncedType<T, U>::SyncedType( SyncedObject* owner, T&& value ) :
 	BaseSyncedType( owner, U == SynchronizationType::Stream ),
+	m_owner( owner ),
 	m_value( std::forward<T>( value ) )
 {
 }
@@ -32,8 +35,21 @@ template<typename T, SynchronizationType U>
 template<SynchronizationType V>
 SyncedType<T, U>::SyncedType( SyncedObject* owner, const SyncedType<T, V>& other ) :
 	BaseSyncedType( owner, U == SynchronizationType::Stream ),
+	m_owner( owner ),
 	m_value( other.m_value )
 {
+}
+
+template<typename T, SynchronizationType U>
+bool SyncedType<T, U>::GetModified() const {
+	return m_modified;
+}
+
+template<typename T, SynchronizationType U>
+void SyncedType<T, U>::SetModified( bool modified ) {
+	m_modified = modified;
+
+	NotifyChanged( m_owner );
 }
 
 template<typename T, SynchronizationType U>

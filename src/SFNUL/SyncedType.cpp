@@ -21,9 +21,7 @@ std::chrono::milliseconds GetStreamSynchronizationPeriod() {
 	return sync_period;
 }
 
-BaseSyncedType::BaseSyncedType( SyncedObject* owner, bool stream ) :
-	m_owner( owner )
-{
+BaseSyncedType::BaseSyncedType( SyncedObject* owner, bool stream ) {
 	owner->RegisterMember( this );
 
 	if( stream ) {
@@ -42,14 +40,8 @@ BaseSyncedType& BaseSyncedType::operator=( BaseSyncedType&& /*other*/ ) {
 	return *this;
 }
 
-bool BaseSyncedType::GetModified() const {
-	return m_modified;
-}
-
-void BaseSyncedType::SetModified( bool modified ) {
-	m_modified = modified;
-
-	m_owner->NotifyChanged();
+void BaseSyncedType::NotifyChanged( SyncedObject* owner ) {
+	owner->NotifyChanged();
 }
 
 }
