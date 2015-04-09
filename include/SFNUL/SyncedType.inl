@@ -384,4 +384,12 @@ std::ostream& operator<<( std::ostream& stream, const SyncedType<T, U>& synced_t
 	return stream << synced_type.GetValue();
 }
 
+template<typename T, SynchronizationType U>
+std::istream& operator>>( std::istream& stream, SyncedType<T, U>& synced_type ) {
+	T value;
+	auto& result = stream >> value;
+	synced_type.SetValue( value );
+	return result;
+}
+
 }

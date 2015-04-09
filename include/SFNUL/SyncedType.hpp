@@ -282,6 +282,9 @@ auto operator>>=( S& other, const SyncedType<T, U>& synced_type ) -> decltype( o
 template<typename T, SynchronizationType U>
 std::ostream& operator<<( std::ostream& stream, const SyncedType<T, U>& synced_type );
 
+template<typename T, SynchronizationType U>
+std::istream& operator>>( std::istream& stream, SyncedType<T, U>& synced_type );
+
 typedef SyncedType<Uint8> SyncedBool;
 
 typedef SyncedType<Int8> SyncedInt8;
