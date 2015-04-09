@@ -39,7 +39,7 @@ protected:
 
 	/** Dtor.
 	 */
-	virtual ~SyncedObject();
+	~SyncedObject();
 
 	virtual object_type_id_type GetTypeID() const = 0;
 
@@ -59,6 +59,7 @@ private:
 	static id_type NewID();
 
 	void RegisterMember( BaseSyncedType* member );
+	void EnableStreaming();
 	void NotifyChanged();
 	void CheckStreamUpdate();
 
@@ -81,8 +82,6 @@ private:
 	static id_type m_last_id;
 
 	id_type m_id = invalid_id;
-
-	bool m_changed = true;
 };
 
 }

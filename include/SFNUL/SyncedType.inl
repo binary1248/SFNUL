@@ -3,36 +3,42 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <SFNUL/Message.hpp>
-#include <ostream>
+#include <iosfwd>
 
 namespace sfn {
 
-template<typename T>
-SyncedType<T>::SyncedType( SyncedObject* owner, SynchronizationType sync_type ) :
-	BaseSyncedType( owner, sync_type ),
+template<typename T, SynchronizationType U>
+SyncedType<T, U>::SyncedType( SyncedObject* owner ) :
+	BaseSyncedType( owner, U == SynchronizationType::Stream ),
 	m_value()
 {
 }
 
-template<typename T>
-SyncedType<T>::SyncedType( SyncedObject* owner, SynchronizationType sync_type, const T& value ) :
-	BaseSyncedType( owner, sync_type ),
+template<typename T, SynchronizationType U>
+SyncedType<T, U>::SyncedType( SyncedObject* owner, const T& value ) :
+	BaseSyncedType( owner, U == SynchronizationType::Stream ),
 	m_value( value )
 {
 }
 
-template<typename T>
-SyncedType<T>::SyncedType( SyncedObject* owner, SynchronizationType sync_type, T&& value ) :
-	BaseSyncedType( owner, sync_type ),
+template<typename T, SynchronizationType U>
+SyncedType<T, U>::SyncedType( SyncedObject* owner, T&& value ) :
+	BaseSyncedType( owner, U == SynchronizationType::Stream ),
 	m_value( std::forward<T>( value ) )
 {
 }
 
-template<typename T>
-SyncedType<T>::SyncedType( SyncedObject* owner, const SyncedType<T>& other ) :
-	BaseSyncedType( owner, other.m_sync_type ),
+template<typename T, SynchronizationType U>
+template<SynchronizationType V>
+SyncedType<T, U>::SyncedType( SyncedObject* owner, const SyncedType<T, V>& other ) :
+	BaseSyncedType( owner, U == SynchronizationType::Stream ),
 	m_value( other.m_value )
 {
+}
+
+template<typename T, SynchronizationType U>
+SynchronizationType SyncedType<T, U>::GetSynchronizationType() const {
+	return U;
 }
 
 #if defined( __GNUG__ )
@@ -40,23 +46,22 @@ SyncedType<T>::SyncedType( SyncedObject* owner, const SyncedType<T>& other ) :
 #pragma GCC diagnostic ignored "-Wfloat-equal"
 #endif
 
-template<typename T>
-template<typename S>
-void SyncedType<T>::SetValue( T value ) {
+template<typename T, SynchronizationType U>
+void SyncedType<T, U>::SetValue( T value ) {
 	if( value != m_value ) {
 		SetModified( true );
 		m_value = value;
 	}
 }
 
-template<typename T>
-T SyncedType<T>::GetValue() const {
+template<typename T, SynchronizationType U>
+T SyncedType<T, U>::GetValue() const {
 	return m_value;
 }
 
-template<typename T>
+template<typename T, SynchronizationType U>
 template<typename S>
-SyncedType<T>& SyncedType<T>::operator=( S other ) {
+SyncedType<T, U>& SyncedType<T, U>::operator=( S other ) {
 	if( other != m_value ) {
 		SetModified( true );
 		m_value = other;
@@ -68,148 +73,148 @@ SyncedType<T>& SyncedType<T>::operator=( S other ) {
 #pragma GCC diagnostic pop
 #endif
 
-template<typename T, typename S>
-auto operator+( const SyncedType<T>& synced_type, S other ) -> decltype( synced_type.GetValue() + other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator+( const SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type.GetValue() + other ) {
 	return synced_type.GetValue() + other;
 }
 
-template<typename T, typename S>
-auto operator+( S other, const SyncedType<T>& synced_type ) -> decltype( other + synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator+( S other, const SyncedType<T, U>& synced_type ) -> decltype( other + synced_type.GetValue() ) {
 	return other + synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator-( const SyncedType<T>& synced_type, S other ) -> decltype( synced_type.GetValue() - other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator-( const SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type.GetValue() - other ) {
 	return synced_type.GetValue() - other;
 }
 
-template<typename T, typename S>
-auto operator-( S other, const SyncedType<T>& synced_type ) -> decltype( other - synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator-( S other, const SyncedType<T, U>& synced_type ) -> decltype( other - synced_type.GetValue() ) {
 	return other - synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator*( const SyncedType<T>& synced_type, S other ) -> decltype( synced_type.GetValue() * other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator*( const SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type.GetValue() * other ) {
 	return synced_type.GetValue() * other;
 }
 
-template<typename T, typename S>
-auto operator*( S other, const SyncedType<T>& synced_type ) -> decltype( other * synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator*( S other, const SyncedType<T, U>& synced_type ) -> decltype( other * synced_type.GetValue() ) {
 	return other * synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator/( const SyncedType<T>& synced_type, S other ) -> decltype( synced_type.GetValue() / other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator/( const SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type.GetValue() / other ) {
 	return synced_type.GetValue() / other;
 }
 
-template<typename T, typename S>
-auto operator/( S other, const SyncedType<T>& synced_type ) -> decltype( other / synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator/( S other, const SyncedType<T, U>& synced_type ) -> decltype( other / synced_type.GetValue() ) {
 	return other / synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator%( const SyncedType<T>& synced_type, S other ) -> decltype( synced_type.GetValue() % other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator%( const SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type.GetValue() % other ) {
 	return synced_type.GetValue() % other;
 }
 
-template<typename T, typename S>
-auto operator%( S other, const SyncedType<T>& synced_type ) -> decltype( other % synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator%( S other, const SyncedType<T, U>& synced_type ) -> decltype( other % synced_type.GetValue() ) {
 	return other % synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator<<( const SyncedType<T>& synced_type, S other ) -> decltype( synced_type.GetValue() << other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator<<( const SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type.GetValue() << other ) {
 	return synced_type.GetValue() << other;
 }
 
-template<typename T, typename S>
-auto operator<<( S other, const SyncedType<T>& synced_type ) -> decltype( other << synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator<<( S other, const SyncedType<T, U>& synced_type ) -> decltype( other << synced_type.GetValue() ) {
 	return other << synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator>>( const SyncedType<T>& synced_type, S other ) -> decltype( synced_type.GetValue() >> other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator>>( const SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type.GetValue() >> other ) {
 	return synced_type.GetValue() >> other;
 }
 
-template<typename T, typename S>
-auto operator>>( S other, const SyncedType<T>& synced_type ) -> decltype( other >> synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator>>( S other, const SyncedType<T, U>& synced_type ) -> decltype( other >> synced_type.GetValue() ) {
 	return other >> synced_type.GetValue();
 }
 
-template<typename T>
-auto operator-( const SyncedType<T>& synced_type ) -> decltype( -( synced_type.GetValue() ) ) {
+template<typename T, SynchronizationType U>
+auto operator-( const SyncedType<T, U>& synced_type ) -> decltype( -( synced_type.GetValue() ) ) {
 	return -( synced_type.GetValue() );
 }
 
-template<typename T, typename S>
-auto operator==( const SyncedType<T>& synced_type, S other ) -> decltype( synced_type.GetValue() == other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator==( const SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type.GetValue() == other ) {
 	return synced_type.GetValue() == other;
 }
 
-template<typename T, typename S>
-auto operator==( S other, const SyncedType<T>& synced_type ) -> decltype( other == synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator==( S other, const SyncedType<T, U>& synced_type ) -> decltype( other == synced_type.GetValue() ) {
 	return other == synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator!=( const SyncedType<T>& synced_type, S other ) -> decltype( synced_type.GetValue() != other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator!=( const SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type.GetValue() != other ) {
 	return synced_type.GetValue() != other;
 }
 
-template<typename T, typename S>
-auto operator!=( S other, const SyncedType<T>& synced_type ) -> decltype( other != synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator!=( S other, const SyncedType<T, U>& synced_type ) -> decltype( other != synced_type.GetValue() ) {
 	return other != synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator>( const SyncedType<T>& synced_type, S other ) -> decltype( synced_type.GetValue() > other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator>( const SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type.GetValue() > other ) {
 	return synced_type.GetValue() > other;
 }
 
-template<typename T, typename S>
-auto operator>( S other, const SyncedType<T>& synced_type ) -> decltype( other > synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator>( S other, const SyncedType<T, U>& synced_type ) -> decltype( other > synced_type.GetValue() ) {
 	return other > synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator<( const SyncedType<T>& synced_type, S other ) -> decltype( synced_type.GetValue() < other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator<( const SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type.GetValue() < other ) {
 	return synced_type.GetValue() < other;
 }
 
-template<typename T, typename S>
-auto operator<( S other, const SyncedType<T>& synced_type ) -> decltype( other < synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator<( S other, const SyncedType<T, U>& synced_type ) -> decltype( other < synced_type.GetValue() ) {
 	return other < synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator>=( const SyncedType<T>& synced_type, S other ) -> decltype( synced_type.GetValue() >= other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator>=( const SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type.GetValue() >= other ) {
 	return synced_type.GetValue() >= other;
 }
 
-template<typename T, typename S>
-auto operator>=( S other, const SyncedType<T>& synced_type ) -> decltype( other >= synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator>=( S other, const SyncedType<T, U>& synced_type ) -> decltype( other >= synced_type.GetValue() ) {
 	return other >= synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator<=( const SyncedType<T>& synced_type, S other ) -> decltype( synced_type.GetValue() <= other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator<=( const SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type.GetValue() <= other ) {
 	return synced_type.GetValue() <= other;
 }
 
-template<typename T, typename S>
-auto operator<=( S other, const SyncedType<T>& synced_type ) -> decltype( other <= synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator<=( S other, const SyncedType<T, U>& synced_type ) -> decltype( other <= synced_type.GetValue() ) {
 	return other <= synced_type.GetValue();
 }
 
-template<typename T>
-auto operator++( SyncedType<T>& synced_type ) -> decltype( synced_type = ( ++synced_type.GetValue() ) ) {
+template<typename T, SynchronizationType U>
+auto operator++( SyncedType<T, U>& synced_type ) -> decltype( synced_type = ( ++synced_type.GetValue() ) ) {
 	return synced_type = ( ++synced_type.GetValue() );
 }
 
-template<typename T>
-auto operator++( SyncedType<T>& synced_type, int ) -> decltype( synced_type = ( synced_type.GetValue()++ ) ) {
+template<typename T, SynchronizationType U>
+auto operator++( SyncedType<T, U>& synced_type, int ) -> decltype( synced_type = ( synced_type.GetValue()++ ) ) {
 	auto return_value = synced_type.GetValue();
 
 	synced_type = ( synced_type.GetValue()++ );
@@ -217,13 +222,13 @@ auto operator++( SyncedType<T>& synced_type, int ) -> decltype( synced_type = ( 
 	return return_value;
 }
 
-template<typename T>
-auto operator--( SyncedType<T>& synced_type ) -> decltype( synced_type = ( --synced_type.GetValue() ) ) {
+template<typename T, SynchronizationType U>
+auto operator--( SyncedType<T, U>& synced_type ) -> decltype( synced_type = ( --synced_type.GetValue() ) ) {
 	return synced_type = ( --synced_type.GetValue() );
 }
 
-template<typename T>
-auto operator--( SyncedType<T>& synced_type, int ) -> decltype( synced_type = ( synced_type.GetValue()-- ) ) {
+template<typename T, SynchronizationType U>
+auto operator--( SyncedType<T, U>& synced_type, int ) -> decltype( synced_type = ( synced_type.GetValue()-- ) ) {
 	auto return_value = synced_type.GetValue();
 
 	synced_type = ( synced_type.GetValue()-- );
@@ -231,151 +236,151 @@ auto operator--( SyncedType<T>& synced_type, int ) -> decltype( synced_type = ( 
 	return return_value;
 }
 
-template<typename T, typename S>
-auto operator+=( SyncedType<T>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() + other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator+=( SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() + other ) {
 	return synced_type = synced_type.GetValue() + other;
 }
 
-template<typename T, typename S>
-auto operator+=( S& other, const SyncedType<T>& synced_type ) -> decltype( other = other + synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator+=( S& other, const SyncedType<T, U>& synced_type ) -> decltype( other = other + synced_type.GetValue() ) {
 	return other = other + synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator-=( SyncedType<T>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() - other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator-=( SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() - other ) {
 	return synced_type = synced_type.GetValue() - other;
 }
 
-template<typename T, typename S>
-auto operator-=( S& other, const SyncedType<T>& synced_type ) -> decltype( other = other - synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator-=( S& other, const SyncedType<T, U>& synced_type ) -> decltype( other = other - synced_type.GetValue() ) {
 	return other = other - synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator*=( SyncedType<T>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() * other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator*=( SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() * other ) {
 	return synced_type = synced_type.GetValue() * other;
 }
 
-template<typename T, typename S>
-auto operator*=( S& other, const SyncedType<T>& synced_type ) -> decltype( other = other * synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator*=( S& other, const SyncedType<T, U>& synced_type ) -> decltype( other = other * synced_type.GetValue() ) {
 	return other = other * synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator/=( SyncedType<T>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() / other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator/=( SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() / other ) {
 	return synced_type = synced_type.GetValue() / other;
 }
 
-template<typename T, typename S>
-auto operator/=( S& other, const SyncedType<T>& synced_type ) -> decltype( other = other / synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator/=( S& other, const SyncedType<T, U>& synced_type ) -> decltype( other = other / synced_type.GetValue() ) {
 	return other = other / synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator%=( SyncedType<T>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() % other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator%=( SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() % other ) {
 	return synced_type = synced_type.GetValue() % other;
 }
 
-template<typename T, typename S>
-auto operator%=( S& other, const SyncedType<T>& synced_type ) -> decltype( other = other % synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator%=( S& other, const SyncedType<T, U>& synced_type ) -> decltype( other = other % synced_type.GetValue() ) {
 	return other = other % synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator&=( SyncedType<T>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() & other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator&=( SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() & other ) {
 	return synced_type = synced_type.GetValue() & other;
 }
 
-template<typename T, typename S>
-auto operator&=( S& other, const SyncedType<T>& synced_type ) -> decltype( other = other & synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator&=( S& other, const SyncedType<T, U>& synced_type ) -> decltype( other = other & synced_type.GetValue() ) {
 	return other = other & synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator|=( SyncedType<T>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() | other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator|=( SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() | other ) {
 	return synced_type = synced_type.GetValue() | other;
 }
 
-template<typename T, typename S>
-auto operator|=( S& other, const SyncedType<T>& synced_type ) -> decltype( other = other | synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator|=( S& other, const SyncedType<T, U>& synced_type ) -> decltype( other = other | synced_type.GetValue() ) {
 	return other = other | synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator^=( SyncedType<T>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() ^ other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator^=( SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() ^ other ) {
 	return synced_type = synced_type.GetValue() ^ other;
 }
 
-template<typename T, typename S>
-auto operator^=( S& other, const SyncedType<T>& synced_type ) -> decltype( other = other ^ synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator^=( S& other, const SyncedType<T, U>& synced_type ) -> decltype( other = other ^ synced_type.GetValue() ) {
 	return other = other ^ synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator<<=( SyncedType<T>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() << other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator<<=( SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() << other ) {
 	return synced_type = synced_type.GetValue() << other;
 }
 
-template<typename T, typename S>
-auto operator<<=( S& other, const SyncedType<T>& synced_type ) -> decltype( other = other << synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator<<=( S& other, const SyncedType<T, U>& synced_type ) -> decltype( other = other << synced_type.GetValue() ) {
 	return other = other << synced_type.GetValue();
 }
 
-template<typename T, typename S>
-auto operator>>=( SyncedType<T>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() >> other ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator>>=( SyncedType<T, U>& synced_type, S other ) -> decltype( synced_type = synced_type.GetValue() >> other ) {
 	return synced_type = synced_type.GetValue() >> other;
 }
 
-template<typename T, typename S>
-auto operator>>=( S& other, const SyncedType<T>& synced_type ) -> decltype( other = other >> synced_type.GetValue() ) {
+template<typename T, SynchronizationType U, typename S>
+auto operator>>=( S& other, const SyncedType<T, U>& synced_type ) -> decltype( other = other >> synced_type.GetValue() ) {
 	return other = other >> synced_type.GetValue();
 }
 
-template<typename T>
+template<typename T, SynchronizationType U>
 template<typename S>
-auto SyncedType<T>::operator[]( S other ) const -> decltype( SyncedType<T>::value_type{}[other] ) {
+auto SyncedType<T, U>::operator[]( S other ) const -> decltype( SyncedType<T, U>::value_type{}[other] ) {
 	return m_value[other];
 }
 
-template<typename T>
+template<typename T, SynchronizationType U>
 template<typename S>
-auto SyncedType<T>::operator[]( S other ) -> decltype( SyncedType<T>::value_type{}[other] ) {
+auto SyncedType<T, U>::operator[]( S other ) -> decltype( SyncedType<T, U>::value_type{}[other] ) {
 	SetModified( true );
 	return m_value[other];
 }
 
-template<typename T>
-SyncedType<T>::operator T() const {
+template<typename T, SynchronizationType U>
+SyncedType<T, U>::operator T() const {
 	return m_value;
 }
 
-template<typename T>
-auto SyncedType<T>::operator->() const -> address_type {
+template<typename T, SynchronizationType U>
+auto SyncedType<T, U>::operator->() const -> address_type {
 	return &( this->m_value );
 }
 
-template<typename T>
-auto SyncedType<T>::operator->() -> address_type {
+template<typename T, SynchronizationType U>
+auto SyncedType<T, U>::operator->() -> address_type {
 	SetModified( true );
 	return &( this->m_value );
 }
 
-template<typename T>
-void SyncedType<T>::Serialize( Message& message, SynchronizationType sync_type ) {
+template<typename T, SynchronizationType U>
+void SyncedType<T, U>::Serialize( Message& message, SynchronizationType sync_type ) {
 	if( GetSynchronizationType() >= sync_type ) {
 		message << m_value;
 	}
 }
 
-template<typename T>
-void SyncedType<T>::Deserialize( Message& message, SynchronizationType sync_type ) {
+template<typename T, SynchronizationType U>
+void SyncedType<T, U>::Deserialize( Message& message, SynchronizationType sync_type ) {
 	if( GetSynchronizationType() >= sync_type ) {
 		message >> m_value;
 	}
 }
 
-template<typename T>
-std::ostream& operator<<( std::ostream& stream, const SyncedType<T>& synced_type ) {
+template<typename T, SynchronizationType U>
+std::ostream& operator<<( std::ostream& stream, const SyncedType<T, U>& synced_type ) {
 	return stream << synced_type.GetValue();
 }
 

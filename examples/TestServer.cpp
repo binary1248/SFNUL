@@ -51,7 +51,7 @@ public:
 	const static object_type_id_type type_id;
 
 	ChatLog() :
-		m_chat_messages{ this, sfn::SynchronizationType::Dynamic }
+		m_chat_messages{ this }
 	{
 	}
 
@@ -100,8 +100,8 @@ public:
 	const static object_type_id_type type_id;
 
 	Bullet( const std::tuple<sf::Vector2f, sf::Vector2f, bool>& data ) :
-		m_position{ this, sfn::SynchronizationType::Stream, std::get<0>( data ) },
-		m_velocity{ this, sfn::SynchronizationType::Dynamic, std::get<1>( data ) }
+		m_position{ this, std::get<0>( data ) },
+		m_velocity{ this, std::get<1>( data ) }
 	{
 	}
 
@@ -137,7 +137,7 @@ protected:
 	}
 
 private:
-	sfn::SyncedType<sf::Vector2f> m_position;
+	sfn::SyncedType<sf::Vector2f, sfn::SynchronizationType::Stream> m_position;
 	sfn::SyncedType<sf::Vector2f> m_velocity;
 
 	sf::Clock m_update_clock{};
@@ -154,12 +154,12 @@ public:
 	const static object_type_id_type type_id;
 
 	Player( std::shared_ptr<sfn::Link<sfn::TcpSocket>> player_link ) :
-		m_position{ this, sfn::SynchronizationType::Stream, { 300.f + position_dist( gen ), 200.f + position_dist( gen ) } },
-		m_velocity{ this, sfn::SynchronizationType::Stream, { 0.f, 0.f } },
-		m_acceleration{ this, sfn::SynchronizationType::Dynamic, 0.f },
-		m_rotation{ this, sfn::SynchronizationType::Stream, 0.f },
-		m_rotational_velocity{ this, sfn::SynchronizationType::Dynamic, 0.f },
-		m_color{ this, sfn::SynchronizationType::Static, sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 } },
+		m_position{ this, { 300.f + position_dist( gen ), 200.f + position_dist( gen ) } },
+		m_velocity{ this, { 0.f, 0.f } },
+		m_acceleration{ this, 0.f },
+		m_rotation{ this, 0.f },
+		m_rotational_velocity{ this, 0.f },
+		m_color{ this, sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 } },
 		m_link{ player_link }
 	{
 	}
@@ -303,12 +303,12 @@ protected:
 	}
 
 private:
-	sfn::SyncedType<sf::Vector2f> m_position;
-	sfn::SyncedType<sf::Vector2f> m_velocity;
+	sfn::SyncedType<sf::Vector2f, sfn::SynchronizationType::Stream> m_position;
+	sfn::SyncedType<sf::Vector2f, sfn::SynchronizationType::Stream> m_velocity;
 	sfn::SyncedFloat m_acceleration;
-	sfn::SyncedFloat m_rotation;
+	sfn::SyncedType<float, sfn::SynchronizationType::Stream> m_rotation;
 	sfn::SyncedFloat m_rotational_velocity;
-	sfn::SyncedType<sf::Color> m_color;
+	sfn::SyncedType<sf::Color, sfn::SynchronizationType::Static> m_color;
 
 	// Link used to communicate with the player.
 	std::shared_ptr<sfn::Link<sfn::TcpSocket>> m_link;

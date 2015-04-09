@@ -49,7 +49,7 @@ public:
 	const static object_type_id_type type_id;
 
 	ChatLog() :
-		m_chat_messages{ this, sfn::SynchronizationType::Dynamic }
+		m_chat_messages{ this }
 	{
 	}
 
@@ -134,8 +134,8 @@ public:
 	const static object_type_id_type type_id;
 
 	Bullet() :
-		m_position{ this, sfn::SynchronizationType::Stream },
-		m_velocity{ this, sfn::SynchronizationType::Dynamic }
+		m_position{ this },
+		m_velocity{ this }
 	{
 		m_shape.setRadius( 5 );
 		m_shape.setOrigin( { 5.f, 5.f } );
@@ -177,8 +177,8 @@ protected:
 	}
 
 private:
-	sfn::SyncedType<sf::Vector2f> m_position;
-	sfn::SyncedType<sf::Vector2f> m_velocity;
+	sfn::SyncedType<sf::Vector2f, sfn::SynchronizationType::Stream> m_position;
+	sfn::SyncedType<sf::Vector2f, sfn::SynchronizationType::Dynamic> m_velocity;
 
 	sf::Clock m_update_clock{};
 
@@ -193,12 +193,12 @@ public:
 	const static object_type_id_type type_id;
 
 	Player() :
-		m_position{ this, sfn::SynchronizationType::Stream },
-		m_velocity{ this, sfn::SynchronizationType::Stream },
-		m_acceleration{ this, sfn::SynchronizationType::Dynamic },
-		m_rotation{ this, sfn::SynchronizationType::Stream },
-		m_rotational_velocity{ this, sfn::SynchronizationType::Dynamic },
-		m_color{ this, sfn::SynchronizationType::Static }
+		m_position{ this },
+		m_velocity{ this },
+		m_acceleration{ this },
+		m_rotation{ this },
+		m_rotational_velocity{ this },
+		m_color{ this }
 	{
 		m_shape.setPoint( 0, { 0.f, -15.f } );
 		m_shape.setPoint( 1, { -10.f, 15.f } );
@@ -269,12 +269,12 @@ protected:
 	}
 
 private:
-	sfn::SyncedType<sf::Vector2f> m_position;
-	sfn::SyncedType<sf::Vector2f> m_velocity;
+	sfn::SyncedType<sf::Vector2f, sfn::SynchronizationType::Stream> m_position;
+	sfn::SyncedType<sf::Vector2f, sfn::SynchronizationType::Stream> m_velocity;
 	sfn::SyncedFloat m_acceleration;
-	sfn::SyncedFloat m_rotation;
+	sfn::SyncedType<float, sfn::SynchronizationType::Stream> m_rotation;
 	sfn::SyncedFloat m_rotational_velocity;
-	sfn::SyncedType<sf::Color> m_color;
+	sfn::SyncedType<sf::Color, sfn::SynchronizationType::Static> m_color;
 
 	sf::Clock m_update_clock{};
 

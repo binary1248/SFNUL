@@ -96,22 +96,22 @@ void SyncedObject::SetID( SyncedObject::id_type id ) {
 void SyncedObject::RegisterMember( BaseSyncedType* member ) {
 	m_members.emplace_back( member );
 	m_members.shrink_to_fit();
+}
 
-	if( !m_last_stream_sync && ( member->GetSynchronizationType() == SynchronizationType::Stream ) ) {
+void SyncedObject::EnableStreaming() {
+	if( !m_last_stream_sync ) {
 		m_last_stream_sync = make_unique<std::chrono::steady_clock::time_point>( std::chrono::steady_clock::now() );
 	}
 }
 
 void SyncedObject::NotifyChanged() {
-	m_changed = true;
-
 	if( m_synchronizer ) {
 		m_synchronizer->UpdateObject( this );
 	}
 }
 
 void SyncedObject::CheckStreamUpdate() {
-	if( m_synchronizer && m_last_stream_sync && ( std::chrono::steady_clock::now() - ( *m_last_stream_sync ) > BaseSyncedType::m_sync_period ) ) {
+	if( m_synchronizer && m_last_stream_sync && ( std::chrono::steady_clock::now() - ( *m_last_stream_sync ) > GetStreamSynchronizationPeriod() ) ) {
 		*m_last_stream_sync = std::chrono::steady_clock::now();
 		m_synchronizer->UpdateObject( this );
 	}

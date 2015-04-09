@@ -16,31 +16,11 @@ public:
 	// Requirement #1:
 	// You MUST provide at least one non-copy constructor.
 	// All Synced member fields MUST be initialized with ( this )
-	// or ( this, sync_type, value ).
-	// The synchronization type of the member can be very important depending on
-	// what the purpose of the member is and how it interacts with the rest of
-	// your application. It defaults to DYNAMIC for the first signature.
-	// STATIC synchronization means that the member should only be synchronized
-	// at the construction of the object. It is set once and never changed again
-	// throughout the lifetime of the object.
-	// DYNAMIC synchronization means that the member is synchronized when it is
-	// altered. This can be desirable in the case of e.g. user input which has
-	// an impact on the value of the member. When the member is not altered,
-	// no synchronization will take place.
-	// STREAM synchronization means that the member will be synchronized
-	// occasionally regardless of whether its value changes or not. This can be
-	// desirable e.g. in the case of values that are the result of physical
-	// computations or otherwise the derivative of other values that change very
-	// often. To prevent STREAM synchronization from consuming a lot of
-	// throughput, STREAM members are only synchronized after a user definable
-	// period of time has passed since the last synchronization or during a
-	// DYNAMIC synchronization. Set the period with
-	// SetStreamSynchronizationPeriod() based on testing of the network and
-	// state update performance.
+	// or ( this, value ).
 	Coordinate() :
-		x{ this, sfn::SynchronizationType::Dynamic, 300.f },
-		y{ this, sfn::SynchronizationType::Dynamic, 200.f },
-		color{ this, sfn::SynchronizationType::Static, sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 } }
+		x{ this, 300.f },
+		y{ this, 200.f },
+		color{ this, sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 } }
 	{
 	}
 
@@ -58,9 +38,9 @@ public:
 	// to replicating the contained values. The underlying SyncedObject still
 	// has to be created as with the default constructor.
 	Coordinate( const Coordinate& coordinate ) :
-		x{ this, sfn::SynchronizationType::Dynamic, coordinate.x },
-		y{ this, sfn::SynchronizationType::Dynamic, coordinate.y },
-		color{ this, sfn::SynchronizationType::Static, coordinate.color }
+		x{ this, coordinate.x },
+		y{ this, coordinate.y },
+		color{ this, coordinate.color }
 	{
 	}
 
@@ -83,9 +63,9 @@ public:
 	// object is constructed due to the constraints mentioned above.
 	Coordinate( Coordinate&& coordinate ) :
 		sfn::SyncedObject{ std::forward<sfn::SyncedObject>( coordinate ) },
-		x{ this, sfn::SynchronizationType::Dynamic, coordinate.x },
-		y{ this, sfn::SynchronizationType::Dynamic, coordinate.y },
-		color{ this, sfn::SynchronizationType::Static, coordinate.color }
+		x{ this, coordinate.x },
+		y{ this, coordinate.y },
+		color{ this, coordinate.color }
 	{
 	}
 
@@ -109,15 +89,39 @@ public:
 	}
 
 	// Requirement #5:
-	// Synchronized data storage. All types that make use of the SyncedType<T>
-	// template are automatically synchronized with remote hosts upon mutation.
+	// Synchronized data storage. All types that make use of the
+	// SyncedType<T, SyncType> template are automatically synchronized with
+	// remote hosts upon mutation.
 	// There are provided typedefs for common types such as SyncedInt32,
 	// SyncedFloat, SyncedUint16, SyncedBool, etc.
 	// It is essential that the ordering of these members stays the same
 	// on all systems or they won't get properly synchronized.
+	// The second template parameter of sfn::SyncedType specifies the type
+	// of the synchronization performed.
+	// The synchronization type of the member can be very important depending on
+	// what the purpose of the member is and how it interacts with the rest of
+	// your application. It defaults to DYNAMIC for the first signature.
+	// STATIC synchronization means that the member should only be synchronized
+	// at the construction of the object. It is set once and never changed again
+	// throughout the lifetime of the object.
+	// DYNAMIC synchronization means that the member is synchronized when it is
+	// altered. This can be desirable in the case of e.g. user input which has
+	// an impact on the value of the member. When the member is not altered,
+	// no synchronization will take place.
+	// STREAM synchronization means that the member will be synchronized
+	// occasionally regardless of whether its value changes or not. This can be
+	// desirable e.g. in the case of values that are the result of physical
+	// computations or otherwise the derivative of other values that change very
+	// often. To prevent STREAM synchronization from consuming a lot of
+	// throughput, STREAM members are only synchronized after a user definable
+	// period of time has passed since the last synchronization or during a
+	// DYNAMIC synchronization. Set the period with
+	// SetStreamSynchronizationPeriod() based on testing of the network and
+	// state update performance.
+	// The default synchronization type is sfn::SynchronizationType::Dynamic.
 	sfn::SyncedFloat x;
 	sfn::SyncedFloat y;
-	sfn::SyncedType<sf::Color> color;
+	sfn::SyncedType<sf::Color, sfn::SynchronizationType::Static> color;
 
 	// SFML Visualisation part...
 	void Draw( sf::RenderWindow& window ) {
@@ -169,7 +173,7 @@ int main( int /*argc*/, char** argv ) {
 		// Create our TCP listener socket.
 		auto listener = sfn::TcpListener::Create();
 
-		// Listen on 0.0.0.0:13337
+		// Listen on 0.0.0.0:31337
 		listener->Listen( sfn::Endpoint{ sfn::IpAddress{ "0.0.0.0" }, 31337 } );
 
 		// A standard STL container to store our objects.

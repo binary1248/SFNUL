@@ -5,19 +5,30 @@
 #include <SFNUL/SyncedType.hpp>
 #include <SFNUL/SyncedObject.hpp>
 
-namespace sfn {
+namespace {
 
-SFNUL_API void SetStreamSynchronizationPeriod( const std::chrono::milliseconds& period ) {
-	BaseSyncedType::m_sync_period = period;
+std::chrono::milliseconds sync_period{ 1000 };
+
 }
 
-std::chrono::milliseconds BaseSyncedType::m_sync_period{ 1000 };
+namespace sfn {
 
-BaseSyncedType::BaseSyncedType( SyncedObject* owner, SynchronizationType sync_type ) :
-	m_sync_type( sync_type ),
+void SetStreamSynchronizationPeriod( const std::chrono::milliseconds& period ) {
+	sync_period = period;
+}
+
+std::chrono::milliseconds GetStreamSynchronizationPeriod() {
+	return sync_period;
+}
+
+BaseSyncedType::BaseSyncedType( SyncedObject* owner, bool stream ) :
 	m_owner( owner )
 {
 	owner->RegisterMember( this );
+
+	if( stream ) {
+		owner->EnableStreaming();
+	}
 }
 
 BaseSyncedType::~BaseSyncedType() {
@@ -39,10 +50,6 @@ void BaseSyncedType::SetModified( bool modified ) {
 	m_modified = modified;
 
 	m_owner->NotifyChanged();
-}
-
-SynchronizationType BaseSyncedType::GetSynchronizationType() const {
-	return m_sync_type;
 }
 
 }
