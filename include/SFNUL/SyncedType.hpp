@@ -43,6 +43,7 @@ public:
 	virtual void SetModified( bool modified ) = 0;
 
 	/** Get the synchronization type set for this object.
+	 * @return The synchronization type set for this object.
 	 */
 	virtual SynchronizationType GetSynchronizationType() const = 0;
 
@@ -80,32 +81,58 @@ public:
 
 	typedef decltype( &m_value ) address_type;
 
+	/** Constructor.
+	 */
 	explicit SyncedType( SyncedObject* owner );
 
+	/** Copy constructor (from value_type).
+	 */
 	explicit SyncedType( SyncedObject* owner, const value_type& value );
 
+	/** Move constructor (from value_type).
+	 */
 	explicit SyncedType( SyncedObject* owner, value_type&& value );
 
+	/** Copy constructor.
+	 */
 	template<SynchronizationType V>
 	explicit SyncedType( SyncedObject* owner, const SyncedType<value_type, V>& other );
 
+	/** Set the value stored in this SyncedType.
+	 * @param value The new value to be stored in this SyncedType.
+	 */
 	void SetValue( value_type value );
 
+	/** Get the value stored in this SyncedType.
+	 * @return The value stored in this SyncedType.
+	 */
 	value_type GetValue() const;
 
+	/** Assignment operator.
+	 */
 	template<typename S>
 	SyncedType<value_type, U>& operator=( S other );
 
+	/** Array subscript operator.
+	 */
 	template<typename S>
 	auto operator[]( S other ) const -> decltype( value_type{}[other] );
 
+	/** Array subscript operator.
+	 */
 	template<typename S>
 	auto operator[]( S other ) -> decltype( value_type{}[other] );
 
+	/** Type conversion.
+	 */
 	operator T() const;
 
+	/** Structure dereference operator.
+	 */
 	auto operator->() const -> address_type;
 
+	/** Structure dereference operator.
+	 */
 	auto operator->() -> address_type;
 
 private:
