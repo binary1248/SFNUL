@@ -158,6 +158,32 @@ SFNUL_API void InsertAtEnd( T& container, typename T::value_type&& value ) {
 
 namespace sfn {
 
+/// @cond
+template<std::size_t S = 0, typename... T>
+SFNUL_API typename std::enable_if<S == sizeof...(T), Message&>::type operator<<( Message& message, const std::tuple<T...>& input ) {
+	return message;
+}
+
+template<std::size_t S = 0, typename... T>
+SFNUL_API typename std::enable_if<S < sizeof...(T), Message&>::type operator<<( Message& message, const std::tuple<T...>& input ) {
+	message << std::get<S>( input );
+
+	return operator<<<S + 1, T...>( message, input );
+}
+
+template<std::size_t S = 0, typename... T>
+SFNUL_API typename std::enable_if<S == sizeof...(T), Message&>::type operator>>( const std::tuple<T...>& input, Message& message ) {
+	return message;
+}
+
+template<std::size_t S = 0, typename... T>
+SFNUL_API typename std::enable_if<S < sizeof...(T), Message&>::type operator>>( const std::tuple<T...>& input, Message& message ) {
+	std::get<S>( input ) >> message;
+
+	return operator>><S + 1, T...>( input, message );
+}
+/// @endcond
+
 template<typename T, typename std::enable_if<std::is_trivial<T>::value, int>::type = 0>
 SFNUL_API Message& operator<<( Message& message, const T& input ) {
 	std::vector<char> data( sizeof( T ) );
@@ -255,6 +281,20 @@ SFNUL_API Message& operator>>( const std::array<T, N>& input, Message& message )
 
 	return message;
 }
+
+/// @cond
+template<std::size_t S = 0, typename... T>
+SFNUL_API typename std::enable_if<S == sizeof...(T), Message&>::type operator>>( Message& message, std::tuple<T...>& output ) {
+	return message;
+}
+
+template<std::size_t S = 0, typename... T>
+SFNUL_API typename std::enable_if<S < sizeof...(T), Message&>::type operator>>( Message& message, std::tuple<T...>& output ) {
+	message >> std::get<S>( output );
+
+	return operator>><S + 1>( message, output );
+}
+/// @endcond
 
 template<typename T, typename std::enable_if<std::is_trivial<T>::value, int>::type = 0>
 SFNUL_API Message& operator>>( Message& message, T& output ) {

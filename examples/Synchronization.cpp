@@ -5,10 +5,11 @@
 #include <iostream>
 #include <random>
 #include <atomic>
+#include <tuple>
 #include <SFNUL.hpp>
 
 // This is an example of a SyncedObject.
-class Coordinate : public sfn::SyncedObject {
+class Object : public sfn::SyncedObject {
 public:
 	// SFNUL Synchronization part...
 	const static object_type_id_type type_id;
@@ -17,9 +18,10 @@ public:
 	// You MUST provide at least one non-copy constructor.
 	// All Synced member fields MUST be initialized with ( this )
 	// or ( this, value ).
-	Coordinate() :
+	Object() :
 		x{ this, 300 },
-		y{ this, 200 }
+		y{ this, 200 },
+		t{ this, std::make_tuple( 0.0, std::string{} ) }
 	{
 	}
 
@@ -36,15 +38,17 @@ public:
 	// If you still want to enable support for copying, it has to be limited
 	// to replicating the contained values. The underlying SyncedObject still
 	// has to be created as with the default constructor.
-	Coordinate( const Coordinate& coordinate ) :
-		x{ this, coordinate.x },
-		y{ this, coordinate.y }
+	Object( const Object& object ) :
+		x{ this, object.x },
+		y{ this, object.y },
+		t{ this, object.t }
 	{
 	}
 
-	Coordinate& operator=( const Coordinate& coordinate ) {
-		x = coordinate.x;
-		y = coordinate.y;
+	Object& operator=( const Object& object ) {
+		x = object.x;
+		y = object.y;
+		t = object.t;
 
 		return *this;
 	}
@@ -58,18 +62,20 @@ public:
 	// are neither copyable nor moveable.
 	// You must always construct new instances of them when your
 	// object is constructed due to the constraints mentioned above.
-	Coordinate( Coordinate&& coordinate ) :
-		sfn::SyncedObject{ std::forward<sfn::SyncedObject>( coordinate ) },
-		x{ this, coordinate.x },
-		y{ this, coordinate.y }
+	Object( Object&& object ) :
+		sfn::SyncedObject{ std::forward<sfn::SyncedObject>( object ) },
+		x{ this, object.x },
+		y{ this, object.y },
+		t{ this, object.t }
 	{
 	}
 
-	Coordinate& operator=( Coordinate&& coordinate ) {
-		static_cast<sfn::SyncedObject*>( this )->operator=( std::forward<sfn::SyncedObject>( coordinate ) );
+	Object& operator=( Object&& object ) {
+		static_cast<sfn::SyncedObject*>( this )->operator=( std::forward<sfn::SyncedObject>( object ) );
 
-		x = coordinate.x;
-		y = coordinate.y;
+		x = object.x;
+		y = object.y;
+		t = object.t;
 
 		return *this;
 	}
@@ -115,10 +121,17 @@ public:
 	// Both of the following types are identical.
 	sfn::SyncedType<sfn::Int32, sfn::SynchronizationType::Dynamic> x;
 	sfn::SyncedInt32 y;
+
+	// We can manage std::tuples this way as well. However, bear in mind that the
+	// entire tuple will be marked as out-of-date as soon as a single element is
+	// modified. The tuple will also have a single synchronization type.
+	// Use std::get<0>( t.GetValue() ) to get a const reference to an element and
+	// std::get<0>( t.Get() ) to get a non-const reference to an element.
+	sfn::SyncedType<std::tuple<double, std::string>> t;
 };
 
-// Our Coordinate object type id.
-const Coordinate::object_type_id_type Coordinate::type_id = 0x1337;
+// Our Object object type id.
+const Object::object_type_id_type Object::type_id = 0x1337;
 
 int main( int /*argc*/, char** argv ) {
 	std::atomic_bool exit{ false };
@@ -137,7 +150,7 @@ int main( int /*argc*/, char** argv ) {
 		listener->Listen( sfn::Endpoint{ sfn::IpAddress{ "0.0.0.0" }, 31337 } );
 
 		// A standard STL container to store our objects.
-		std::deque<Coordinate> coordinates{};
+		std::deque<Object> objects{};
 
 		// Our Synchronizer.
 		// It is of type SynchronizerServer because in server mode we want it to be
@@ -162,22 +175,26 @@ int main( int /*argc*/, char** argv ) {
 		// The resulting object can be moved around as much as we want, since
 		// we took care of supporting moves in our class definition.
 		// In this case, the move constructor is invoked.
-		coordinates.emplace_back( synchronizer.CreateObject<Coordinate>() );
+		objects.emplace_back( synchronizer.CreateObject<Object>() );
 
 		std::mt19937 gen{};
-		std::uniform_int_distribution<sfn::Int32> dist{ -100, 100 };
+		std::uniform_int_distribution<sfn::Int32> int_dist{ -100, 100 };
+		std::uniform_real_distribution<double> real_dist{ -1.0, 1.0 };
+		std::uniform_int_distribution<sfn::Uint8> char_dist{ 65, 90 };
 
-		// Move construct a few more new Coordinate objects.
-		coordinates.emplace_back( synchronizer.CreateObject<Coordinate>() );
-		coordinates.emplace_back( synchronizer.CreateObject<Coordinate>() );
-		coordinates.emplace_back( synchronizer.CreateObject<Coordinate>() );
-		coordinates.emplace_back( synchronizer.CreateObject<Coordinate>() );
-		coordinates.emplace_back( synchronizer.CreateObject<Coordinate>() );
-		coordinates.emplace_back( synchronizer.CreateObject<Coordinate>() );
+		// Move construct a few more new Object objects.
+		objects.emplace_back( synchronizer.CreateObject<Object>() );
+		objects.emplace_back( synchronizer.CreateObject<Object>() );
+		objects.emplace_back( synchronizer.CreateObject<Object>() );
+		objects.emplace_back( synchronizer.CreateObject<Object>() );
 
-		for( auto& c : coordinates ) {
-			c.x += dist( gen );
-			c.y += dist( gen );
+		for( auto& o : objects ) {
+			o.x += int_dist( gen );
+			o.y += int_dist( gen );
+			std::get<0>( o.t.Get() ) += real_dist( gen );
+			std::get<1>( o.t.Get() ) += static_cast<char>( char_dist( gen ) );
+			std::get<1>( o.t.Get() ) += static_cast<char>( char_dist( gen ) );
+			std::get<1>( o.t.Get() ) += static_cast<char>( char_dist( gen ) );
 		}
 
 		while( !exit ) {
@@ -213,8 +230,8 @@ int main( int /*argc*/, char** argv ) {
 			// Update the synchronizer to broadcast the state to associated hosts.
 			synchronizer.Update();
 
-			for( auto& c : coordinates ) {
-				std::cout << "(" << c.x << "," << c.y << ") ";
+			for( auto& o : objects ) {
+				std::cout << "(" << o.x << "," << o.y << "," << std::get<0>( o.t.GetValue() ) << "," << std::get<1>( o.t.GetValue() ) << ") ";
 			}
 			std::cout << "\n";
 		}
@@ -256,7 +273,7 @@ int main( int /*argc*/, char** argv ) {
 		link->Connect( sfn::Endpoint{ addresses.front(), 31337 } );
 
 		// A standard STL container to store our objects.
-		std::deque<Coordinate> coordinates{};
+		std::deque<Object> objects{};
 
 		// Our Synchronizer.
 		// It is of type SynchronizerClient because in client mode we don't want
@@ -274,7 +291,7 @@ int main( int /*argc*/, char** argv ) {
 		// have to be specified for each object type. These are std::function
 		// objects and are hence compatible with function pointers, functors,
 		// lambda functions/closures, std::bind expressions etc.
-		synchronizer.SetLifetimeManagers( Coordinate::type_id,
+		synchronizer.SetLifetimeManagers( Object::type_id,
 			// First the factory.
 			// This function is called when the synchronizer requires the
 			// client to create a new object with the given type id.
@@ -282,9 +299,9 @@ int main( int /*argc*/, char** argv ) {
 			// a non-owning pointer to it.
 			// Signature:
 			// sfn::SyncedObject* Factory()
-			[&coordinates]() {
-				coordinates.emplace_back();
-				return &coordinates.back();
+			[&objects]() {
+				objects.emplace_back();
+				return &objects.back();
 			},
 
 			// Then the destructor.
@@ -296,15 +313,15 @@ int main( int /*argc*/, char** argv ) {
 			// the associated object from the local game state.
 			// Signature:
 			// void Destructor( sfn::SyncedObject* )
-			[&coordinates]( sfn::SyncedObject* coordinate ) {
-				auto iter = std::find_if( std::begin( coordinates ), std::end( coordinates ),
-					[coordinate]( const Coordinate& element ) {
-						return coordinate == &element;
+			[&objects]( sfn::SyncedObject* object ) {
+				auto iter = std::find_if( std::begin( objects ), std::end( objects ),
+					[object]( const Object& element ) {
+						return object == &element;
 					}
 				);
 
-				if( iter != std::end( coordinates ) ) {
-					coordinates.erase( iter );
+				if( iter != std::end( objects ) ) {
+					objects.erase( iter );
 				}
 			}
 		);
@@ -335,8 +352,8 @@ int main( int /*argc*/, char** argv ) {
 			// Update the synchronizer to receive the state from associated hosts.
 			synchronizer.Update();
 
-			for( auto& c : coordinates ) {
-				std::cout << "(" << c.x << "," << c.y << ") ";
+			for( auto& o : objects ) {
+				std::cout << "(" << o.x << "," << o.y << "," << std::get<0>( o.t.GetValue() ) << "," << std::get<1>( o.t.GetValue() ) << ") ";
 			}
 			std::cout << "\n";
 		}

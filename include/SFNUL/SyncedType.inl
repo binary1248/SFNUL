@@ -47,9 +47,13 @@ bool SyncedType<T, U>::GetModified() const {
 
 template<typename T, SynchronizationType U>
 void SyncedType<T, U>::SetModified( bool modified ) {
-	m_modified = modified;
+	if( m_modified != modified ) {
+		m_modified = modified;
 
-	NotifyChanged( m_owner );
+		if( m_modified ) {
+			NotifyChanged( m_owner );
+		}
+	}
 }
 
 template<typename T, SynchronizationType U>
@@ -63,7 +67,7 @@ SynchronizationType SyncedType<T, U>::GetSynchronizationType() const {
 #endif
 
 template<typename T, SynchronizationType U>
-void SyncedType<T, U>::SetValue( T value ) {
+void SyncedType<T, U>::SetValue( const T& value ) {
 	if( value != m_value ) {
 		SetModified( true );
 		m_value = value;
@@ -71,7 +75,13 @@ void SyncedType<T, U>::SetValue( T value ) {
 }
 
 template<typename T, SynchronizationType U>
-T SyncedType<T, U>::GetValue() const {
+const T& SyncedType<T, U>::GetValue() const {
+	return m_value;
+}
+
+template<typename T, SynchronizationType U>
+T& SyncedType<T, U>::Get() {
+	SetModified( true );
 	return m_value;
 }
 
@@ -366,7 +376,13 @@ auto SyncedType<T, U>::operator[]( S other ) -> decltype( SyncedType<T, U>::valu
 }
 
 template<typename T, SynchronizationType U>
-SyncedType<T, U>::operator T() const {
+SyncedType<T, U>::operator const T&() const {
+	return m_value;
+}
+
+template<typename T, SynchronizationType U>
+SyncedType<T, U>::operator T&() {
+	SetModified( true );
 	return m_value;
 }
 

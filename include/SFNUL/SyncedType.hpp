@@ -101,12 +101,17 @@ public:
 	/** Set the value stored in this SyncedType.
 	 * @param value The new value to be stored in this SyncedType.
 	 */
-	void SetValue( value_type value );
+	void SetValue( const value_type& value );
 
 	/** Get the value stored in this SyncedType.
 	 * @return The value stored in this SyncedType.
 	 */
-	value_type GetValue() const;
+	const value_type& GetValue() const;
+
+	/** Get a reference to the value stored in this SyncedType.
+	 * @return A reference to the value stored in this SyncedType.
+	 */
+	value_type& Get();
 
 	/** Assignment operator.
 	 */
@@ -125,7 +130,11 @@ public:
 
 	/** Type conversion.
 	 */
-	operator T() const;
+	operator const T&() const;
+
+	/** Type conversion.
+	 */
+	operator T&();
 
 	/** Structure dereference operator.
 	 */

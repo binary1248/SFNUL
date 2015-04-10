@@ -50,9 +50,9 @@ SyncedObject& SyncedObject::operator=( SyncedObject&& object ) {
 }
 
 SyncedObject::~SyncedObject() {
-  if( m_synchronizer ) {
+	if( m_synchronizer ) {
 		m_synchronizer->RemoveObject( this );
-  }
+	}
 }
 
 Message SyncedObject::Serialize( SynchronizationType sync_type ) {
@@ -62,6 +62,7 @@ Message SyncedObject::Serialize( SynchronizationType sync_type ) {
 
 	for( auto m : m_members ) {
 		m->Serialize( message, sync_type );
+		m->SetModified( false );
 	}
 
 	if( m_last_stream_sync ) {
