@@ -1,0 +1,5 @@
+define CMAC 20131128
+
+<requires>
+block
+</requires>

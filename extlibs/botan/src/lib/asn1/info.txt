@@ -1,0 +1,10 @@
+define ASN1 20131128
+
+load_on auto
+
+<requires>
+alloc
+bigint
+filters
+oid_lookup
+</requires>

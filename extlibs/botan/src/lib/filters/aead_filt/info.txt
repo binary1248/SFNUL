@@ -1,0 +1,5 @@
+define AEAD_FILTER 20131128
+
+<requires>
+aead
+</requires>

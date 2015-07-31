@@ -1,0 +1,9 @@
+define LOCKING_ALLOCATOR 20131128
+
+<os>
+linux
+freebsd
+netbsd
+openbsd
+solaris
+</os>

@@ -1,0 +1,9 @@
+define BCRYPT 20131128
+
+<requires>
+libstate
+blowfish
+rng
+base64
+</requires>
+

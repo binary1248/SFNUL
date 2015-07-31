@@ -1,0 +1,9 @@
+define AES_NI 20131128
+
+load_on auto
+
+need_isa aesni
+
+<requires>
+aes_isa_eng
+</requires>

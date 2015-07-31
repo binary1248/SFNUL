@@ -1,0 +1,8 @@
+define TRANSFORM 20131209
+
+<requires>
+alloc
+filters
+hex
+rng
+</requires>

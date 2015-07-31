@@ -1,0 +1,10 @@
+define IF_PUBLIC_KEY_FAMILY 20131128
+
+load_on dep
+
+<requires>
+asn1
+bigint
+libstate
+numbertheory
+</requires>
