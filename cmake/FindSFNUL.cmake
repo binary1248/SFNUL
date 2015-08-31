@@ -213,7 +213,7 @@ if( SFNUL_STATIC_LIBRARIES )
 	endif()
 
 	if( ${CMAKE_SYSTEM_NAME} MATCHES "Windows" )
-		set( SFNUL_DEPENDENCIES ${SFNUL_DEPENDENCIES} "ws2_32" )
+		set( SFNUL_DEPENDENCIES ${SFNUL_DEPENDENCIES} "ws2_32" "mswsock" )
 	elseif( ${CMAKE_SYSTEM_NAME} MATCHES "Darwin" )
 		find_library( COREFOUNDATION_LIBRARY CoreFoundation )
 		
