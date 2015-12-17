@@ -49,7 +49,7 @@ public:
 		m_parser_settings.on_message_complete = OnMessageComplete;
 	}
 
-#if !defined( _MSC_VER )
+#if !defined( SFNUL_BROKEN_CXX11 )
 	HTTPClientPipeline( HTTPClientPipeline&& ) = default;
 #endif
 

@@ -68,8 +68,8 @@
 	#define ASIO_HAS_CSTDINT 1
 #endif
 
-// VS2013 support, because asio doesn't detect it
-#if defined( _MSC_VER ) && ( _MSC_VER == 1800 )
+// VS2013 and later support, because asio doesn't detect it
+#if defined( _MSC_VER ) && ( _MSC_VER >= 1800 )
 	#define ASIO_HAS_MOVE 1
 	#define ASIO_HAS_VARIADIC_TEMPLATES 1
 	#define ASIO_HAS_HANDLER_HOOKS 1

@@ -180,7 +180,7 @@ int main( int /*argc*/, char** argv ) {
 		std::mt19937 gen{};
 		std::uniform_int_distribution<sfn::Int32> int_dist{ -100, 100 };
 		std::uniform_real_distribution<double> real_dist{ -1.0, 1.0 };
-		std::uniform_int_distribution<sfn::Uint8> char_dist{ 65, 90 };
+		std::uniform_int_distribution<sfn::Uint16> char_dist{ 65, 90 };
 
 		// Move construct a few more new Object objects.
 		objects.emplace_back( synchronizer.CreateObject<Object>() );

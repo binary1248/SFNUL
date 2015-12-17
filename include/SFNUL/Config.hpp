@@ -20,4 +20,8 @@
 #if defined( _MSC_VER )
 	#pragma warning(disable : 4251) // Suppress a warning which is meaningless for us
 	#pragma warning(disable : 4503) // Suppress warnings about truncated names. Enable again if linker errors occur.
+
+	#if ( _MSC_VER < 1900 )
+		#define SFNUL_BROKEN_CXX11
+	#endif
 #endif

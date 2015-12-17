@@ -4,7 +4,7 @@
 
 #include <memory>
 
-#if !defined( _MSC_VER )
+#if !defined( _MSC_VER ) || ( _MSC_VER < 1800 )
 // Until C++14 comes along...
 template<typename T, typename... Args>
 inline std::unique_ptr<T> make_unique( Args&&... args ) {

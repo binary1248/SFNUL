@@ -20,7 +20,7 @@ public:
 
 	Thread( const Thread& other ) = delete;
 
-#if !defined( _MSC_VER )
+#if !defined( SFNUL_BROKEN_CXX11 )
 	Thread( Thread&& other ) = default;
 #endif
 
@@ -38,7 +38,7 @@ protected:
 		~ScopedLock();
 		ScopedLock( const ScopedLock& other ) = delete;
 
-#if !defined( _MSC_VER )
+#if !defined( SFNUL_BROKEN_CXX11 )
 		ScopedLock( ScopedLock&& other ) = default;
 #endif
 
@@ -52,13 +52,13 @@ protected:
 	~Atomic();
 	Atomic( const Atomic& other ) = delete;
 
-#if !defined( _MSC_VER )
+#if !defined( SFNUL_BROKEN_CXX11 )
 	Atomic( Atomic&& other ) = default;
 #endif
 
 	Atomic& operator=( const Atomic& other ) = delete;
 
-#if !defined( _MSC_VER )
+#if !defined( SFNUL_BROKEN_CXX11 )
 	Atomic& operator=( Atomic&& other ) = default;
 #endif
 

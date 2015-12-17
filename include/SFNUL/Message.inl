@@ -159,28 +159,35 @@ SFNUL_API void InsertAtEnd( T& container, typename T::value_type&& value ) {
 namespace sfn {
 
 /// @cond
-template<std::size_t S = 0, typename... T>
-SFNUL_API typename std::enable_if<S == sizeof...(T), Message&>::type operator<<( Message& message, const std::tuple<T...>& input ) {
+template<std::size_t N, typename... T>
+SFNUL_API typename std::enable_if<( N == 0 ), Message&>::type operator<<( Message& message, const std::tuple<T...>& input ) {
 	return message;
 }
 
-template<std::size_t S = 0, typename... T>
-SFNUL_API typename std::enable_if<S < sizeof...(T), Message&>::type operator<<( Message& message, const std::tuple<T...>& input ) {
-	message << std::get<S>( input );
-
-	return operator<<<S + 1, T...>( message, input );
+template<std::size_t N, typename... T>
+SFNUL_API typename std::enable_if<( N > 0 ), Message&>::type operator<<( Message& message, const std::tuple<T...>& input ) {
+	return operator<<<( N - 1 )>( message, input ) << std::get<( N - 1 )>( input );
 }
 
-template<std::size_t S = 0, typename... T>
-SFNUL_API typename std::enable_if<S == sizeof...(T), Message&>::type operator>>( const std::tuple<T...>& input, Message& message ) {
+template<typename... T>
+SFNUL_API Message& operator<<( Message& message, const std::tuple<T...>& input ) {
+	return operator<<<sizeof...( T )>( message, input );
+}
+
+template<std::size_t N, typename... T>
+SFNUL_API typename std::enable_if<( N == 0 ), Message&>::type operator>>( const std::tuple<T...>& input, Message& message ) {
 	return message;
 }
 
-template<std::size_t S = 0, typename... T>
-SFNUL_API typename std::enable_if<S < sizeof...(T), Message&>::type operator>>( const std::tuple<T...>& input, Message& message ) {
-	std::get<S>( input ) >> message;
+template<std::size_t N, typename... T>
+SFNUL_API typename std::enable_if<( N > 0 ), Message&>::type operator>>( const std::tuple<T...>& input, Message& message ) {
+	operator>><( N - 1 )>( input, message );
+	return std::get<( N - 1 )>( input ) >> message;
+}
 
-	return operator>><S + 1, T...>( input, message );
+template<typename... T>
+SFNUL_API Message& operator>>( const std::tuple<T...>& input, Message& message ) {
+	return operator>><sizeof...( T )>( input, message );
 }
 /// @endcond
 
@@ -283,16 +290,19 @@ SFNUL_API Message& operator>>( const std::array<T, N>& input, Message& message )
 }
 
 /// @cond
-template<std::size_t S = 0, typename... T>
-SFNUL_API typename std::enable_if<S == sizeof...(T), Message&>::type operator>>( Message& message, std::tuple<T...>& output ) {
+template<std::size_t N, typename... T>
+SFNUL_API typename std::enable_if<( N == 0 ), Message&>::type operator>>( Message& message, std::tuple<T...>& output ) {
 	return message;
 }
 
-template<std::size_t S = 0, typename... T>
-SFNUL_API typename std::enable_if<S < sizeof...(T), Message&>::type operator>>( Message& message, std::tuple<T...>& output ) {
-	message >> std::get<S>( output );
+template<std::size_t N, typename... T>
+SFNUL_API typename std::enable_if<( N > 0 ), Message&>::type operator>>( Message& message, std::tuple<T...>& output ) {
+	return operator>><( N - 1 )>( message, output ) >> std::get<( N - 1 )>( output );
+}
 
-	return operator>><S + 1>( message, output );
+template<typename... T>
+SFNUL_API Message& operator>>( Message& message, std::tuple<T...>& output ) {
+	return operator>><sizeof...( T )>( message, output );
 }
 /// @endcond
 

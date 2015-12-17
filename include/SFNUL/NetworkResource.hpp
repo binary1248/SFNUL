@@ -26,13 +26,13 @@ protected:
 
 	NetworkResource( const NetworkResource& other ) = delete;
 
-#if !defined( _MSC_VER )
+#if !defined( SFNUL_BROKEN_CXX11 )
 	NetworkResource( NetworkResource&& other ) = default;
 #endif
 
 	NetworkResource& operator=( const NetworkResource& other ) = delete;
 
-#if !defined( _MSC_VER )
+#if !defined( SFNUL_BROKEN_CXX11 )
 	NetworkResource& operator=( NetworkResource&& other ) = default;
 #endif
 

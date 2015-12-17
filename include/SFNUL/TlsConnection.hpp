@@ -38,7 +38,7 @@ enum class TlsVerificationResult : unsigned char {
 	NotTrusted = 1 << 4
 };
 
-#if defined( _MSC_VER )
+#if defined( SFNUL_BROKEN_CXX11 )
 #define CONSTEXPR
 #else
 #define CONSTEXPR constexpr
