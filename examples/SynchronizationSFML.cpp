@@ -20,7 +20,7 @@ public:
 	Coordinate() :
 		x{ this, 300.f },
 		y{ this, 200.f },
-		color{ this, sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 } }
+		color{ this, sf::Color{ static_cast<sf::Uint8>( dist( gen ) ), static_cast<sf::Uint8>( dist( gen ) ), static_cast<sf::Uint8>( dist( gen ) ), 255 } }
 	{
 	}
 
@@ -70,7 +70,7 @@ public:
 	}
 
 	Coordinate& operator=( Coordinate&& coordinate ) {
-		static_cast<sfn::SyncedObject*>( this )->operator=( std::forward<sfn::SyncedObject>( coordinate ) );
+		sfn::SyncedObject::operator=( std::forward<sfn::SyncedObject>( coordinate ) );
 
 		x = coordinate.x;
 		y = coordinate.y;
@@ -134,7 +134,7 @@ public:
 	sf::CircleShape shape{ 20.f, 20 };
 
 	static std::mt19937 gen;
-	static std::uniform_int_distribution<sf::Uint8> dist;
+	static std::uniform_int_distribution<sf::Uint16> dist;
 };
 
 // Our Coordinate object type id.
@@ -142,7 +142,7 @@ const Coordinate::object_type_id_type Coordinate::type_id = 0x1337;
 
 // Our random colour generator
 std::mt19937 Coordinate::gen{};
-std::uniform_int_distribution<sf::Uint8> Coordinate::dist{ 0, 255 };
+std::uniform_int_distribution<sf::Uint16> Coordinate::dist{ 0, 255 };
 
 // Of course we need to teach sfn::Message how to deal with sf::Color objects.
 namespace sfn {
@@ -270,7 +270,10 @@ int main( int /*argc*/, char** argv ) {
 			// the RemoveClient() method.
 			for( auto iter = std::begin( links ); iter != std::end( links ); ) {
 				auto transport = ( *iter )->GetTransport();
-				if( !transport || !transport->IsConnected() || transport->RemoteHasShutdown() ) {
+				if( !transport ) {
+					iter = links.erase( iter );
+					continue;
+				} else if( !transport->IsConnected() || transport->RemoteHasShutdown() ) {
 					transport->Shutdown();
 					iter = links.erase( iter );
 					continue;

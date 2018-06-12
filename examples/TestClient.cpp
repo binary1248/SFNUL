@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#include <cctype>
 #include <cmath>
 #include <iostream>
 #include <list>
@@ -458,7 +459,7 @@ int main( int argc, char** argv ) {
 				if( ( event.text.unicode == 8 ) && current_message.getSize() ) { // Backspace
 					current_message.erase( current_message.getSize() - 1, 1 );
 				}
-				else if( std::isprint( event.text.unicode ) ) {
+				else if( ( event.text.unicode < 255 ) && std::isprint( static_cast<char>( event.text.unicode ) ) ) {
 					current_message += event.text.unicode;
 				}
 			} else if( ( event.type == sf::Event::KeyPressed ) && connected && !chatting ) {

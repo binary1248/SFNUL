@@ -159,7 +159,7 @@ public:
 		m_acceleration{ this, 0.f },
 		m_rotation{ this, 0.f },
 		m_rotational_velocity{ this, 0.f },
-		m_color{ this, sf::Color{ dist( gen ), dist( gen ), dist( gen ), 255 } },
+		m_color{ this, sf::Color{ static_cast<sf::Uint8>( dist( gen ) ), static_cast<sf::Uint8>( dist( gen ) ), static_cast<sf::Uint8>( dist( gen ) ), 255 } },
 		m_link{ player_link }
 	{
 	}
@@ -319,14 +319,14 @@ private:
 	bool m_firing{ false };
 
 	static std::mt19937 gen;
-	static std::uniform_int_distribution<sf::Uint8> dist;
+	static std::uniform_int_distribution<sf::Uint16> dist;
 	static std::uniform_real_distribution<float> position_dist;
 };
 
 const Player::object_type_id_type Player::type_id = 0x1337;
 
 std::mt19937 Player::gen{};
-std::uniform_int_distribution<sf::Uint8> Player::dist{ 100, 255 };
+std::uniform_int_distribution<sf::Uint16> Player::dist{ 100, 255 };
 std::uniform_real_distribution<float> Player::position_dist{ -180.f, 180.f };
 
 namespace sfn {

@@ -71,7 +71,7 @@ public:
 	}
 
 	Object& operator=( Object&& object ) {
-		static_cast<sfn::SyncedObject*>( this )->operator=( std::forward<sfn::SyncedObject>( object ) );
+		sfn::SyncedObject::operator=( std::forward<sfn::SyncedObject>( object ) );
 
 		x = object.x;
 		y = object.y;
@@ -219,7 +219,11 @@ int main( int /*argc*/, char** argv ) {
 			// the RemoveClient() method.
 			for( auto iter = std::begin( links ); iter != std::end( links ); ) {
 				auto transport = ( *iter )->GetTransport();
-				if( !transport || !transport->IsConnected() || transport->RemoteHasShutdown() ) {
+
+				if( !transport ) {
+					iter = links.erase( iter );
+					continue;
+				} else if( !transport->IsConnected() || transport->RemoteHasShutdown() ) {
 					transport->Shutdown();
 					iter = links.erase( iter );
 					continue;
