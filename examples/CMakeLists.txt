@@ -13,10 +13,10 @@ function( build_example SAMPLE_NAME SOURCES )
 			set_source_files_properties( ${SOURCES} PROPERTIES COMPILE_FLAGS "-std=c++11 -Wall -Wshadow -Wconversion -Wunreachable-code -Wredundant-decls -Wcast-align -Wfloat-equal -Wformat=2 -Wmissing-declarations -Woverlength-strings -pedantic" )
 		endif()
 	endif()
-	
+
 	add_executable( ${SAMPLE_NAME} ${SOURCES} )
 	target_link_libraries( ${SAMPLE_NAME} sfnul )
-	
+
 	if( WIN32 )
 		target_link_libraries( ${SAMPLE_NAME} ws2_32 mswsock )
 	endif()
@@ -33,21 +33,19 @@ function( build_example SAMPLE_NAME SOURCES )
 endfunction()
 
 function( build_sfml_example SAMPLE_NAME SOURCES )
-	include_directories( SYSTEM ${SFML_INCLUDE_DIR} )
-	
 	# Set default compile flags for GCC
 	if( CMAKE_COMPILER_IS_GNUCXX )
 		if( CMAKE_CXX_COMPILER MATCHES ".*clang[+][+]" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
-			set_source_files_properties( ${SOURCES} PROPERTIES COMPILE_FLAGS "-stdlib=libc++ -std=c++11 -Wall -Wshadow -Wconversion -Wunreachable-code -Wredundant-decls -Wcast-align -Wfloat-equal -Wformat=2 -Wmissing-declarations -Woverlength-strings -pedantic" )
+			set_source_files_properties( ${SOURCES} PROPERTIES COMPILE_FLAGS "-stdlib=libc++ -Wall -Wshadow -Wconversion -Wunreachable-code -Wredundant-decls -Wcast-align -Wfloat-equal -Wformat=2 -Wmissing-declarations -Woverlength-strings -pedantic" )
 		else()
-			set_source_files_properties( ${SOURCES} PROPERTIES COMPILE_FLAGS "-std=c++11 -Wall -Wshadow -Wconversion -Wunreachable-code -Wredundant-decls -Wcast-align -Wfloat-equal -Wformat=2 -Wmissing-declarations -Woverlength-strings -pedantic" )
+			set_source_files_properties( ${SOURCES} PROPERTIES COMPILE_FLAGS "-Wall -Wshadow -Wconversion -Wunreachable-code -Wredundant-decls -Wcast-align -Wfloat-equal -Wformat=2 -Wmissing-declarations -Woverlength-strings -pedantic" )
 		endif()
 	endif()
-	
+
 	add_executable( ${SAMPLE_NAME} ${SOURCES} )
 
-	target_link_libraries( ${SAMPLE_NAME} sfnul ${SFML_LIBRARIES} ${SFML_DEPENDENCIES} )
-	
+	target_link_libraries( ${SAMPLE_NAME} sfnul sfml-graphics sfml-window sfml-system )
+
 	if( WIN32 )
 		target_link_libraries( ${SAMPLE_NAME} ws2_32 mswsock )
 	elseif( APPLE )
@@ -86,18 +84,15 @@ if( SFNUL_BUILD_SFML_EXAMPLES )
 	# A bit of non-trivial information.
 	message( STATUS "If using SFML as a static library remember to set SFML_STATIC_LIBRARIES." )
 
-	# Automatically grab SFML_ROOT from the environment if it exists, or force the user to specify it if it doesn't.
-	set( SFML_ROOT "$ENV{SFML_ROOT}" CACHE PATH "SFML root directory." )
+	# Automatically grab SFML_DIR from the environment if it exists, or force the user to specify it if it doesn't.
+	set( SFML_DIR "$ENV{SFML_DIR}" CACHE PATH "SFML root directory." )
 
-	if( "${SFML_ROOT}" STREQUAL "" )
-		message( FATAL_ERROR "The SFML_ROOT environment variable was not found. Please set SFML_ROOT to the directory where SFML is located." )
+	if( "${SFML_DIR}" STREQUAL "" )
+		message( FATAL_ERROR "The SFML_DIR environment variable was not found. Please set SFML_DIR to the directory where SFML is located." )
 	endif()
 
-	# Add SFML's CMake Modules directory to module search path for finding FindSFML.cmake more easily.
-	set( CMAKE_MODULE_PATH "${SFML_ROOT}/cmake/Modules/;${CMAKE_MODULE_PATH}" )
-	
-	find_package( SFML 2 REQUIRED COMPONENTS graphics window system )
-	
+	find_package( SFML 2 COMPONENTS graphics window system REQUIRED )
+
 	build_sfml_example( "SynchronizationSFML" "SynchronizationSFML.cpp" )
 	build_sfml_example( "TestClient" "TestClient.cpp" )
 	build_sfml_example( "TestServer" "TestServer.cpp" )
