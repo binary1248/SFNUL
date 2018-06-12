@@ -2,13 +2,12 @@
 * CAST-256
 * (C) 1999-2007 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/cast256.h>
 #include <botan/internal/cast_sboxes.h>
 #include <botan/loadstor.h>
-#include <botan/rotate.h>
 
 namespace Botan {
 
@@ -17,31 +16,31 @@ namespace {
 /*
 * CAST-256 Round Type 1
 */
-void round1(u32bit& out, u32bit in, u32bit mask, u32bit rot)
+void round1(uint32_t& out, uint32_t in, uint32_t MK, uint32_t RK)
    {
-   u32bit temp = rotate_left(mask + in, rot);
-   out  ^= (CAST_SBOX1[get_byte(0, temp)] ^ CAST_SBOX2[get_byte(1, temp)]) -
-            CAST_SBOX3[get_byte(2, temp)] + CAST_SBOX4[get_byte(3, temp)];
+   const uint32_t T = rotl_var(MK + in, RK);
+   out ^= (CAST_SBOX1[get_byte(0, T)] ^ CAST_SBOX2[get_byte(1, T)]) -
+           CAST_SBOX3[get_byte(2, T)] + CAST_SBOX4[get_byte(3, T)];
    }
 
 /*
 * CAST-256 Round Type 2
 */
-void round2(u32bit& out, u32bit in, u32bit mask, u32bit rot)
+void round2(uint32_t& out, uint32_t in, uint32_t MK, uint32_t RK)
    {
-   u32bit temp = rotate_left(mask ^ in, rot);
-   out  ^= (CAST_SBOX1[get_byte(0, temp)]  - CAST_SBOX2[get_byte(1, temp)] +
-            CAST_SBOX3[get_byte(2, temp)]) ^ CAST_SBOX4[get_byte(3, temp)];
+   const uint32_t T = rotl_var(MK ^ in, RK);
+   out ^= (CAST_SBOX1[get_byte(0, T)]  - CAST_SBOX2[get_byte(1, T)] +
+           CAST_SBOX3[get_byte(2, T)]) ^ CAST_SBOX4[get_byte(3, T)];
    }
 
 /*
 * CAST-256 Round Type 3
 */
-void round3(u32bit& out, u32bit in, u32bit mask, u32bit rot)
+void round3(uint32_t& out, uint32_t in, uint32_t MK, uint32_t RK)
    {
-   u32bit temp = rotate_left(mask - in, rot);
-   out  ^= ((CAST_SBOX1[get_byte(0, temp)]  + CAST_SBOX2[get_byte(1, temp)]) ^
-             CAST_SBOX3[get_byte(2, temp)]) - CAST_SBOX4[get_byte(3, temp)];
+   const uint32_t T = rotl_var(MK - in, RK);
+   out ^= ((CAST_SBOX1[get_byte(0, T)]  + CAST_SBOX2[get_byte(1, T)]) ^
+            CAST_SBOX3[get_byte(2, T)]) - CAST_SBOX4[get_byte(3, T)];
    }
 
 }
@@ -49,39 +48,41 @@ void round3(u32bit& out, u32bit in, u32bit mask, u32bit rot)
 /*
 * CAST-256 Encryption
 */
-void CAST_256::encrypt_n(const byte in[], byte out[], size_t blocks) const
+void CAST_256::encrypt_n(const uint8_t in[], uint8_t out[], size_t blocks) const
    {
+   verify_key_set(m_RK.empty() == false);
+
    for(size_t i = 0; i != blocks; ++i)
       {
-      u32bit A = load_be<u32bit>(in, 0);
-      u32bit B = load_be<u32bit>(in, 1);
-      u32bit C = load_be<u32bit>(in, 2);
-      u32bit D = load_be<u32bit>(in, 3);
+      uint32_t A = load_be<uint32_t>(in, 0);
+      uint32_t B = load_be<uint32_t>(in, 1);
+      uint32_t C = load_be<uint32_t>(in, 2);
+      uint32_t D = load_be<uint32_t>(in, 3);
 
-      round1(C, D, MK[ 0], RK[ 0]); round2(B, C, MK[ 1], RK[ 1]);
-      round3(A, B, MK[ 2], RK[ 2]); round1(D, A, MK[ 3], RK[ 3]);
-      round1(C, D, MK[ 4], RK[ 4]); round2(B, C, MK[ 5], RK[ 5]);
-      round3(A, B, MK[ 6], RK[ 6]); round1(D, A, MK[ 7], RK[ 7]);
-      round1(C, D, MK[ 8], RK[ 8]); round2(B, C, MK[ 9], RK[ 9]);
-      round3(A, B, MK[10], RK[10]); round1(D, A, MK[11], RK[11]);
-      round1(C, D, MK[12], RK[12]); round2(B, C, MK[13], RK[13]);
-      round3(A, B, MK[14], RK[14]); round1(D, A, MK[15], RK[15]);
-      round1(C, D, MK[16], RK[16]); round2(B, C, MK[17], RK[17]);
-      round3(A, B, MK[18], RK[18]); round1(D, A, MK[19], RK[19]);
-      round1(C, D, MK[20], RK[20]); round2(B, C, MK[21], RK[21]);
-      round3(A, B, MK[22], RK[22]); round1(D, A, MK[23], RK[23]);
-      round1(D, A, MK[27], RK[27]); round3(A, B, MK[26], RK[26]);
-      round2(B, C, MK[25], RK[25]); round1(C, D, MK[24], RK[24]);
-      round1(D, A, MK[31], RK[31]); round3(A, B, MK[30], RK[30]);
-      round2(B, C, MK[29], RK[29]); round1(C, D, MK[28], RK[28]);
-      round1(D, A, MK[35], RK[35]); round3(A, B, MK[34], RK[34]);
-      round2(B, C, MK[33], RK[33]); round1(C, D, MK[32], RK[32]);
-      round1(D, A, MK[39], RK[39]); round3(A, B, MK[38], RK[38]);
-      round2(B, C, MK[37], RK[37]); round1(C, D, MK[36], RK[36]);
-      round1(D, A, MK[43], RK[43]); round3(A, B, MK[42], RK[42]);
-      round2(B, C, MK[41], RK[41]); round1(C, D, MK[40], RK[40]);
-      round1(D, A, MK[47], RK[47]); round3(A, B, MK[46], RK[46]);
-      round2(B, C, MK[45], RK[45]); round1(C, D, MK[44], RK[44]);
+      round1(C, D, m_MK[ 0], m_RK[ 0]); round2(B, C, m_MK[ 1], m_RK[ 1]);
+      round3(A, B, m_MK[ 2], m_RK[ 2]); round1(D, A, m_MK[ 3], m_RK[ 3]);
+      round1(C, D, m_MK[ 4], m_RK[ 4]); round2(B, C, m_MK[ 5], m_RK[ 5]);
+      round3(A, B, m_MK[ 6], m_RK[ 6]); round1(D, A, m_MK[ 7], m_RK[ 7]);
+      round1(C, D, m_MK[ 8], m_RK[ 8]); round2(B, C, m_MK[ 9], m_RK[ 9]);
+      round3(A, B, m_MK[10], m_RK[10]); round1(D, A, m_MK[11], m_RK[11]);
+      round1(C, D, m_MK[12], m_RK[12]); round2(B, C, m_MK[13], m_RK[13]);
+      round3(A, B, m_MK[14], m_RK[14]); round1(D, A, m_MK[15], m_RK[15]);
+      round1(C, D, m_MK[16], m_RK[16]); round2(B, C, m_MK[17], m_RK[17]);
+      round3(A, B, m_MK[18], m_RK[18]); round1(D, A, m_MK[19], m_RK[19]);
+      round1(C, D, m_MK[20], m_RK[20]); round2(B, C, m_MK[21], m_RK[21]);
+      round3(A, B, m_MK[22], m_RK[22]); round1(D, A, m_MK[23], m_RK[23]);
+      round1(D, A, m_MK[27], m_RK[27]); round3(A, B, m_MK[26], m_RK[26]);
+      round2(B, C, m_MK[25], m_RK[25]); round1(C, D, m_MK[24], m_RK[24]);
+      round1(D, A, m_MK[31], m_RK[31]); round3(A, B, m_MK[30], m_RK[30]);
+      round2(B, C, m_MK[29], m_RK[29]); round1(C, D, m_MK[28], m_RK[28]);
+      round1(D, A, m_MK[35], m_RK[35]); round3(A, B, m_MK[34], m_RK[34]);
+      round2(B, C, m_MK[33], m_RK[33]); round1(C, D, m_MK[32], m_RK[32]);
+      round1(D, A, m_MK[39], m_RK[39]); round3(A, B, m_MK[38], m_RK[38]);
+      round2(B, C, m_MK[37], m_RK[37]); round1(C, D, m_MK[36], m_RK[36]);
+      round1(D, A, m_MK[43], m_RK[43]); round3(A, B, m_MK[42], m_RK[42]);
+      round2(B, C, m_MK[41], m_RK[41]); round1(C, D, m_MK[40], m_RK[40]);
+      round1(D, A, m_MK[47], m_RK[47]); round3(A, B, m_MK[46], m_RK[46]);
+      round2(B, C, m_MK[45], m_RK[45]); round1(C, D, m_MK[44], m_RK[44]);
 
       store_be(out, A, B, C, D);
 
@@ -93,39 +94,41 @@ void CAST_256::encrypt_n(const byte in[], byte out[], size_t blocks) const
 /*
 * CAST-256 Decryption
 */
-void CAST_256::decrypt_n(const byte in[], byte out[], size_t blocks) const
+void CAST_256::decrypt_n(const uint8_t in[], uint8_t out[], size_t blocks) const
    {
+   verify_key_set(m_RK.empty() == false);
+
    for(size_t i = 0; i != blocks; ++i)
       {
-      u32bit A = load_be<u32bit>(in, 0);
-      u32bit B = load_be<u32bit>(in, 1);
-      u32bit C = load_be<u32bit>(in, 2);
-      u32bit D = load_be<u32bit>(in, 3);
+      uint32_t A = load_be<uint32_t>(in, 0);
+      uint32_t B = load_be<uint32_t>(in, 1);
+      uint32_t C = load_be<uint32_t>(in, 2);
+      uint32_t D = load_be<uint32_t>(in, 3);
 
-      round1(C, D, MK[44], RK[44]); round2(B, C, MK[45], RK[45]);
-      round3(A, B, MK[46], RK[46]); round1(D, A, MK[47], RK[47]);
-      round1(C, D, MK[40], RK[40]); round2(B, C, MK[41], RK[41]);
-      round3(A, B, MK[42], RK[42]); round1(D, A, MK[43], RK[43]);
-      round1(C, D, MK[36], RK[36]); round2(B, C, MK[37], RK[37]);
-      round3(A, B, MK[38], RK[38]); round1(D, A, MK[39], RK[39]);
-      round1(C, D, MK[32], RK[32]); round2(B, C, MK[33], RK[33]);
-      round3(A, B, MK[34], RK[34]); round1(D, A, MK[35], RK[35]);
-      round1(C, D, MK[28], RK[28]); round2(B, C, MK[29], RK[29]);
-      round3(A, B, MK[30], RK[30]); round1(D, A, MK[31], RK[31]);
-      round1(C, D, MK[24], RK[24]); round2(B, C, MK[25], RK[25]);
-      round3(A, B, MK[26], RK[26]); round1(D, A, MK[27], RK[27]);
-      round1(D, A, MK[23], RK[23]); round3(A, B, MK[22], RK[22]);
-      round2(B, C, MK[21], RK[21]); round1(C, D, MK[20], RK[20]);
-      round1(D, A, MK[19], RK[19]); round3(A, B, MK[18], RK[18]);
-      round2(B, C, MK[17], RK[17]); round1(C, D, MK[16], RK[16]);
-      round1(D, A, MK[15], RK[15]); round3(A, B, MK[14], RK[14]);
-      round2(B, C, MK[13], RK[13]); round1(C, D, MK[12], RK[12]);
-      round1(D, A, MK[11], RK[11]); round3(A, B, MK[10], RK[10]);
-      round2(B, C, MK[ 9], RK[ 9]); round1(C, D, MK[ 8], RK[ 8]);
-      round1(D, A, MK[ 7], RK[ 7]); round3(A, B, MK[ 6], RK[ 6]);
-      round2(B, C, MK[ 5], RK[ 5]); round1(C, D, MK[ 4], RK[ 4]);
-      round1(D, A, MK[ 3], RK[ 3]); round3(A, B, MK[ 2], RK[ 2]);
-      round2(B, C, MK[ 1], RK[ 1]); round1(C, D, MK[ 0], RK[ 0]);
+      round1(C, D, m_MK[44], m_RK[44]); round2(B, C, m_MK[45], m_RK[45]);
+      round3(A, B, m_MK[46], m_RK[46]); round1(D, A, m_MK[47], m_RK[47]);
+      round1(C, D, m_MK[40], m_RK[40]); round2(B, C, m_MK[41], m_RK[41]);
+      round3(A, B, m_MK[42], m_RK[42]); round1(D, A, m_MK[43], m_RK[43]);
+      round1(C, D, m_MK[36], m_RK[36]); round2(B, C, m_MK[37], m_RK[37]);
+      round3(A, B, m_MK[38], m_RK[38]); round1(D, A, m_MK[39], m_RK[39]);
+      round1(C, D, m_MK[32], m_RK[32]); round2(B, C, m_MK[33], m_RK[33]);
+      round3(A, B, m_MK[34], m_RK[34]); round1(D, A, m_MK[35], m_RK[35]);
+      round1(C, D, m_MK[28], m_RK[28]); round2(B, C, m_MK[29], m_RK[29]);
+      round3(A, B, m_MK[30], m_RK[30]); round1(D, A, m_MK[31], m_RK[31]);
+      round1(C, D, m_MK[24], m_RK[24]); round2(B, C, m_MK[25], m_RK[25]);
+      round3(A, B, m_MK[26], m_RK[26]); round1(D, A, m_MK[27], m_RK[27]);
+      round1(D, A, m_MK[23], m_RK[23]); round3(A, B, m_MK[22], m_RK[22]);
+      round2(B, C, m_MK[21], m_RK[21]); round1(C, D, m_MK[20], m_RK[20]);
+      round1(D, A, m_MK[19], m_RK[19]); round3(A, B, m_MK[18], m_RK[18]);
+      round2(B, C, m_MK[17], m_RK[17]); round1(C, D, m_MK[16], m_RK[16]);
+      round1(D, A, m_MK[15], m_RK[15]); round3(A, B, m_MK[14], m_RK[14]);
+      round2(B, C, m_MK[13], m_RK[13]); round1(C, D, m_MK[12], m_RK[12]);
+      round1(D, A, m_MK[11], m_RK[11]); round3(A, B, m_MK[10], m_RK[10]);
+      round2(B, C, m_MK[ 9], m_RK[ 9]); round1(C, D, m_MK[ 8], m_RK[ 8]);
+      round1(D, A, m_MK[ 7], m_RK[ 7]); round3(A, B, m_MK[ 6], m_RK[ 6]);
+      round2(B, C, m_MK[ 5], m_RK[ 5]); round1(C, D, m_MK[ 4], m_RK[ 4]);
+      round1(D, A, m_MK[ 3], m_RK[ 3]); round3(A, B, m_MK[ 2], m_RK[ 2]);
+      round2(B, C, m_MK[ 1], m_RK[ 1]); round1(C, D, m_MK[ 0], m_RK[ 0]);
 
       store_be(out, A, B, C, D);
 
@@ -137,9 +140,9 @@ void CAST_256::decrypt_n(const byte in[], byte out[], size_t blocks) const
 /*
 * CAST-256 Key Schedule
 */
-void CAST_256::key_schedule(const byte key[], size_t length)
+void CAST_256::key_schedule(const uint8_t key[], size_t length)
    {
-   static const u32bit KEY_MASK[192] = {
+   static const uint32_t KEY_MASK[192] = {
       0x5A827999, 0xC95C653A, 0x383650DB, 0xA7103C7C, 0x15EA281D, 0x84C413BE,
       0xF39DFF5F, 0x6277EB00, 0xD151D6A1, 0x402BC242, 0xAF05ADE3, 0x1DDF9984,
       0x8CB98525, 0xFB9370C6, 0x6A6D5C67, 0xD9474808, 0x482133A9, 0xB6FB1F4A,
@@ -173,20 +176,20 @@ void CAST_256::key_schedule(const byte key[], size_t length)
       0x4BBC26CD, 0xBA96126E, 0x296FFE0F, 0x9849E9B0, 0x0723D551, 0x75FDC0F2,
       0xE4D7AC93, 0x53B19834, 0xC28B83D5, 0x31656F76, 0xA03F5B17, 0x0F1946B8 };
 
-   static const byte KEY_ROT[32] = {
+   static const uint8_t KEY_ROT[32] = {
       0x13, 0x04, 0x15, 0x06, 0x17, 0x08, 0x19, 0x0A, 0x1B, 0x0C,
       0x1D, 0x0E, 0x1F, 0x10, 0x01, 0x12, 0x03, 0x14, 0x05, 0x16,
       0x07, 0x18, 0x09, 0x1A, 0x0B, 0x1C, 0x0D, 0x1E, 0x0F, 0x00,
       0x11, 0x02 };
 
-   MK.resize(48);
-   RK.resize(48);
+   m_MK.resize(48);
+   m_RK.resize(48);
 
-   secure_vector<u32bit> K(8);
+   secure_vector<uint32_t> K(8);
    for(size_t i = 0; i != length; ++i)
       K[i/4] = (K[i/4] << 8) + key[i];
 
-   u32bit A = K[0], B = K[1], C = K[2], D = K[3],
+   uint32_t A = K[0], B = K[1], C = K[2], D = K[3],
           E = K[4], F = K[5], G = K[6], H = K[7];
 
    for(size_t i = 0; i != 48; i += 4)
@@ -208,21 +211,21 @@ void CAST_256::key_schedule(const byte key[], size_t length)
       round1(A, B, KEY_MASK[4*i+14], KEY_ROT[(4*i+14) % 32]);
       round2(H, A, KEY_MASK[4*i+15], KEY_ROT[(4*i+15) % 32]);
 
-      RK[i  ] = (A % 32);
-      RK[i+1] = (C % 32);
-      RK[i+2] = (E % 32);
-      RK[i+3] = (G % 32);
-      MK[i  ] = H;
-      MK[i+1] = F;
-      MK[i+2] = D;
-      MK[i+3] = B;
+      m_RK[i  ] = (A % 32);
+      m_RK[i+1] = (C % 32);
+      m_RK[i+2] = (E % 32);
+      m_RK[i+3] = (G % 32);
+      m_MK[i  ] = H;
+      m_MK[i+1] = F;
+      m_MK[i+2] = D;
+      m_MK[i+3] = B;
       }
    }
 
 void CAST_256::clear()
    {
-   zap(MK);
-   zap(RK);
+   zap(m_MK);
+   zap(m_RK);
    }
 
 }

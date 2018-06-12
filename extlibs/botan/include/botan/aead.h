@@ -2,11 +2,11 @@
 * Interface for AEAD modes
 * (C) 2013 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_AEAD_MODE_H__
-#define BOTAN_AEAD_MODE_H__
+#ifndef BOTAN_AEAD_MODE_H_
+#define BOTAN_AEAD_MODE_H_
 
 #include <botan/cipher_mode.h>
 
@@ -19,15 +19,37 @@ namespace Botan {
 * which is not included in the ciphertext (for instance a sequence
 * number).
 */
-class BOTAN_DLL AEAD_Mode : public Cipher_Mode
+class BOTAN_PUBLIC_API(2,0) AEAD_Mode : public Cipher_Mode
    {
    public:
+      /**
+      * Create an AEAD mode
+      * @param algo the algorithm to create
+      * @param direction specify if this should be an encryption or decryption AEAD
+      * @param provider optional specification for provider to use
+      * @return an AEAD mode or a null pointer if not available
+      */
+      static std::unique_ptr<AEAD_Mode> create(const std::string& algo,
+                                               Cipher_Dir direction,
+                                               const std::string& provider = "");
+
+      /**
+      * Create an AEAD mode, or throw
+      * @param algo the algorithm to create
+      * @param direction specify if this should be an encryption or decryption AEAD
+      * @param provider optional specification for provider to use
+      * @return an AEAD mode, or throw an exception
+      */
+      static std::unique_ptr<AEAD_Mode> create_or_throw(const std::string& algo,
+                                                        Cipher_Dir direction,
+                                                        const std::string& provider = "");
+
       bool authenticated() const override { return true; }
 
       /**
       * Set associated data that is not included in the ciphertext but
-      * that should be authenticated. Must be called after set_key
-      * and before finish.
+      * that should be authenticated. Must be called after set_key and
+      * before start.
       *
       * Unless reset by another call, the associated data is kept
       * between messages. Thus, if the AD does not change, calling
@@ -36,30 +58,56 @@ class BOTAN_DLL AEAD_Mode : public Cipher_Mode
       * @param ad the associated data
       * @param ad_len length of add in bytes
       */
-      virtual void set_associated_data(const byte ad[], size_t ad_len) = 0;
+      virtual void set_associated_data(const uint8_t ad[], size_t ad_len) = 0;
 
+      /**
+      * Set associated data that is not included in the ciphertext but
+      * that should be authenticated. Must be called after set_key and
+      * before start.
+      *
+      * See @ref set_associated_data().
+      *
+      * @param ad the associated data
+      */
       template<typename Alloc>
-      void set_associated_data_vec(const std::vector<byte, Alloc>& ad)
+      void set_associated_data_vec(const std::vector<uint8_t, Alloc>& ad)
          {
-         set_associated_data(&ad[0], ad.size());
+         set_associated_data(ad.data(), ad.size());
          }
 
       /**
-      * Default AEAD nonce size (a commonly supported value among AEAD
-      * modes, and large enough that random collisions are unlikely).
+      * Set associated data that is not included in the ciphertext but
+      * that should be authenticated. Must be called after set_key and
+      * before start.
+      *
+      * See @ref set_associated_data().
+      *
+      * @param ad the associated data
+      */
+      template<typename Alloc>
+      void set_ad(const std::vector<uint8_t, Alloc>& ad)
+         {
+         set_associated_data(ad.data(), ad.size());
+         }
+
+      /**
+      * @return default AEAD nonce size (a commonly supported value among AEAD
+      * modes, and large enough that random collisions are unlikely)
       */
       size_t default_nonce_length() const override { return 12; }
 
-      /**
-      * Return the size of the authentication tag used (in bytes)
-      */
-      virtual size_t tag_size() const = 0;
+      virtual ~AEAD_Mode() = default;
    };
 
 /**
 * Get an AEAD mode by name (eg "AES-128/GCM" or "Serpent/EAX")
+* @param name AEAD name
+* @param direction ENCRYPTION or DECRYPTION
 */
-BOTAN_DLL AEAD_Mode* get_aead(const std::string& name, Cipher_Dir direction);
+inline AEAD_Mode* get_aead(const std::string& name, Cipher_Dir direction)
+   {
+   return AEAD_Mode::create(name, direction, "").release();
+   }
 
 }
 

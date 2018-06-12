@@ -73,7 +73,7 @@ bool IpAddress::IsIPv6() const {
 std::deque<IpAddress> IpAddress::Resolve( const std::string& hostname ) {
 	NetworkResource resource;
 
-	asio::ip::icmp::resolver resolver{ *static_cast<asio::io_service*>( resource.GetIOService() ) };
+	asio::ip::icmp::resolver resolver{ *static_cast<asio::io_context*>( resource.GetIOService() ) };
 	asio::ip::icmp::resolver::query query{ hostname, "" };
 
 	asio::error_code error;

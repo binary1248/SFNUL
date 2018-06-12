@@ -1,8 +1,8 @@
 /*
-* Parallel
+* Parallel Hash
 * (C) 1999-2009 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/par_hash.h>
@@ -10,91 +10,77 @@
 
 namespace Botan {
 
-/*
-* Update the hash
-*/
-void Parallel::add_data(const byte input[], size_t length)
+void Parallel::add_data(const uint8_t input[], size_t length)
    {
-   for(auto hash : hashes)
+   for(auto&& hash : m_hashes)
        hash->update(input, length);
    }
 
-/*
-* Finalize the hash
-*/
-void Parallel::final_result(byte out[])
+void Parallel::final_result(uint8_t out[])
    {
-   u32bit offset = 0;
+   size_t offset = 0;
 
-   for(auto hash : hashes)
+   for(auto&& hash : m_hashes)
       {
       hash->final(out + offset);
       offset += hash->output_length();
       }
    }
 
-/*
-* Return output size
-*/
 size_t Parallel::output_length() const
    {
    size_t sum = 0;
 
-   for(auto hash : hashes)
+   for(auto&& hash : m_hashes)
       sum += hash->output_length();
    return sum;
    }
 
-/*
-* Return the name of this type
-*/
 std::string Parallel::name() const
    {
    std::vector<std::string> names;
 
-   for(auto hash : hashes)
+   for(auto&& hash : m_hashes)
       names.push_back(hash->name());
 
    return "Parallel(" + string_join(names, ',') + ")";
    }
 
-/*
-* Return a clone of this object
-*/
 HashFunction* Parallel::clone() const
    {
-   std::vector<HashFunction*> hash_copies;
+   std::vector<std::unique_ptr<HashFunction>> hash_copies;
 
-   for(auto hash : hashes)
-      hash_copies.push_back(hash->clone());
+   for(auto&& hash : m_hashes)
+      hash_copies.push_back(std::unique_ptr<HashFunction>(hash->clone()));
 
    return new Parallel(hash_copies);
    }
 
-/*
-* Clear memory of sensitive data
-*/
+std::unique_ptr<HashFunction> Parallel::copy_state() const
+   {
+   std::vector<std::unique_ptr<HashFunction>> hash_clones;
+
+   for(const std::unique_ptr<HashFunction>& hash : m_hashes)
+      {
+      hash_clones.push_back(hash->copy_state());
+      }
+
+   return std::unique_ptr<HashFunction>(new Parallel(hash_clones));
+   }
+
 void Parallel::clear()
    {
-   for(auto hash : hashes)
+   for(auto&& hash : m_hashes)
       hash->clear();
    }
 
-/*
-* Parallel Constructor
-*/
-Parallel::Parallel(const std::vector<HashFunction*>& hash_in) :
-   hashes(hash_in)
+Parallel::Parallel(std::vector<std::unique_ptr<HashFunction>>& h)
    {
+   for(size_t i = 0; i != h.size(); ++i)
+      {
+      m_hashes.push_back(std::unique_ptr<HashFunction>(h[i].release()));
+      }
    }
 
-/*
-* Parallel Destructor
-*/
-Parallel::~Parallel()
-   {
-   for(auto hash : hashes)
-      delete hash;
-   }
 
 }

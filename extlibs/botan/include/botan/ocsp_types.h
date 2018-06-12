@@ -2,11 +2,11 @@
 * OCSP subtypes
 * (C) 2012 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_OCSP_TYPES_H__
-#define BOTAN_OCSP_TYPES_H__
+#ifndef BOTAN_OCSP_TYPES_H_
+#define BOTAN_OCSP_TYPES_H_
 
 #include <botan/x509cert.h>
 #include <botan/asn1_time.h>
@@ -16,13 +16,13 @@ namespace Botan {
 
 namespace OCSP {
 
-class BOTAN_DLL CertID : public ASN1_Object
+class BOTAN_PUBLIC_API(2,0) CertID final : public ASN1_Object
    {
    public:
-      CertID() {}
+      CertID() = default;
 
       CertID(const X509_Certificate& issuer,
-             const X509_Certificate& subject);
+             const BigInt& subject_serial);
 
       bool is_id_for(const X509_Certificate& issuer,
                      const X509_Certificate& subject) const;
@@ -30,16 +30,17 @@ class BOTAN_DLL CertID : public ASN1_Object
       void encode_into(class DER_Encoder& to) const override;
 
       void decode_from(class BER_Decoder& from) override;
-   private:
-      std::vector<byte> extract_key_bitstr(const X509_Certificate& cert) const;
 
+      const std::vector<uint8_t>& issuer_key_hash() const { return m_issuer_key_hash; }
+
+   private:
       AlgorithmIdentifier m_hash_id;
-      std::vector<byte> m_issuer_dn_hash;
-      std::vector<byte> m_issuer_key_hash;
+      std::vector<uint8_t> m_issuer_dn_hash;
+      std::vector<uint8_t> m_issuer_key_hash;
       BigInt m_subject_serial;
    };
 
-class BOTAN_DLL SingleResponse : public ASN1_Object
+class BOTAN_PUBLIC_API(2,0) SingleResponse final : public ASN1_Object
    {
    public:
       const CertID& certid() const { return m_certid; }

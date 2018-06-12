@@ -1,384 +1,326 @@
 /*
-* Public Key Base
-* (C) 1999-2010 Jack Lloyd
+* (C) 1999-2010,2015 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/pubkey.h>
 #include <botan/der_enc.h>
 #include <botan/ber_dec.h>
 #include <botan/bigint.h>
-#include <botan/parsing.h>
-#include <botan/libstate.h>
-#include <botan/engine.h>
-#include <botan/internal/bit_ops.h>
+#include <botan/pk_ops.h>
+#include <botan/internal/ct_utils.h>
+#include <botan/rng.h>
 
 namespace Botan {
 
-/*
-* PK_Encryptor_EME Constructor
-*/
+secure_vector<uint8_t> PK_Decryptor::decrypt(const uint8_t in[], size_t length) const
+   {
+   uint8_t valid_mask = 0;
+
+   secure_vector<uint8_t> decoded = do_decrypt(valid_mask, in, length);
+
+   if(valid_mask == 0)
+      throw Decoding_Error("Invalid public key ciphertext, cannot decrypt");
+
+   return decoded;
+   }
+
+secure_vector<uint8_t>
+PK_Decryptor::decrypt_or_random(const uint8_t in[],
+                                size_t length,
+                                size_t expected_pt_len,
+                                RandomNumberGenerator& rng,
+                                const uint8_t required_content_bytes[],
+                                const uint8_t required_content_offsets[],
+                                size_t required_contents_length) const
+   {
+   const secure_vector<uint8_t> fake_pms = rng.random_vec(expected_pt_len);
+
+   uint8_t valid_mask = 0;
+   secure_vector<uint8_t> decoded = do_decrypt(valid_mask, in, length);
+
+   valid_mask &= CT::is_equal(decoded.size(), expected_pt_len);
+
+   decoded.resize(expected_pt_len);
+
+   for(size_t i = 0; i != required_contents_length; ++i)
+      {
+      /*
+      These values are chosen by the application and for TLS are constants,
+      so this early failure via assert is fine since we know 0,1 < 48
+
+      If there is a protocol that has content checks on the key where
+      the expected offsets are controllable by the attacker this could
+      still leak.
+
+      Alternately could always reduce the offset modulo the length?
+      */
+
+      const uint8_t exp = required_content_bytes[i];
+      const uint8_t off = required_content_offsets[i];
+
+      BOTAN_ASSERT(off < expected_pt_len, "Offset in range of plaintext");
+
+      valid_mask &= CT::is_equal(decoded[off], exp);
+      }
+
+   CT::conditional_copy_mem(valid_mask,
+                            /*output*/decoded.data(),
+                            /*from0*/decoded.data(),
+                            /*from1*/fake_pms.data(),
+                            expected_pt_len);
+
+   return decoded;
+   }
+
+secure_vector<uint8_t>
+PK_Decryptor::decrypt_or_random(const uint8_t in[],
+                                size_t length,
+                                size_t expected_pt_len,
+                                RandomNumberGenerator& rng) const
+   {
+   return decrypt_or_random(in, length, expected_pt_len, rng,
+                            nullptr, nullptr, 0);
+   }
+
 PK_Encryptor_EME::PK_Encryptor_EME(const Public_Key& key,
-                                   const std::string& eme_name)
+                                   RandomNumberGenerator& rng,
+                                   const std::string& padding,
+                                   const std::string& provider)
    {
-   Algorithm_Factory::Engine_Iterator i(global_state().algorithm_factory());
-   RandomNumberGenerator& rng = global_state().global_rng();
-
-   while(const Engine* engine = i.next())
-      {
-      m_op.reset(engine->get_encryption_op(key, rng));
-      if(m_op)
-         break;
-      }
-
+   m_op = key.create_encryption_op(rng, padding, provider);
    if(!m_op)
-      throw Lookup_Error("Encryption with " + key.algo_name() + " not supported");
-
-   m_eme.reset(get_eme(eme_name));
+      throw Invalid_Argument("Key type " + key.algo_name() + " does not support encryption");
    }
 
-/*
-* Encrypt a message
-*/
-std::vector<byte>
-PK_Encryptor_EME::enc(const byte in[],
-                      size_t length,
-                      RandomNumberGenerator& rng) const
+PK_Encryptor_EME::~PK_Encryptor_EME() { /* for unique_ptr */ }
+
+std::vector<uint8_t>
+PK_Encryptor_EME::enc(const uint8_t in[], size_t length, RandomNumberGenerator& rng) const
    {
-   if(m_eme)
-      {
-      secure_vector<byte> encoded =
-         m_eme->encode(in, length, m_op->max_input_bits(), rng);
-
-      if(8*(encoded.size() - 1) + high_bit(encoded[0]) > m_op->max_input_bits())
-         throw Invalid_Argument("PK_Encryptor_EME: Input is too large");
-
-      return unlock(m_op->encrypt(&encoded[0], encoded.size(), rng));
-      }
-   else
-      {
-      if(8*(length - 1) + high_bit(in[0]) > m_op->max_input_bits())
-         throw Invalid_Argument("PK_Encryptor_EME: Input is too large");
-
-      return unlock(m_op->encrypt(&in[0], length, rng));
-      }
+   return unlock(m_op->encrypt(in, length, rng));
    }
 
-/*
-* Return the max size, in bytes, of a message
-*/
 size_t PK_Encryptor_EME::maximum_input_size() const
    {
-   if(!m_eme)
-      return (m_op->max_input_bits() / 8);
-   else
-      return m_eme->maximum_input_size(m_op->max_input_bits());
+   return m_op->max_input_bits() / 8;
    }
 
-/*
-* PK_Decryptor_EME Constructor
-*/
 PK_Decryptor_EME::PK_Decryptor_EME(const Private_Key& key,
-                                   const std::string& eme_name)
+                                   RandomNumberGenerator& rng,
+                                   const std::string& padding,
+                                   const std::string& provider)
    {
-   Algorithm_Factory::Engine_Iterator i(global_state().algorithm_factory());
-   RandomNumberGenerator& rng = global_state().global_rng();
-
-   while(const Engine* engine = i.next())
-      {
-      m_op.reset(engine->get_decryption_op(key, rng));
-      if(m_op)
-         break;
-      }
-
+   m_op = key.create_decryption_op(rng, padding, provider);
    if(!m_op)
-      throw Lookup_Error("Decryption with " + key.algo_name() + " not supported");
-
-   m_eme.reset(get_eme(eme_name));
+      throw Invalid_Argument("Key type " + key.algo_name() + " does not support decryption");
    }
 
-/*
-* Decrypt a message
-*/
-secure_vector<byte> PK_Decryptor_EME::dec(const byte msg[],
-                                          size_t length) const
+PK_Decryptor_EME::~PK_Decryptor_EME() { /* for unique_ptr */ }
+
+secure_vector<uint8_t> PK_Decryptor_EME::do_decrypt(uint8_t& valid_mask,
+                                                 const uint8_t in[], size_t in_len) const
    {
-   try {
-      secure_vector<byte> decrypted = m_op->decrypt(msg, length);
-      if(m_eme)
-         return m_eme->decode(decrypted, m_op->max_input_bits());
-      else
-         return decrypted;
-      }
-   catch(Invalid_Argument)
-      {
-      throw Decoding_Error("PK_Decryptor_EME: Input is invalid");
-      }
+   return m_op->decrypt(valid_mask, in, in_len);
    }
 
-/*
-* PK_Signer Constructor
-*/
+PK_KEM_Encryptor::PK_KEM_Encryptor(const Public_Key& key,
+                                   RandomNumberGenerator& rng,
+                                   const std::string& param,
+                                   const std::string& provider)
+   {
+   m_op = key.create_kem_encryption_op(rng, param, provider);
+   if(!m_op)
+      throw Invalid_Argument("Key type " + key.algo_name() + " does not support KEM encryption");
+   }
+
+PK_KEM_Encryptor::~PK_KEM_Encryptor() { /* for unique_ptr */ }
+
+void PK_KEM_Encryptor::encrypt(secure_vector<uint8_t>& out_encapsulated_key,
+                               secure_vector<uint8_t>& out_shared_key,
+                               size_t desired_shared_key_len,
+                               Botan::RandomNumberGenerator& rng,
+                               const uint8_t salt[],
+                               size_t salt_len)
+   {
+   m_op->kem_encrypt(out_encapsulated_key,
+                     out_shared_key,
+                     desired_shared_key_len,
+                     rng,
+                     salt,
+                     salt_len);
+   }
+
+PK_KEM_Decryptor::PK_KEM_Decryptor(const Private_Key& key,
+                                   RandomNumberGenerator& rng,
+                                   const std::string& param,
+                                   const std::string& provider)
+   {
+   m_op = key.create_kem_decryption_op(rng, param, provider);
+   if(!m_op)
+      throw Invalid_Argument("Key type " + key.algo_name() + " does not support KEM decryption");
+   }
+
+PK_KEM_Decryptor::~PK_KEM_Decryptor() { /* for unique_ptr */ }
+
+secure_vector<uint8_t> PK_KEM_Decryptor::decrypt(const uint8_t encap_key[],
+                                              size_t encap_key_len,
+                                              size_t desired_shared_key_len,
+                                              const uint8_t salt[],
+                                              size_t salt_len)
+   {
+   return m_op->kem_decrypt(encap_key, encap_key_len,
+                            desired_shared_key_len,
+                            salt, salt_len);
+   }
+
+PK_Key_Agreement::PK_Key_Agreement(const Private_Key& key,
+                                   RandomNumberGenerator& rng,
+                                   const std::string& kdf,
+                                   const std::string& provider)
+   {
+   m_op = key.create_key_agreement_op(rng, kdf, provider);
+   if(!m_op)
+      throw Invalid_Argument("Key type " + key.algo_name() + " does not support key agreement");
+   }
+
+PK_Key_Agreement::~PK_Key_Agreement() { /* for unique_ptr */ }
+
+PK_Key_Agreement& PK_Key_Agreement::operator=(PK_Key_Agreement&& other)
+   {
+   if(this != &other)
+      {
+      m_op = std::move(other.m_op);
+      }
+   return (*this);
+   }
+
+PK_Key_Agreement::PK_Key_Agreement(PK_Key_Agreement&& other) :
+   m_op(std::move(other.m_op))
+   {}
+
+SymmetricKey PK_Key_Agreement::derive_key(size_t key_len,
+                                          const uint8_t in[], size_t in_len,
+                                          const uint8_t salt[],
+                                          size_t salt_len) const
+   {
+   return m_op->agree(key_len, in, in_len, salt, salt_len);
+   }
+
 PK_Signer::PK_Signer(const Private_Key& key,
-                     const std::string& emsa_name,
+                     RandomNumberGenerator& rng,
+                     const std::string& emsa,
                      Signature_Format format,
-                     Fault_Protection prot)
+                     const std::string& provider)
    {
-   Algorithm_Factory::Engine_Iterator i(global_state().algorithm_factory());
-   RandomNumberGenerator& rng = global_state().global_rng();
-
-   m_op = nullptr;
-   m_verify_op = nullptr;
-
-   while(const Engine* engine = i.next())
-      {
-      if(!m_op)
-         m_op.reset(engine->get_signature_op(key, rng));
-
-      if(!m_verify_op && prot == ENABLE_FAULT_PROTECTION)
-         m_verify_op.reset(engine->get_verify_op(key, rng));
-
-      if(m_op && (m_verify_op || prot == DISABLE_FAULT_PROTECTION))
-         break;
-      }
-
-   if(!m_op || (!m_verify_op && prot == ENABLE_FAULT_PROTECTION))
-      throw Lookup_Error("Signing with " + key.algo_name() + " not supported");
-
-   m_emsa.reset(get_emsa(emsa_name));
+   m_op = key.create_signature_op(rng, emsa, provider);
+   if(!m_op)
+      throw Invalid_Argument("Key type " + key.algo_name() + " does not support signature generation");
    m_sig_format = format;
+   m_parts = key.message_parts();
+   m_part_size = key.message_part_size();
    }
 
-/*
-* Sign a message
-*/
-std::vector<byte> PK_Signer::sign_message(const byte msg[], size_t length,
-                                           RandomNumberGenerator& rng)
+PK_Signer::~PK_Signer() { /* for unique_ptr */ }
+
+void PK_Signer::update(const uint8_t in[], size_t length)
    {
-   update(msg, length);
-   return signature(rng);
+   m_op->update(in, length);
    }
 
-/*
-* Add more to the message to be signed
-*/
-void PK_Signer::update(const byte in[], size_t length)
+std::vector<uint8_t> PK_Signer::signature(RandomNumberGenerator& rng)
    {
-   m_emsa->update(in, length);
-   }
+   const std::vector<uint8_t> sig = unlock(m_op->sign(rng));
 
-/*
-* Check the signature we just created, to help prevent fault attacks
-*/
-bool PK_Signer::self_test_signature(const std::vector<byte>& msg,
-                                    const std::vector<byte>& sig) const
-   {
-   if(!m_verify_op)
-      return true; // checking disabled, assume ok
-
-   if(m_verify_op->with_recovery())
+   if(m_sig_format == IEEE_1363)
       {
-      std::vector<byte> recovered =
-         unlock(m_verify_op->verify_mr(&sig[0], sig.size()));
-
-      if(msg.size() > recovered.size())
-         {
-         size_t extra_0s = msg.size() - recovered.size();
-
-         for(size_t i = 0; i != extra_0s; ++i)
-            if(msg[i] != 0)
-               return false;
-
-         return same_mem(&msg[extra_0s], &recovered[0], recovered.size());
-         }
-
-      return (recovered == msg);
+      return sig;
       }
-   else
-      return m_verify_op->verify(&msg[0], msg.size(),
-                               &sig[0], sig.size());
-   }
-
-/*
-* Create a signature
-*/
-std::vector<byte> PK_Signer::signature(RandomNumberGenerator& rng)
-   {
-   std::vector<byte> encoded = unlock(m_emsa->encoding_of(m_emsa->raw_data(),
-                                                 m_op->max_input_bits(),
-                                                        rng));
-
-   std::vector<byte> plain_sig = unlock(m_op->sign(&encoded[0], encoded.size(), rng));
-
-   BOTAN_ASSERT(self_test_signature(encoded, plain_sig), "Signature was consistent");
-
-   if(m_op->message_parts() == 1 || m_sig_format == IEEE_1363)
-      return plain_sig;
-
-   if(m_sig_format == DER_SEQUENCE)
+   else if(m_sig_format == DER_SEQUENCE)
       {
-      if(plain_sig.size() % m_op->message_parts())
-         throw Encoding_Error("PK_Signer: strange signature size found");
-      const size_t SIZE_OF_PART = plain_sig.size() / m_op->message_parts();
+      if(sig.size() % m_parts != 0 || sig.size() != m_parts * m_part_size)
+         throw Internal_Error("PK_Signer: DER signature sizes unexpected, cannot encode");
 
-      std::vector<BigInt> sig_parts(m_op->message_parts());
-      for(size_t j = 0; j != sig_parts.size(); ++j)
-         sig_parts[j].binary_decode(&plain_sig[SIZE_OF_PART*j], SIZE_OF_PART);
+      std::vector<BigInt> sig_parts(m_parts);
+      for(size_t i = 0; i != sig_parts.size(); ++i)
+         sig_parts[i].binary_decode(&sig[m_part_size*i], m_part_size);
 
       return DER_Encoder()
          .start_cons(SEQUENCE)
-            .encode_list(sig_parts)
+         .encode_list(sig_parts)
          .end_cons()
-      .get_contents_unlocked();
+         .get_contents_unlocked();
       }
    else
-      throw Encoding_Error("PK_Signer: Unknown signature format " +
-                           std::to_string(m_sig_format));
+      throw Internal_Error("PK_Signer: Invalid signature format enum");
    }
 
-/*
-* PK_Verifier Constructor
-*/
 PK_Verifier::PK_Verifier(const Public_Key& key,
-                         const std::string& emsa_name,
-                         Signature_Format format)
+                         const std::string& emsa,
+                         Signature_Format format,
+                         const std::string& provider)
    {
-   Algorithm_Factory::Engine_Iterator i(global_state().algorithm_factory());
-   RandomNumberGenerator& rng = global_state().global_rng();
-
-   while(const Engine* engine = i.next())
-      {
-      m_op.reset(engine->get_verify_op(key, rng));
-      if(m_op)
-         break;
-      }
-
+   m_op = key.create_verification_op(emsa, provider);
    if(!m_op)
-      throw Lookup_Error("Verification with " + key.algo_name() + " not supported");
-
-   m_emsa.reset(get_emsa(emsa_name));
+      throw Invalid_Argument("Key type " + key.algo_name() + " does not support signature verification");
    m_sig_format = format;
+   m_parts = key.message_parts();
+   m_part_size = key.message_part_size();
    }
 
-/*
-* Set the signature format
-*/
+PK_Verifier::~PK_Verifier() { /* for unique_ptr */ }
+
 void PK_Verifier::set_input_format(Signature_Format format)
    {
-   if(m_op->message_parts() == 1 && format != IEEE_1363)
-      throw Invalid_State("PK_Verifier: This algorithm always uses IEEE 1363");
+   if(format != IEEE_1363 && m_parts == 1)
+      throw Invalid_Argument("PK_Verifier: This algorithm does not support DER encoding");
    m_sig_format = format;
    }
 
-/*
-* Verify a message
-*/
-bool PK_Verifier::verify_message(const byte msg[], size_t msg_length,
-                                 const byte sig[], size_t sig_length)
+bool PK_Verifier::verify_message(const uint8_t msg[], size_t msg_length,
+                                 const uint8_t sig[], size_t sig_length)
    {
    update(msg, msg_length);
    return check_signature(sig, sig_length);
    }
 
-/*
-* Append to the message
-*/
-void PK_Verifier::update(const byte in[], size_t length)
+void PK_Verifier::update(const uint8_t in[], size_t length)
    {
-   m_emsa->update(in, length);
+   m_op->update(in, length);
    }
 
-/*
-* Check a signature
-*/
-bool PK_Verifier::check_signature(const byte sig[], size_t length)
+bool PK_Verifier::check_signature(const uint8_t sig[], size_t length)
    {
    try {
       if(m_sig_format == IEEE_1363)
-         return validate_signature(m_emsa->raw_data(), sig, length);
+         {
+         return m_op->is_valid_signature(sig, length);
+         }
       else if(m_sig_format == DER_SEQUENCE)
          {
+         std::vector<uint8_t> real_sig;
          BER_Decoder decoder(sig, length);
          BER_Decoder ber_sig = decoder.start_cons(SEQUENCE);
 
          size_t count = 0;
-         std::vector<byte> real_sig;
          while(ber_sig.more_items())
             {
             BigInt sig_part;
             ber_sig.decode(sig_part);
-            real_sig += BigInt::encode_1363(sig_part, m_op->message_part_size());
+            real_sig += BigInt::encode_1363(sig_part, m_part_size);
             ++count;
             }
 
-         if(count != m_op->message_parts())
+         if(count != m_parts)
             throw Decoding_Error("PK_Verifier: signature size invalid");
 
-         return validate_signature(m_emsa->raw_data(),
-                                   &real_sig[0], real_sig.size());
+         return m_op->is_valid_signature(real_sig.data(), real_sig.size());
          }
       else
-         throw Decoding_Error("PK_Verifier: Unknown signature format " +
-                              std::to_string(m_sig_format));
+         throw Internal_Error("PK_Verifier: Invalid signature format enum");
       }
-   catch(Invalid_Argument) { return false; }
-   }
-
-/*
-* Verify a signature
-*/
-bool PK_Verifier::validate_signature(const secure_vector<byte>& msg,
-                                     const byte sig[], size_t sig_len)
-   {
-   if(m_op->with_recovery())
-      {
-      secure_vector<byte> output_of_key = m_op->verify_mr(sig, sig_len);
-      return m_emsa->verify(output_of_key, msg, m_op->max_input_bits());
-      }
-   else
-      {
-      RandomNumberGenerator& rng = global_state().global_rng();
-
-      secure_vector<byte> encoded =
-         m_emsa->encoding_of(msg, m_op->max_input_bits(), rng);
-
-      return m_op->verify(&encoded[0], encoded.size(), sig, sig_len);
-      }
-   }
-
-/*
-* PK_Key_Agreement Constructor
-*/
-PK_Key_Agreement::PK_Key_Agreement(const PK_Key_Agreement_Key& key,
-                                   const std::string& kdf_name)
-   {
-   Algorithm_Factory::Engine_Iterator i(global_state().algorithm_factory());
-   RandomNumberGenerator& rng = global_state().global_rng();
-
-   while(const Engine* engine = i.next())
-      {
-      m_op.reset(engine->get_key_agreement_op(key, rng));
-      if(m_op)
-         break;
-      }
-
-   if(!m_op)
-      throw Lookup_Error("Key agreement with " + key.algo_name() + " not supported");
-
-   m_kdf.reset(get_kdf(kdf_name));
-   }
-
-SymmetricKey PK_Key_Agreement::derive_key(size_t key_len, const byte in[],
-                                          size_t in_len, const byte params[],
-                                          size_t params_len) const
-   {
-   secure_vector<byte> z = m_op->agree(in, in_len);
-
-   if(!m_kdf)
-      return z;
-
-   return m_kdf->derive_key(key_len, z, params, params_len);
+   catch(Invalid_Argument&) { return false; }
    }
 
 }

@@ -2,28 +2,24 @@
 * X.509 Public Key
 * (C) 1999-2010 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/x509_key.h>
-#include <botan/der_enc.h>
+#include <botan/data_src.h>
 #include <botan/ber_dec.h>
 #include <botan/pem.h>
 #include <botan/alg_id.h>
-#include <botan/internal/pk_algs.h>
+#include <botan/pk_algs.h>
 
 namespace Botan {
 
 namespace X509 {
 
-std::vector<byte> BER_encode(const Public_Key& key)
+std::vector<uint8_t> BER_encode(const Public_Key& key)
    {
-   return DER_Encoder()
-         .start_cons(SEQUENCE)
-            .encode(key.algorithm_identifier())
-            .encode(key.x509_subject_public_key(), BIT_STRING)
-         .end_cons()
-      .get_contents_unlocked();
+   // keeping it around for compat
+   return key.subject_public_key();
    }
 
 /*
@@ -31,7 +27,7 @@ std::vector<byte> BER_encode(const Public_Key& key)
 */
 std::string PEM_encode(const Public_Key& key)
    {
-   return PEM_Code::encode(X509::BER_encode(key),
+   return PEM_Code::encode(key.subject_public_key(),
                            "PUBLIC KEY");
    }
 
@@ -42,7 +38,7 @@ Public_Key* load_key(DataSource& source)
    {
    try {
       AlgorithmIdentifier alg_id;
-      secure_vector<byte> key_bits;
+      std::vector<uint8_t> key_bits;
 
       if(ASN1::maybe_BER(source) && !PEM_Code::matches(source))
          {
@@ -50,7 +46,6 @@ Public_Key* load_key(DataSource& source)
             .start_cons(SEQUENCE)
             .decode(alg_id)
             .decode(key_bits, BIT_STRING)
-            .verify_end()
          .end_cons();
          }
       else
@@ -63,21 +58,21 @@ Public_Key* load_key(DataSource& source)
             .start_cons(SEQUENCE)
             .decode(alg_id)
             .decode(key_bits, BIT_STRING)
-            .verify_end()
          .end_cons();
          }
 
       if(key_bits.empty())
          throw Decoding_Error("X.509 public key decoding failed");
 
-      return make_public_key(alg_id, key_bits);
+      return load_public_key(alg_id, key_bits).release();
       }
-   catch(Decoding_Error)
+   catch(Decoding_Error& e)
       {
-      throw Decoding_Error("X.509 public key decoding failed");
+      throw Decoding_Error("X.509 public key decoding failed: " + std::string(e.what()));
       }
    }
 
+#if defined(BOTAN_TARGET_OS_HAS_FILESYSTEM)
 /*
 * Extract a public key and return it
 */
@@ -86,11 +81,12 @@ Public_Key* load_key(const std::string& fsname)
    DataSource_Stream source(fsname, true);
    return X509::load_key(source);
    }
+#endif
 
 /*
 * Extract a public key and return it
 */
-Public_Key* load_key(const std::vector<byte>& mem)
+Public_Key* load_key(const std::vector<uint8_t>& mem)
    {
    DataSource_Memory source(mem);
    return X509::load_key(source);

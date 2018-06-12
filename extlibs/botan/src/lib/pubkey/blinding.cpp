@@ -1,49 +1,66 @@
 /*
 * Blinding for public key operations
-* (C) 1999-2010 Jack Lloyd
+* (C) 1999-2010,2015 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/blinding.h>
-#include <botan/numthry.h>
 
 namespace Botan {
 
-/*
-* Blinder Constructor
-*/
-Blinder::Blinder(const BigInt& e, const BigInt& d, const BigInt& n)
+Blinder::Blinder(const BigInt& modulus,
+                 RandomNumberGenerator& rng,
+                 std::function<BigInt (const BigInt&)> fwd,
+                 std::function<BigInt (const BigInt&)> inv) :
+      m_reducer(modulus),
+      m_rng(rng),
+      m_fwd_fn(fwd),
+      m_inv_fn(inv),
+      m_modulus_bits(modulus.bits()),
+      m_e{},
+      m_d{},
+      m_counter{}
    {
-   if(e < 1 || d < 1 || n < 1)
-      throw Invalid_Argument("Blinder: Arguments too small");
-
-   reducer = Modular_Reducer(n);
-   this->e = e;
-   this->d = d;
+   const BigInt k = blinding_nonce();
+   m_e = m_fwd_fn(k);
+   m_d = m_inv_fn(k);
    }
 
-/*
-* Blind a number
-*/
+BigInt Blinder::blinding_nonce() const
+   {
+   return BigInt(m_rng, m_modulus_bits - 1);
+   }
+
 BigInt Blinder::blind(const BigInt& i) const
    {
-   if(!reducer.initialized())
-      return i;
+   if(!m_reducer.initialized())
+      throw Exception("Blinder not initialized, cannot blind");
 
-   e = reducer.square(e);
-   d = reducer.square(d);
-   return reducer.multiply(i, e);
+   ++m_counter;
+
+   if((BOTAN_BLINDING_REINIT_INTERVAL > 0) && (m_counter > BOTAN_BLINDING_REINIT_INTERVAL))
+      {
+      const BigInt k = blinding_nonce();
+      m_e = m_fwd_fn(k);
+      m_d = m_inv_fn(k);
+      m_counter = 0;
+      }
+   else
+      {
+      m_e = m_reducer.square(m_e);
+      m_d = m_reducer.square(m_d);
+      }
+
+   return m_reducer.multiply(i, m_e);
    }
 
-/*
-* Unblind a number
-*/
 BigInt Blinder::unblind(const BigInt& i) const
    {
-   if(!reducer.initialized())
-      return i;
-   return reducer.multiply(i, d);
+   if(!m_reducer.initialized())
+      throw Exception("Blinder not initialized, cannot unblind");
+
+   return m_reducer.multiply(i, m_d);
    }
 
 }

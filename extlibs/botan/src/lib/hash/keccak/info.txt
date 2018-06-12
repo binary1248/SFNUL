@@ -1,5 +1,0 @@
-define KECCAK 20131128
-
-<requires>
-alloc
-</requires>

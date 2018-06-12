@@ -1,9 +1,0 @@
-[submodule "extlibs/asio"]
-	path = extlibs/asio
-	url = https://github.com/chriskohlhoff/asio.git
-[submodule "extlibs/botan"]
-	path = extlibs/botan
-	url = https://github.com/binary1248/botan-tls.git
-[submodule "extlibs/http-parser"]
-	path = extlibs/http-parser
-	url = https://github.com/joyent/http-parser.git

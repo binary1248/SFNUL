@@ -4,26 +4,29 @@
 *          Manuel Hartl, FlexSecure GmbH
 * (C) 2008-2010 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_ECDH_KEY_H__
-#define BOTAN_ECDH_KEY_H__
+#ifndef BOTAN_ECDH_KEY_H_
+#define BOTAN_ECDH_KEY_H_
 
 #include <botan/ecc_key.h>
-#include <botan/pk_ops.h>
 
 namespace Botan {
 
 /**
 * This class represents ECDH Public Keys.
 */
-class BOTAN_DLL ECDH_PublicKey : public virtual EC_PublicKey
+class BOTAN_PUBLIC_API(2,0) ECDH_PublicKey : public virtual EC_PublicKey
    {
    public:
-
+      /**
+      * Create an ECDH public key.
+      * @param alg_id algorithm identifier
+      * @param key_bits DER encoded public key bits
+      */
       ECDH_PublicKey(const AlgorithmIdentifier& alg_id,
-                     const secure_vector<byte>& key_bits) :
+                     const std::vector<uint8_t>& key_bits) :
          EC_PublicKey(alg_id, key_bits) {}
 
       /**
@@ -39,37 +42,40 @@ class BOTAN_DLL ECDH_PublicKey : public virtual EC_PublicKey
       * Get this keys algorithm name.
       * @return this keys algorithm name
       */
-      std::string algo_name() const { return "ECDH"; }
-
-      /**
-      * Get the maximum number of bits allowed to be fed to this key.
-      * This is the bitlength of the order of the base point.
-
-      * @return maximum number of input bits
-      */
-      size_t max_input_bits() const { return domain().get_order().bits(); }
+      std::string algo_name() const override { return "ECDH"; }
 
       /**
       * @return public point value
       */
-      std::vector<byte> public_value() const
-         { return unlock(EC2OSP(public_point(), PointGFp::UNCOMPRESSED)); }
+      std::vector<uint8_t> public_value() const
+         { return public_point().encode(PointGFp::UNCOMPRESSED); }
+
+      /**
+      * @return public point value
+      */
+      std::vector<uint8_t> public_value(PointGFp::Compression_Type format) const
+         { return public_point().encode(format); }
 
    protected:
-      ECDH_PublicKey() {}
+      ECDH_PublicKey() = default;
    };
 
 /**
 * This class represents ECDH Private Keys.
 */
-class BOTAN_DLL ECDH_PrivateKey : public ECDH_PublicKey,
+class BOTAN_PUBLIC_API(2,0) ECDH_PrivateKey final : public ECDH_PublicKey,
                                   public EC_PrivateKey,
                                   public PK_Key_Agreement_Key
    {
    public:
 
+      /**
+      * Load a private key.
+      * @param alg_id the X.509 algorithm identifier
+      * @param key_bits ECPrivateKey bits
+      */
       ECDH_PrivateKey(const AlgorithmIdentifier& alg_id,
-                      const secure_vector<byte>& key_bits) :
+                      const secure_vector<uint8_t>& key_bits) :
          EC_PrivateKey(alg_id, key_bits) {}
 
       /**
@@ -83,23 +89,16 @@ class BOTAN_DLL ECDH_PrivateKey : public ECDH_PublicKey,
                       const BigInt& x = 0) :
          EC_PrivateKey(rng, domain, x) {}
 
-      std::vector<byte> public_value() const
-         { return ECDH_PublicKey::public_value(); }
-   };
+      std::vector<uint8_t> public_value() const override
+         { return ECDH_PublicKey::public_value(PointGFp::UNCOMPRESSED); }
 
-/**
-* ECDH operation
-*/
-class BOTAN_DLL ECDH_KA_Operation : public PK_Ops::Key_Agreement
-   {
-   public:
-      ECDH_KA_Operation(const ECDH_PrivateKey& key);
+      std::vector<uint8_t> public_value(PointGFp::Compression_Type type) const
+         { return ECDH_PublicKey::public_value(type); }
 
-      secure_vector<byte> agree(const byte w[], size_t w_len);
-   private:
-      const CurveGFp& curve;
-      const BigInt& cofactor;
-      BigInt l_times_priv;
+      std::unique_ptr<PK_Ops::Key_Agreement>
+         create_key_agreement_op(RandomNumberGenerator& rng,
+                                 const std::string& params,
+                                 const std::string& provider) const override;
    };
 
 }

@@ -24,7 +24,7 @@ class TcpListener::TcpListenerImpl {
 public:
 	TcpListenerImpl( TcpListener* owner ) :
 		tcp_listener{ owner },
-		asio_acceptor{ *static_cast<asio::io_service*>( owner->GetIOService() ) }
+		asio_acceptor{ *static_cast<asio::io_context*>( owner->GetIOService() ) }
 	{
 	}
 
@@ -51,10 +51,10 @@ public:
 			return;
 		}
 
-		auto new_socket = std::make_shared<asio::ip::tcp::socket>( *static_cast<asio::io_service*>( tcp_listener->GetIOService() ) );
+		auto new_socket = std::make_shared<asio::ip::tcp::socket>( *static_cast<asio::io_context*>( tcp_listener->GetIOService() ) );
 
 		asio_acceptor.async_accept( *new_socket,
-			static_cast<asio::strand*>( tcp_listener->GetStrand() )->wrap(
+			static_cast<asio::io_context::strand*>( tcp_listener->GetStrand() )->wrap(
 				std::bind(
 					[]( std::weak_ptr<TcpListener> listener, const asio::error_code& handler_error, std::shared_ptr<asio::ip::tcp::socket> handler_socket ) {
 						if( listener.expired() ) {

@@ -2,11 +2,11 @@
 * Alert Message
 * (C) 2004-2006,2011,2012 Jack Lloyd
 *
-* Released under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_TLS_ALERT_H__
-#define BOTAN_TLS_ALERT_H__
+#ifndef BOTAN_TLS_ALERT_H_
+#define BOTAN_TLS_ALERT_H_
 
 #include <botan/secmem.h>
 #include <string>
@@ -18,7 +18,7 @@ namespace TLS {
 /**
 * SSL/TLS Alert Message
 */
-class BOTAN_DLL Alert
+class BOTAN_PUBLIC_API(2,0) Alert final
    {
    public:
       /**
@@ -47,6 +47,7 @@ class BOTAN_DLL Alert
          PROTOCOL_VERSION                = 70,
          INSUFFICIENT_SECURITY           = 71,
          INTERNAL_ERROR                  = 80,
+         INAPPROPRIATE_FALLBACK          = 86,
          USER_CANCELED                   = 90,
          NO_RENEGOTIATION                = 100,
          UNSUPPORTED_EXTENSION           = 110,
@@ -56,9 +57,10 @@ class BOTAN_DLL Alert
          BAD_CERTIFICATE_HASH_VALUE      = 114,
          UNKNOWN_PSK_IDENTITY            = 115,
 
+         NO_APPLICATION_PROTOCOL         = 120, // RFC 7301
+
          // pseudo alert values
-         NULL_ALERT                      = 256,
-         HEARTBEAT_PAYLOAD               = 257
+         NULL_ALERT                      = 256
       };
 
       /**
@@ -84,13 +86,13 @@ class BOTAN_DLL Alert
       /**
       * Serialize an alert
       */
-      std::vector<byte> serialize() const;
+      std::vector<uint8_t> serialize() const;
 
       /**
       * Deserialize an Alert message
       * @param buf the serialized alert
       */
-      Alert(const secure_vector<byte>& buf);
+      explicit Alert(const secure_vector<uint8_t>& buf);
 
       /**
       * Create a new Alert

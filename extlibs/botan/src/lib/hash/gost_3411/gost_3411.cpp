@@ -2,13 +2,10 @@
 * GOST 34.11
 * (C) 2009 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/gost_3411.h>
-#include <botan/loadstor.h>
-#include <botan/rotate.h>
-#include <botan/internal/xor_buf.h>
 
 namespace Botan {
 
@@ -16,41 +13,46 @@ namespace Botan {
 * GOST 34.11 Constructor
 */
 GOST_34_11::GOST_34_11() :
-   cipher(GOST_28147_89_Params("R3411_CryptoPro")),
-   buffer(32),
-   sum(32),
-   hash(32)
+   m_cipher(GOST_28147_89_Params("R3411_CryptoPro")),
+   m_buffer(32),
+   m_sum(32),
+   m_hash(32)
    {
-   count = 0;
-   position = 0;
+   m_count = 0;
+   m_position = 0;
    }
 
 void GOST_34_11::clear()
    {
-   cipher.clear();
-   zeroise(sum);
-   zeroise(hash);
-   count = 0;
-   position = 0;
+   m_cipher.clear();
+   zeroise(m_sum);
+   zeroise(m_hash);
+   m_count = 0;
+   m_position = 0;
+   }
+
+std::unique_ptr<HashFunction> GOST_34_11::copy_state() const
+   {
+   return std::unique_ptr<HashFunction>(new GOST_34_11(*this));
    }
 
 /**
 * Hash additional inputs
 */
-void GOST_34_11::add_data(const byte input[], size_t length)
+void GOST_34_11::add_data(const uint8_t input[], size_t length)
    {
-   count += length;
+   m_count += length;
 
-   if(position)
+   if(m_position)
       {
-      buffer_insert(buffer, position, input, length);
+      buffer_insert(m_buffer, m_position, input, length);
 
-      if(position + length >= hash_block_size())
+      if(m_position + length >= hash_block_size())
          {
-         compress_n(&buffer[0], 1);
-         input += (hash_block_size() - position);
-         length -= (hash_block_size() - position);
-         position = 0;
+         compress_n(m_buffer.data(), 1);
+         input += (hash_block_size() - m_position);
+         length -= (hash_block_size() - m_position);
+         m_position = 0;
          }
       }
 
@@ -60,47 +62,50 @@ void GOST_34_11::add_data(const byte input[], size_t length)
    if(full_blocks)
       compress_n(input, full_blocks);
 
-   buffer_insert(buffer, position, input + full_blocks * hash_block_size(), remaining);
-   position += remaining;
+   buffer_insert(m_buffer, m_position, input + full_blocks * hash_block_size(), remaining);
+   m_position += remaining;
    }
 
 /**
 * The GOST 34.11 compression function
 */
-void GOST_34_11::compress_n(const byte input[], size_t blocks)
+void GOST_34_11::compress_n(const uint8_t input[], size_t blocks)
    {
    for(size_t i = 0; i != blocks; ++i)
       {
-      for(u16bit j = 0, carry = 0; j != 32; ++j)
+      for(uint16_t j = 0, carry = 0; j != 32; ++j)
          {
-         u16bit s = sum[j] + input[32*i+j] + carry;
+         uint16_t s = m_sum[j] + input[32*i+j] + carry;
          carry = get_byte(0, s);
-         sum[j] = get_byte(1, s);
+         m_sum[j] = get_byte(1, s);
          }
 
-      byte S[32] = { 0 };
+      uint8_t S[32] = { 0 };
 
-      u64bit U[4], V[4];
-      load_be(U, &hash[0], 4);
+      uint64_t U[4], V[4];
+      load_be(U, m_hash.data(), 4);
       load_be(V, input + 32*i, 4);
 
       for(size_t j = 0; j != 4; ++j)
          {
-         byte key[32] = { 0 };
+         uint8_t key[32] = { 0 };
 
          // P transformation
          for(size_t k = 0; k != 4; ++k)
+            {
+            const uint64_t UVk = U[k] ^ V[k];
             for(size_t l = 0; l != 8; ++l)
-               key[4*l+k] = get_byte(l, U[k]) ^ get_byte(l, V[k]);
+               key[4*l+k] = get_byte(l, UVk);
+            }
 
-         cipher.set_key(key, 32);
-         cipher.encrypt(&hash[8*j], S + 8*j);
+         m_cipher.set_key(key, 32);
+         m_cipher.encrypt(&m_hash[8*j], S + 8*j);
 
          if(j == 3)
             break;
 
          // A(x)
-         u64bit A_U = U[0];
+         uint64_t A_U = U[0];
          U[0] = U[1];
          U[1] = U[2];
          U[2] = U[3];
@@ -115,15 +120,15 @@ void GOST_34_11::compress_n(const byte input[], size_t blocks)
             }
 
          // A(A(x))
-         u64bit AA_V_1 = V[0] ^ V[1];
-         u64bit AA_V_2 = V[1] ^ V[2];
+         uint64_t AA_V_1 = V[0] ^ V[1];
+         uint64_t AA_V_2 = V[1] ^ V[2];
          V[0] = V[2];
          V[1] = V[3];
          V[2] = AA_V_1;
          V[3] = AA_V_2;
          }
 
-      byte S2[32] = { 0 };
+      uint8_t S2[32] = { 0 };
 
       // 12 rounds of psi
       S2[ 0] = S[24];
@@ -168,7 +173,7 @@ void GOST_34_11::compress_n(const byte input[], size_t blocks)
       S[30] = S2[0];
       S[31] = S2[1];
 
-      xor_buf(S, &hash[0], 32);
+      xor_buf(S, m_hash.data(), 32);
 
       // 61 rounds of psi
       S2[ 0] = S[ 2] ^ S[ 6] ^ S[14] ^ S[20] ^ S[22] ^ S[26] ^ S[28] ^ S[30];
@@ -210,31 +215,31 @@ void GOST_34_11::compress_n(const byte input[], size_t blocks)
       S2[30] = S[ 2] ^ S[ 4] ^ S[ 8] ^ S[14] ^ S[16] ^ S[18] ^ S[22] ^ S[24] ^ S[28] ^ S[30];
       S2[31] = S[ 3] ^ S[ 5] ^ S[ 9] ^ S[15] ^ S[17] ^ S[19] ^ S[23] ^ S[25] ^ S[29] ^ S[31];
 
-      copy_mem(&hash[0], &S2[0], 32);
+      copy_mem(m_hash.data(), S2, 32);
       }
    }
 
 /**
 * Produce the final GOST 34.11 output
 */
-void GOST_34_11::final_result(byte out[])
+void GOST_34_11::final_result(uint8_t out[])
    {
-   if(position)
+   if(m_position)
       {
-      clear_mem(&buffer[0] + position, buffer.size() - position);
-      compress_n(&buffer[0], 1);
+      clear_mem(m_buffer.data() + m_position, m_buffer.size() - m_position);
+      compress_n(m_buffer.data(), 1);
       }
 
-   secure_vector<byte> length_buf(32);
-   const u64bit bit_count = count * 8;
-   store_le(bit_count, &length_buf[0]);
+   secure_vector<uint8_t> length_buf(32);
+   const uint64_t bit_count = m_count * 8;
+   store_le(bit_count, length_buf.data());
 
-   secure_vector<byte> sum_buf = sum;
+   secure_vector<uint8_t> sum_buf = m_sum;
 
-   compress_n(&length_buf[0], 1);
-   compress_n(&sum_buf[0], 1);
+   compress_n(length_buf.data(), 1);
+   compress_n(sum_buf.data(), 1);
 
-   copy_mem(out, &hash[0], 32);
+   copy_mem(out, m_hash.data(), 32);
 
    clear();
    }

@@ -2,12 +2,11 @@
 * TLS Protocol Version Management
 * (C) 2012 Jack Lloyd
 *
-* Released under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/tls_version.h>
 #include <botan/tls_exceptn.h>
-#include <botan/parsing.h>
 
 namespace Botan {
 
@@ -15,8 +14,8 @@ namespace TLS {
 
 std::string Protocol_Version::to_string() const
    {
-   const byte maj = major_version();
-   const byte min = minor_version();
+   const uint8_t maj = major_version();
+   const uint8_t min = minor_version();
 
    if(maj == 3 && min == 0)
       return "SSL v3";
@@ -49,21 +48,9 @@ bool Protocol_Version::operator>(const Protocol_Version& other) const
    return m_version > other.m_version;
    }
 
-Protocol_Version Protocol_Version::best_known_match() const
-   {
-   if(known_version())
-      return *this; // known version is its own best match
-
-   if(is_datagram_protocol())
-      return Protocol_Version::DTLS_V12;
-   else
-      return Protocol_Version::TLS_V12;
-   }
-
 bool Protocol_Version::known_version() const
    {
-   return (m_version == Protocol_Version::SSL_V3 ||
-           m_version == Protocol_Version::TLS_V10 ||
+   return (m_version == Protocol_Version::TLS_V10 ||
            m_version == Protocol_Version::TLS_V11 ||
            m_version == Protocol_Version::TLS_V12 ||
            m_version == Protocol_Version::DTLS_V10 ||

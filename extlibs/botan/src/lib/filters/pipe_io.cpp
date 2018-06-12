@@ -2,11 +2,12 @@
 * Pipe I/O
 * (C) 1999-2007 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/pipe.h>
-#include <iostream>
+#include <istream>
+#include <ostream>
 
 namespace Botan {
 
@@ -15,11 +16,11 @@ namespace Botan {
 */
 std::ostream& operator<<(std::ostream& stream, Pipe& pipe)
    {
-   secure_vector<byte> buffer(DEFAULT_BUFFERSIZE);
+   secure_vector<uint8_t> buffer(BOTAN_DEFAULT_BUFFER_SIZE);
    while(stream.good() && pipe.remaining())
       {
-      size_t got = pipe.read(&buffer[0], buffer.size());
-      stream.write(reinterpret_cast<const char*>(&buffer[0]), got);
+      const size_t got = pipe.read(buffer.data(), buffer.size());
+      stream.write(cast_uint8_ptr_to_char(buffer.data()), got);
       }
    if(!stream.good())
       throw Stream_IO_Error("Pipe output operator (iostream) has failed");
@@ -31,11 +32,12 @@ std::ostream& operator<<(std::ostream& stream, Pipe& pipe)
 */
 std::istream& operator>>(std::istream& stream, Pipe& pipe)
    {
-   secure_vector<byte> buffer(DEFAULT_BUFFERSIZE);
+   secure_vector<uint8_t> buffer(BOTAN_DEFAULT_BUFFER_SIZE);
    while(stream.good())
       {
-      stream.read(reinterpret_cast<char*>(&buffer[0]), buffer.size());
-      pipe.write(&buffer[0], stream.gcount());
+      stream.read(cast_uint8_ptr_to_char(buffer.data()), buffer.size());
+      const size_t got = static_cast<size_t>(stream.gcount());
+      pipe.write(buffer.data(), got);
       }
    if(stream.bad() || (stream.fail() && !stream.eof()))
       throw Stream_IO_Error("Pipe input operator (iostream) has failed");

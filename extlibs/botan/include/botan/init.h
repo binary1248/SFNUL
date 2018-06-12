@@ -1,46 +1,31 @@
 /*
 * Library Initialization
-* (C) 1999-2008 Jack Lloyd
+* (C) 1999-2008,2015 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_LIBRARY_INITIALIZER_H__
-#define BOTAN_LIBRARY_INITIALIZER_H__
+#ifndef BOTAN_LIBRARY_INITIALIZER_H_
+#define BOTAN_LIBRARY_INITIALIZER_H_
 
-#include <botan/build.h>
+#include <botan/types.h>
 #include <string>
 
 namespace Botan {
 
-/**
-* This class represents the Library Initialization/Shutdown Object. It
-* has to exceed the lifetime of any Botan object used in an
-* application.  You can call initialize/deinitialize or use
-* LibraryInitializer in the RAII style.
+/*
+* Previously botan had state whose lifetime had to be explicitly
+* managed by the application. As of 1.11.14 this is no longer the
+* case, and this class is no longer needed and kept only for backwards
+* compatibility.
 */
-class BOTAN_DLL LibraryInitializer
+class BOTAN_PUBLIC_API(2,0) BOTAN_DEPRECATED("LibraryInitializer is no longer required") LibraryInitializer final
    {
    public:
-      /**
-      * Initialize the library
-      * @param options a string listing initialization options
-      */
-      static void initialize(const std::string& options = "");
+      explicit LibraryInitializer(const std::string& /*ignored*/ = "") { }
 
-      /**
-      * Shutdown the library
-      */
-      static void deinitialize();
-
-      /**
-      * Initialize the library
-      * @param options a string listing initialization options
-      */
-      LibraryInitializer(const std::string& options = "")
-         { LibraryInitializer::initialize(options); }
-
-      ~LibraryInitializer() { LibraryInitializer::deinitialize(); }
+      static void initialize(const std::string& /*ignored*/ = "") {}
+      static void deinitialize() {}
    };
 
 }

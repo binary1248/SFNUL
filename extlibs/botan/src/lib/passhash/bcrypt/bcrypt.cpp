@@ -2,22 +2,23 @@
 * Bcrypt Password Hashing
 * (C) 2010 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/bcrypt.h>
-#include <botan/loadstor.h>
+#include <botan/rng.h>
 #include <botan/blowfish.h>
 #include <botan/base64.h>
+#include <botan/parsing.h>
 
 namespace Botan {
 
 namespace {
 
-std::string bcrypt_base64_encode(const byte input[], size_t length)
+std::string bcrypt_base64_encode(const uint8_t input[], size_t length)
    {
    // Bcrypt uses a non-standard base64 alphabet
-   const byte OPENBSD_BASE64_SUB[256] = {
+   const uint8_t OPENBSD_BASE64_SUB[256] = {
       0x00, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
       0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
       0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
@@ -48,14 +49,14 @@ std::string bcrypt_base64_encode(const byte input[], size_t length)
       b64 = b64.substr(0, b64.size() - 1);
 
    for(size_t i = 0; i != b64.size(); ++i)
-      b64[i] = OPENBSD_BASE64_SUB[static_cast<byte>(b64[i])];
+      b64[i] = OPENBSD_BASE64_SUB[static_cast<uint8_t>(b64[i])];
 
    return b64;
    }
 
-std::vector<byte> bcrypt_base64_decode(std::string input)
+std::vector<uint8_t> bcrypt_base64_decode(std::string input)
    {
-   const byte OPENBSD_BASE64_SUB[256] = {
+   const uint8_t OPENBSD_BASE64_SUB[256] = {
       0x00, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
       0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
       0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
@@ -81,35 +82,35 @@ std::vector<byte> bcrypt_base64_decode(std::string input)
    };
 
    for(size_t i = 0; i != input.size(); ++i)
-      input[i] = OPENBSD_BASE64_SUB[static_cast<byte>(input[i])];
+      input[i] = OPENBSD_BASE64_SUB[static_cast<uint8_t>(input[i])];
 
    return unlock(base64_decode(input));
    }
 
 std::string make_bcrypt(const std::string& pass,
-                        const std::vector<byte>& salt,
-                        u16bit work_factor)
+                        const std::vector<uint8_t>& salt,
+                        uint16_t work_factor)
    {
-   const byte magic[24] = {
+   static const uint8_t BCRYPT_MAGIC[8*3] = {
       0x4F, 0x72, 0x70, 0x68, 0x65, 0x61, 0x6E, 0x42,
       0x65, 0x68, 0x6F, 0x6C, 0x64, 0x65, 0x72, 0x53,
       0x63, 0x72, 0x79, 0x44, 0x6F, 0x75, 0x62, 0x74
    };
 
-   std::vector<byte> ctext(magic, magic + sizeof(magic));
-
    Blowfish blowfish;
 
-   // Include the trailing NULL byte
-   blowfish.eks_key_schedule(reinterpret_cast<const byte*>(pass.c_str()),
+   // Include the trailing NULL byte, so we need c_str() not data()
+   blowfish.eks_key_schedule(cast_char_ptr_to_uint8(pass.c_str()),
                              pass.length() + 1,
-                             &salt[0],
+                             salt.data(),
                              work_factor);
 
-   for(size_t i = 0; i != 64; ++i)
-      blowfish.encrypt_n(&ctext[0], &ctext[0], 3);
+   std::vector<uint8_t> ctext(BCRYPT_MAGIC, BCRYPT_MAGIC + 8*3);
 
-   std::string salt_b64 = bcrypt_base64_encode(&salt[0], salt.size());
+   for(size_t i = 0; i != 64; ++i)
+      blowfish.encrypt_n(ctext.data(), ctext.data(), 3);
+
+   std::string salt_b64 = bcrypt_base64_encode(salt.data(), salt.size());
 
    std::string work_factor_str = std::to_string(work_factor);
    if(work_factor_str.length() == 1)
@@ -117,14 +118,14 @@ std::string make_bcrypt(const std::string& pass,
 
    return "$2a$" + work_factor_str +
           "$" + salt_b64.substr(0, 22) +
-          bcrypt_base64_encode(&ctext[0], ctext.size() - 1);
+          bcrypt_base64_encode(ctext.data(), ctext.size() - 1);
    }
 
 }
 
 std::string generate_bcrypt(const std::string& pass,
                             RandomNumberGenerator& rng,
-                            u16bit work_factor)
+                            uint16_t work_factor)
    {
    return make_bcrypt(pass, unlock(rng.random_vec(16)), work_factor);
    }
@@ -138,13 +139,15 @@ bool check_bcrypt(const std::string& pass, const std::string& hash)
       return false;
       }
 
-   const u16bit workfactor = to_u32bit(hash.substr(4, 2));
+   const uint16_t workfactor = to_uint16(hash.substr(4, 2));
 
-   std::vector<byte> salt = bcrypt_base64_decode(hash.substr(7, 22));
+   const std::vector<uint8_t> salt = bcrypt_base64_decode(hash.substr(7, 22));
+   if(salt.size() != 16)
+      return false;
 
    const std::string compare = make_bcrypt(pass, salt, workfactor);
 
-   return (hash == compare);
+   return same_mem(hash.data(), compare.data(), compare.size());
    }
 
 }

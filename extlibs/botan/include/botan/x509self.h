@@ -2,23 +2,26 @@
 * X.509 Self-Signed Certificate
 * (C) 1999-2007 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_X509_SELF_H__
-#define BOTAN_X509_SELF_H__
+#ifndef BOTAN_X509_SELF_H_
+#define BOTAN_X509_SELF_H_
 
 #include <botan/x509cert.h>
-#include <botan/pkcs8.h>
+#include <botan/x509_ext.h>
 #include <botan/pkcs10.h>
 #include <botan/asn1_time.h>
 
 namespace Botan {
 
+class RandomNumberGenerator;
+class Private_Key;
+
 /**
 * Options for X.509 certificates.
 */
-class BOTAN_DLL X509_Cert_Options
+class BOTAN_PUBLIC_API(2,0) X509_Cert_Options final
    {
    public:
       /**
@@ -76,6 +79,8 @@ class BOTAN_DLL X509_Cert_Options
       */
       std::string dns;
 
+      std::vector<std::string> more_dns;
+
       /**
       * the subject XMPP
       */
@@ -105,6 +110,8 @@ class BOTAN_DLL X509_Cert_Options
       */
       size_t path_limit;
 
+      std::string padding_scheme;
+
       /**
       * The key constraints for the subject public key
       */
@@ -116,15 +123,20 @@ class BOTAN_DLL X509_Cert_Options
       std::vector<OID> ex_constraints;
 
       /**
-      * Check the options set in this object for validity.
+      * Additional X.509 extensions
       */
-      void sanity_check() const;
+      Extensions extensions;
 
       /**
       * Mark the certificate as a CA certificate and set the path limit.
       * @param limit the path limit to be set in the BasicConstraints extension.
       */
       void CA_key(size_t limit = 1);
+
+      /**
+      * Choose a padding scheme different from the default for the key used.
+      */
+      void set_padding_scheme(const std::string& scheme);
 
       /**
       * Set the notBefore of the certificate.
@@ -163,7 +175,7 @@ class BOTAN_DLL X509_Cert_Options
       * @param expire_time the expiration time (from the current clock in seconds)
       */
       X509_Cert_Options(const std::string& opts = "",
-                        u32bit expire_time = 365 * 24 * 60 * 60);
+                        uint32_t expire_time = 365 * 24 * 60 * 60);
    };
 
 namespace X509 {
@@ -177,7 +189,7 @@ namespace X509 {
 * @param rng the rng to use
 * @return newly created self-signed certificate
 */
-BOTAN_DLL X509_Certificate
+BOTAN_PUBLIC_API(2,0) X509_Certificate
 create_self_signed_cert(const X509_Cert_Options& opts,
                         const Private_Key& key,
                         const std::string& hash_fn,
@@ -191,7 +203,7 @@ create_self_signed_cert(const X509_Cert_Options& opts,
 * @param hash_fn the hash function to use
 * @return newly created PKCS#10 request
 */
-BOTAN_DLL PKCS10_Request create_cert_req(const X509_Cert_Options& opts,
+BOTAN_PUBLIC_API(2,0) PKCS10_Request create_cert_req(const X509_Cert_Options& opts,
                                          const Private_Key& key,
                                          const std::string& hash_fn,
                                          RandomNumberGenerator& rng);

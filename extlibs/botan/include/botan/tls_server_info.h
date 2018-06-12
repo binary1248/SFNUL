@@ -2,11 +2,11 @@
 * TLS Server Information
 * (C) 2012 Jack Lloyd
 *
-* Released under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_TLS_SERVER_INFO_H__
-#define BOTAN_TLS_SERVER_INFO_H__
+#ifndef BOTAN_TLS_SERVER_INFO_H_
+#define BOTAN_TLS_SERVER_INFO_H_
 
 #include <botan/types.h>
 #include <string>
@@ -18,7 +18,7 @@ namespace TLS {
 /**
 * Represents information known about a TLS server.
 */
-class BOTAN_DLL Server_Information
+class BOTAN_PUBLIC_API(2,0) Server_Information final
    {
    public:
       /**
@@ -32,7 +32,7 @@ class BOTAN_DLL Server_Information
       *        TCP/UDP). Zero represents unknown.
       */
       Server_Information(const std::string& hostname,
-                        u16bit port = 0) :
+                        uint16_t port = 0) :
          m_hostname(hostname), m_service(""), m_port(port) {}
 
       /**
@@ -44,20 +44,33 @@ class BOTAN_DLL Server_Information
       */
       Server_Information(const std::string& hostname,
                         const std::string& service,
-                        u16bit port = 0) :
+                        uint16_t port = 0) :
          m_hostname(hostname), m_service(service), m_port(port) {}
 
+      /**
+      * @return the host's DNS name, if known
+      */
       std::string hostname() const { return m_hostname; }
 
+      /**
+      * @return text string of the service type, e.g.,
+      * "https", "tor", or "git"
+      */
       std::string service() const { return m_service; }
 
-      u16bit port() const { return m_port; }
+      /**
+      * @return the protocol port of the server, or zero if unknown
+      */
+      uint16_t port() const { return m_port; }
 
+      /**
+      * @return whether the hostname is known
+      */
       bool empty() const { return m_hostname.empty(); }
 
    private:
       std::string m_hostname, m_service;
-      u16bit m_port;
+      uint16_t m_port;
    };
 
 inline bool operator==(const Server_Information& a, const Server_Information& b)

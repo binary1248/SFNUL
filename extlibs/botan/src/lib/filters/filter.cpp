@@ -2,11 +2,10 @@
 * Filter
 * (C) 1999-2007 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/filter.h>
-#include <botan/secqueue.h>
 #include <botan/exceptn.h>
 
 namespace Botan {
@@ -16,31 +15,34 @@ namespace Botan {
 */
 Filter::Filter()
    {
-   next.resize(1);
-   port_num = 0;
-   filter_owns = 0;
-   owned = false;
+   m_next.resize(1);
+   m_port_num = 0;
+   m_filter_owns = 0;
+   m_owned = false;
    }
 
 /*
 * Send data to all ports
 */
-void Filter::send(const byte input[], size_t length)
+void Filter::send(const uint8_t input[], size_t length)
    {
+   if(!length)
+      return;
+
    bool nothing_attached = true;
    for(size_t j = 0; j != total_ports(); ++j)
-      if(next[j])
+      if(m_next[j])
          {
-         if(write_queue.size())
-            next[j]->write(&write_queue[0], write_queue.size());
-         next[j]->write(input, length);
+         if(m_write_queue.size())
+            m_next[j]->write(m_write_queue.data(), m_write_queue.size());
+         m_next[j]->write(input, length);
          nothing_attached = false;
          }
 
    if(nothing_attached)
-      write_queue += std::make_pair(input, length);
+      m_write_queue += std::make_pair(input, length);
    else
-      write_queue.clear();
+      m_write_queue.clear();
    }
 
 /*
@@ -50,8 +52,8 @@ void Filter::new_msg()
    {
    start_msg();
    for(size_t j = 0; j != total_ports(); ++j)
-      if(next[j])
-         next[j]->new_msg();
+      if(m_next[j])
+         m_next[j]->new_msg();
    }
 
 /*
@@ -61,8 +63,8 @@ void Filter::finish_msg()
    {
    end_msg();
    for(size_t j = 0; j != total_ports(); ++j)
-      if(next[j])
-         next[j]->finish_msg();
+      if(m_next[j])
+         m_next[j]->finish_msg();
    }
 
 /*
@@ -75,7 +77,7 @@ void Filter::attach(Filter* new_filter)
       Filter* last = this;
       while(last->get_next())
          last = last->get_next();
-      last->next[last->current_port()] = new_filter;
+      last->m_next[last->current_port()] = new_filter;
       }
    }
 
@@ -86,7 +88,7 @@ void Filter::set_port(size_t new_port)
    {
    if(new_port >= total_ports())
       throw Invalid_Argument("Filter: Invalid port number");
-   port_num = new_port;
+   m_port_num = new_port;
    }
 
 /*
@@ -94,8 +96,8 @@ void Filter::set_port(size_t new_port)
 */
 Filter* Filter::get_next() const
    {
-   if(port_num < next.size())
-      return next[port_num];
+   if(m_port_num < m_next.size())
+      return m_next[m_port_num];
    return nullptr;
    }
 
@@ -104,16 +106,16 @@ Filter* Filter::get_next() const
 */
 void Filter::set_next(Filter* filters[], size_t size)
    {
-   next.clear();
+   m_next.clear();
 
-   port_num = 0;
-   filter_owns = 0;
+   m_port_num = 0;
+   m_filter_owns = 0;
 
    while(size && filters && (filters[size-1] == nullptr))
       --size;
 
    if(filters && size)
-      next.assign(filters, filters + size);
+      m_next.assign(filters, filters + size);
    }
 
 /*
@@ -121,7 +123,7 @@ void Filter::set_next(Filter* filters[], size_t size)
 */
 size_t Filter::total_ports() const
    {
-   return next.size();
+   return m_next.size();
    }
 
 }

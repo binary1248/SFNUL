@@ -2,16 +2,16 @@
 * Certificate Request Message
 * (C) 2004-2006,2012 Jack Lloyd
 *
-* Released under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#include <botan/internal/tls_messages.h>
+#include <botan/tls_messages.h>
+#include <botan/tls_extensions.h>
 #include <botan/internal/tls_reader.h>
-#include <botan/internal/tls_extensions.h>
 #include <botan/internal/tls_handshake_io.h>
+#include <botan/internal/tls_handshake_hash.h>
 #include <botan/der_enc.h>
 #include <botan/ber_dec.h>
-#include <botan/loadstor.h>
 
 namespace Botan {
 
@@ -19,7 +19,7 @@ namespace TLS {
 
 namespace {
 
-std::string cert_type_code_to_name(byte code)
+std::string cert_type_code_to_name(uint8_t code)
    {
    switch(code)
       {
@@ -34,7 +34,7 @@ std::string cert_type_code_to_name(byte code)
       }
    }
 
-byte cert_type_name_to_code(const std::string& name)
+uint8_t cert_type_name_to_code(const std::string& name)
    {
    if(name == "RSA")
       return 1;
@@ -61,12 +61,7 @@ Certificate_Req::Certificate_Req(Handshake_IO& io,
    {
    if(version.supports_negotiable_signature_algorithms())
       {
-      std::vector<std::string> hashes = policy.allowed_signature_hashes();
-      std::vector<std::string> sigs = policy.allowed_signature_methods();
-
-      for(size_t i = 0; i != hashes.size(); ++i)
-         for(size_t j = 0; j != sigs.size(); ++j)
-            m_supported_algos.push_back(std::make_pair(hashes[i], sigs[j]));
+      m_schemes = policy.allowed_signature_schemes();
       }
 
    hash.update(io.send(*this));
@@ -75,21 +70,21 @@ Certificate_Req::Certificate_Req(Handshake_IO& io,
 /**
 * Deserialize a Certificate Request message
 */
-Certificate_Req::Certificate_Req(const std::vector<byte>& buf,
+Certificate_Req::Certificate_Req(const std::vector<uint8_t>& buf,
                                  Protocol_Version version)
    {
    if(buf.size() < 4)
       throw Decoding_Error("Certificate_Req: Bad certificate request");
 
-   TLS_Data_Reader reader(buf);
+   TLS_Data_Reader reader("CertificateRequest", buf);
 
-   std::vector<byte> cert_type_codes = reader.get_range_vector<byte>(1, 1, 255);
+   std::vector<uint8_t> cert_type_codes = reader.get_range_vector<uint8_t>(1, 1, 255);
 
    for(size_t i = 0; i != cert_type_codes.size(); ++i)
       {
       const std::string cert_type_name = cert_type_code_to_name(cert_type_codes[i]);
 
-      if(cert_type_name == "") // something we don't know
+      if(cert_type_name.empty()) // something we don't know
          continue;
 
       m_cert_key_types.push_back(cert_type_name);
@@ -97,29 +92,27 @@ Certificate_Req::Certificate_Req(const std::vector<byte>& buf,
 
    if(version.supports_negotiable_signature_algorithms())
       {
-      std::vector<byte> sig_hash_algs = reader.get_range_vector<byte>(2, 2, 65534);
+      const std::vector<uint8_t> algs = reader.get_range_vector<uint8_t>(2, 2, 65534);
 
-      if(sig_hash_algs.size() % 2 != 0)
+      if(algs.size() % 2 != 0)
          throw Decoding_Error("Bad length for signature IDs in certificate request");
 
-      for(size_t i = 0; i != sig_hash_algs.size(); i += 2)
+      for(size_t i = 0; i != algs.size(); i += 2)
          {
-         std::string hash = Signature_Algorithms::hash_algo_name(sig_hash_algs[i]);
-         std::string sig = Signature_Algorithms::sig_algo_name(sig_hash_algs[i+1]);
-         m_supported_algos.push_back(std::make_pair(hash, sig));
+         m_schemes.push_back(static_cast<Signature_Scheme>(make_uint16(algs[i], algs[i+1])));
          }
       }
 
-   const u16bit purported_size = reader.get_u16bit();
+   const uint16_t purported_size = reader.get_uint16_t();
 
    if(reader.remaining_bytes() != purported_size)
       throw Decoding_Error("Inconsistent length in certificate request");
 
    while(reader.has_remaining())
       {
-      std::vector<byte> name_bits = reader.get_range_vector<byte>(2, 0, 65535);
+      std::vector<uint8_t> name_bits = reader.get_range_vector<uint8_t>(2, 0, 65535);
 
-      BER_Decoder decoder(&name_bits[0], name_bits.size());
+      BER_Decoder decoder(name_bits.data(), name_bits.size());
       X509_DN name;
       decoder.decode(name);
       m_names.push_back(name);
@@ -129,21 +122,21 @@ Certificate_Req::Certificate_Req(const std::vector<byte>& buf,
 /**
 * Serialize a Certificate Request message
 */
-std::vector<byte> Certificate_Req::serialize() const
+std::vector<uint8_t> Certificate_Req::serialize() const
    {
-   std::vector<byte> buf;
+   std::vector<uint8_t> buf;
 
-   std::vector<byte> cert_types;
+   std::vector<uint8_t> cert_types;
 
    for(size_t i = 0; i != m_cert_key_types.size(); ++i)
       cert_types.push_back(cert_type_name_to_code(m_cert_key_types[i]));
 
    append_tls_length_value(buf, cert_types, 1);
 
-   if(!m_supported_algos.empty())
-      buf += Signature_Algorithms(m_supported_algos).serialize();
+   if(m_schemes.size() > 0)
+      buf += Signature_Algorithms(m_schemes).serialize();
 
-   std::vector<byte> encoded_names;
+   std::vector<uint8_t> encoded_names;
 
    for(size_t i = 0; i != m_names.size(); ++i)
       {

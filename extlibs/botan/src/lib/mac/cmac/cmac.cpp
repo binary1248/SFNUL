@@ -2,59 +2,46 @@
 * CMAC
 * (C) 1999-2007,2014 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/cmac.h>
-#include <botan/loadstor.h>
-#include <botan/internal/xor_buf.h>
+#include <botan/internal/poly_dbl.h>
 
 namespace Botan {
 
 /*
 * Perform CMAC's multiplication in GF(2^n)
 */
-secure_vector<byte> CMAC::poly_double(const secure_vector<byte>& in)
+secure_vector<uint8_t> CMAC::poly_double(const secure_vector<uint8_t>& in)
    {
-   const byte polynomial = (in.size() == 16) ? 0x87 : 0x1B;
-
-   const byte poly_xor = (in[0] & 0x80) ? polynomial : 0;
-
-   secure_vector<byte> out = in;
-
-   byte carry = 0;
-   for(size_t i = out.size(); i != 0; --i)
-      {
-      byte temp = out[i-1];
-      out[i-1] = (temp << 1) | carry;
-      carry = (temp >> 7);
-      }
-
-   out[out.size()-1] ^= poly_xor;
-
+   secure_vector<uint8_t> out(in.size());
+   poly_double_n(out.data(), in.data(), out.size());
    return out;
    }
 
 /*
 * Update an CMAC Calculation
 */
-void CMAC::add_data(const byte input[], size_t length)
+void CMAC::add_data(const uint8_t input[], size_t length)
    {
+   const size_t bs = output_length();
+
    buffer_insert(m_buffer, m_position, input, length);
-   if(m_position + length > output_length())
+   if(m_position + length > bs)
       {
-      xor_buf(m_state, m_buffer, output_length());
+      xor_buf(m_state, m_buffer, bs);
       m_cipher->encrypt(m_state);
-      input += (output_length() - m_position);
-      length -= (output_length() - m_position);
-      while(length > output_length())
+      input += (bs - m_position);
+      length -= (bs - m_position);
+      while(length > bs)
          {
-         xor_buf(m_state, input, output_length());
+         xor_buf(m_state, input, bs);
          m_cipher->encrypt(m_state);
-         input += output_length();
-         length -= output_length();
+         input += bs;
+         length -= bs;
          }
-      copy_mem(&m_buffer[0], input, length);
+      copy_mem(m_buffer.data(), input, length);
       m_position = 0;
       }
    m_position += length;
@@ -63,7 +50,7 @@ void CMAC::add_data(const byte input[], size_t length)
 /*
 * Finalize an CMAC Calculation
 */
-void CMAC::final_result(byte mac[])
+void CMAC::final_result(uint8_t mac[])
    {
    xor_buf(m_state, m_buffer, m_position);
 
@@ -79,8 +66,7 @@ void CMAC::final_result(byte mac[])
 
    m_cipher->encrypt(m_state);
 
-   for(size_t i = 0; i != output_length(); ++i)
-      mac[i] = m_state[i];
+   copy_mem(mac, m_state.data(), output_length());
 
    zeroise(m_state);
    zeroise(m_buffer);
@@ -90,13 +76,13 @@ void CMAC::final_result(byte mac[])
 /*
 * CMAC Key Schedule
 */
-void CMAC::key_schedule(const byte key[], size_t length)
+void CMAC::key_schedule(const uint8_t key[], size_t length)
    {
    clear();
    m_cipher->set_key(key, length);
    m_cipher->encrypt(m_B);
-   m_B = poly_double(m_B);
-   m_P = poly_double(m_B);
+   poly_double_n(m_B.data(), m_B.size());
+   poly_double_n(m_P.data(), m_B.data(), m_P.size());
    }
 
 /*
@@ -131,10 +117,16 @@ MessageAuthenticationCode* CMAC::clone() const
 /*
 * CMAC Constructor
 */
-CMAC::CMAC(BlockCipher* cipher) : m_cipher(cipher)
+CMAC::CMAC(BlockCipher* cipher) :
+   m_cipher(cipher),
+   m_block_size(m_cipher->block_size())
    {
-   if(m_cipher->block_size() != 8 && m_cipher->block_size() != 16)
-      throw Invalid_Argument("CMAC cannot use the cipher " + m_cipher->name());
+   if(poly_double_supported_size(m_block_size) == false)
+      {
+      throw Invalid_Argument("CMAC cannot use the " +
+                             std::to_string(m_block_size * 8) +
+                             " bit cipher " + m_cipher->name());
+      }
 
    m_state.resize(output_length());
    m_buffer.resize(output_length());

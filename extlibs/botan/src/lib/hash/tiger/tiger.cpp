@@ -2,22 +2,25 @@
 * Tiger
 * (C) 1999-2007 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/tiger.h>
 #include <botan/exceptn.h>
-#include <botan/loadstor.h>
-#include <botan/parsing.h>
 
 namespace Botan {
+
+std::unique_ptr<HashFunction> Tiger::copy_state() const
+   {
+   return std::unique_ptr<HashFunction>(new Tiger(*this));
+   }
 
 namespace {
 
 /*
 * Tiger Mixing Function
 */
-inline void mix(secure_vector<u64bit>& X)
+inline void mix(secure_vector<uint64_t>& X)
    {
    X[0] -= X[7] ^ 0xA5A5A5A5A5A5A5A5;
    X[1] ^= X[0];
@@ -43,28 +46,28 @@ inline void mix(secure_vector<u64bit>& X)
 /*
 * Tiger Compression Function
 */
-void Tiger::compress_n(const byte input[], size_t blocks)
+void Tiger::compress_n(const uint8_t input[], size_t blocks)
    {
-   u64bit A = digest[0], B = digest[1], C = digest[2];
+   uint64_t A = m_digest[0], B = m_digest[1], C = m_digest[2];
 
    for(size_t i = 0; i != blocks; ++i)
       {
-      load_le(&X[0], input, X.size());
+      load_le(m_X.data(), input, m_X.size());
 
-      pass(A, B, C, X, 5); mix(X);
-      pass(C, A, B, X, 7); mix(X);
-      pass(B, C, A, X, 9);
+      pass(A, B, C, m_X, 5); mix(m_X);
+      pass(C, A, B, m_X, 7); mix(m_X);
+      pass(B, C, A, m_X, 9);
 
-      for(size_t j = 3; j != passes; ++j)
+      for(size_t j = 3; j != m_passes; ++j)
          {
-         mix(X);
-         pass(A, B, C, X, 9);
-         u64bit T = A; A = C; C = B; B = T;
+         mix(m_X);
+         pass(A, B, C, m_X, 9);
+         uint64_t T = A; A = C; C = B; B = T;
          }
 
-      A = (digest[0] ^= A);
-      B = digest[1] = B - digest[1];
-      C = (digest[2] += C);
+      A = (m_digest[0] ^= A);
+      B = m_digest[1] = B - m_digest[1];
+      C = (m_digest[2] += C);
 
       input += hash_block_size();
       }
@@ -73,18 +76,17 @@ void Tiger::compress_n(const byte input[], size_t blocks)
 /*
 * Copy out the digest
 */
-void Tiger::copy_out(byte output[])
+void Tiger::copy_out(uint8_t output[])
    {
-   for(size_t i = 0; i != output_length(); ++i)
-      output[i] = get_byte(7 - (i % 8), digest[i/8]);
+   copy_out_vec_le(output, output_length(), m_digest);
    }
 
 /*
 * Tiger Pass
 */
-void Tiger::pass(u64bit& A, u64bit& B, u64bit& C,
-                 const secure_vector<u64bit>& X,
-                 byte mul)
+void Tiger::pass(uint64_t& A, uint64_t& B, uint64_t& C,
+                 const secure_vector<uint64_t>& X,
+                 uint8_t mul)
    {
    C ^= X[0];
    A -= SBOX1[get_byte(7, C)] ^ SBOX2[get_byte(5, C)] ^
@@ -149,10 +151,10 @@ void Tiger::pass(u64bit& A, u64bit& B, u64bit& C,
 void Tiger::clear()
    {
    MDx_HashFunction::clear();
-   zeroise(X);
-   digest[0] = 0x0123456789ABCDEF;
-   digest[1] = 0xFEDCBA9876543210;
-   digest[2] = 0xF096A5B4C3B2E187;
+   zeroise(m_X);
+   m_digest[0] = 0x0123456789ABCDEF;
+   m_digest[1] = 0xFEDCBA9876543210;
+   m_digest[2] = 0xF096A5B4C3B2E187;
    }
 
 /*
@@ -161,7 +163,7 @@ void Tiger::clear()
 std::string Tiger::name() const
    {
    return "Tiger(" + std::to_string(output_length()) + "," +
-                     std::to_string(passes) + ")";
+                     std::to_string(m_passes) + ")";
    }
 
 /*
@@ -169,10 +171,10 @@ std::string Tiger::name() const
 */
 Tiger::Tiger(size_t hash_len, size_t passes) :
    MDx_HashFunction(64, false, false),
-   X(8),
-   digest(3),
-   hash_len(hash_len),
-   passes(passes)
+   m_X(8),
+   m_digest(3),
+   m_hash_len(hash_len),
+   m_passes(passes)
    {
    if(output_length() != 16 && output_length() != 20 && output_length() != 24)
       throw Invalid_Argument("Tiger: Illegal hash output size: " +

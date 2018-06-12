@@ -2,11 +2,11 @@
 * ASN.1 OID
 * (C) 1999-2007 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_ASN1_OID_H__
-#define BOTAN_ASN1_OID_H__
+#ifndef BOTAN_ASN1_OID_H_
+#define BOTAN_ASN1_OID_H_
 
 #include <botan/asn1_obj.h>
 #include <string>
@@ -17,29 +17,41 @@ namespace Botan {
 /**
 * This class represents ASN.1 object identifiers.
 */
-class BOTAN_DLL OID : public ASN1_Object
+class BOTAN_PUBLIC_API(2,0) OID final : public ASN1_Object
    {
    public:
-      void encode_into(class DER_Encoder&) const;
-      void decode_from(class BER_Decoder&);
+      void encode_into(class DER_Encoder&) const override;
+      void decode_from(class BER_Decoder&) override;
 
       /**
       * Find out whether this OID is empty
       * @return true is no OID value is set
       */
-      bool empty() const { return id.size() == 0; }
+      bool empty() const { return m_id.empty(); }
+
+      /**
+      * Find out whether this OID has a value
+      * @return true is this OID has a value
+      */
+      bool has_value() const { return (m_id.empty() == false); }
 
       /**
       * Get this OID as list (vector) of its components.
       * @return vector representing this OID
       */
-      const std::vector<u32bit>& get_id() const { return id; }
+      const std::vector<uint32_t>& get_id() const { return m_id; }
 
       /**
       * Get this OID as a string
       * @return string representing this OID
       */
-      std::string as_string() const;
+      std::string as_string() const { return this->to_string(); }
+
+      /**
+      * Get this OID as a string
+      * @return string representing this OID
+      */
+      std::string to_string() const;
 
       /**
       * Compare two OIDs.
@@ -57,15 +69,17 @@ class BOTAN_DLL OID : public ASN1_Object
       * @param new_comp the new component to add to the end of this OID
       * @return reference to *this
       */
-      OID& operator+=(u32bit new_comp);
+      OID& operator+=(uint32_t new_comp);
 
       /**
       * Construct an OID from a string.
       * @param str a string in the form "a.b.c" etc., where a,b,c are numbers
       */
       OID(const std::string& str = "");
+
+      explicit OID(std::initializer_list<uint32_t> init) : m_id(init) {}
    private:
-      std::vector<u32bit> id;
+      std::vector<uint32_t> m_id;
    };
 
 /**
@@ -73,7 +87,7 @@ class BOTAN_DLL OID : public ASN1_Object
 * @param oid the OID to add the new component to
 * @param new_comp the new component to add
 */
-OID BOTAN_DLL operator+(const OID& oid, u32bit new_comp);
+OID BOTAN_PUBLIC_API(2,0) operator+(const OID& oid, uint32_t new_comp);
 
 /**
 * Compare two OIDs.
@@ -81,7 +95,7 @@ OID BOTAN_DLL operator+(const OID& oid, u32bit new_comp);
 * @param b the second OID
 * @return true if a is not equal to b
 */
-bool BOTAN_DLL operator!=(const OID& a, const OID& b);
+bool BOTAN_PUBLIC_API(2,0) operator!=(const OID& a, const OID& b);
 
 /**
 * Compare two OIDs.
@@ -89,7 +103,7 @@ bool BOTAN_DLL operator!=(const OID& a, const OID& b);
 * @param b the second OID
 * @return true if a is lexicographically smaller than b
 */
-bool BOTAN_DLL operator<(const OID& a, const OID& b);
+bool BOTAN_PUBLIC_API(2,0) operator<(const OID& a, const OID& b);
 
 }
 

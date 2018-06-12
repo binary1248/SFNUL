@@ -3,11 +3,16 @@
 * (C) 2013 Joel Low
 *     2013 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/basefilt.h>
+
+#if defined(BOTAN_HAS_THREAD_UTILS)
+
 #include <botan/internal/semaphore.h>
+#include <botan/internal/barrier.h>
+#include <functional>
 
 namespace Botan {
 
@@ -20,16 +25,16 @@ struct Threaded_Fork_Data
    Semaphore m_input_ready_semaphore;
 
    /*
-   * Ensures that all threads have completed processing data.
+   * Synchronises all threads to complete processing data in lock-step.
    */
-   Semaphore m_input_complete_semaphore;
+   Barrier m_input_complete_barrier;
 
    /*
    * The work that needs to be done. This should be only when the threads
    * are NOT running (i.e. before notifying the work condition, after
-   * the input_complete_semaphore is completely reset.)
+   * the input_complete_barrier has reset.)
    */
-   const byte* m_input = nullptr;
+   const uint8_t* m_input = nullptr;
 
    /*
    * The length of the work that needs to be done.
@@ -77,7 +82,7 @@ std::string Threaded_Fork::name() const
 void Threaded_Fork::set_next(Filter* f[], size_t n)
    {
    Fork::set_next(f, n);
-   n = next.size();
+   n = m_next.size();
 
    if(n < m_threads.size())
       m_threads.resize(n);
@@ -89,40 +94,40 @@ void Threaded_Fork::set_next(Filter* f[], size_t n)
          m_threads.push_back(
             std::shared_ptr<std::thread>(
                new std::thread(
-                  std::bind(&Threaded_Fork::thread_entry, this, next[i]))));
+                  std::bind(&Threaded_Fork::thread_entry, this, m_next[i]))));
          }
       }
    }
 
-void Threaded_Fork::send(const byte input[], size_t length)
+void Threaded_Fork::send(const uint8_t input[], size_t length)
    {
-   if(write_queue.size())
-      thread_delegate_work(&write_queue[0], write_queue.size());
+   if(m_write_queue.size())
+      thread_delegate_work(m_write_queue.data(), m_write_queue.size());
    thread_delegate_work(input, length);
 
    bool nothing_attached = true;
    for(size_t j = 0; j != total_ports(); ++j)
-      if(next[j])
+      if(m_next[j])
          nothing_attached = false;
 
    if(nothing_attached)
-      write_queue += std::make_pair(input, length);
+      m_write_queue += std::make_pair(input, length);
    else
-      write_queue.clear();
+      m_write_queue.clear();
    }
 
-void Threaded_Fork::thread_delegate_work(const byte input[], size_t length)
+void Threaded_Fork::thread_delegate_work(const uint8_t input[], size_t length)
    {
    //Set the data to do.
    m_thread_data->m_input = input;
    m_thread_data->m_input_length = length;
 
    //Let the workers start processing.
+   m_thread_data->m_input_complete_barrier.wait(total_ports() + 1);
    m_thread_data->m_input_ready_semaphore.release(total_ports());
 
    //Wait for all the filters to finish processing.
-   for(size_t i = 0; i != total_ports(); ++i)
-      m_thread_data->m_input_complete_semaphore.acquire();
+   m_thread_data->m_input_complete_barrier.sync();
 
    //Reset the thread data
    m_thread_data->m_input = nullptr;
@@ -139,8 +144,10 @@ void Threaded_Fork::thread_entry(Filter* filter)
          break;
 
       filter->write(m_thread_data->m_input, m_thread_data->m_input_length);
-      m_thread_data->m_input_complete_semaphore.release();
+      m_thread_data->m_input_complete_barrier.sync();
       }
    }
 
 }
+
+#endif

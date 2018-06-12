@@ -1,3 +1,0 @@
-define AEAD_SIV 20131202
-
-load_on auto

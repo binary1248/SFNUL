@@ -1,5 +1,0 @@
-define KDF2 20131128
-
-<requires>
-hash
-</requires>

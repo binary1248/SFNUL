@@ -2,18 +2,19 @@
 * Reader of /dev/random and company
 * (C) 1999-2009,2013 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/internal/dev_random.h>
-#include <botan/internal/rounding.h>
+#include <botan/exceptn.h>
+
+#if defined(BOTAN_HAS_ENTROPY_SRC_DEV_RANDOM)
 
 #include <sys/types.h>
 #include <sys/select.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <string.h>
 
 namespace Botan {
 
@@ -33,14 +34,34 @@ Device_EntropySource::Device_EntropySource(const std::vector<std::string>& fsnam
 
    const int flags = O_RDONLY | O_NONBLOCK | O_NOCTTY;
 
+   m_max_fd = 0;
+
    for(auto fsname : fsnames)
       {
-      fd_type fd = ::open(fsname.c_str(), flags);
+      int fd = ::open(fsname.c_str(), flags);
 
-      if(fd >= 0 && fd < FD_SETSIZE)
-         m_devices.push_back(fd);
-      else if(fd >= 0)
-         ::close(fd);
+      if(fd < 0)
+         {
+         /*
+         ENOENT or EACCES is normal as some of the named devices may not exist
+         on this system. But any other errno value probably indicates
+         either a bug in the application or file descriptor exhaustion.
+         */
+         if(errno != ENOENT && errno != EACCES)
+            throw Exception("Opening OS RNG device failed with errno " +
+                            std::to_string(errno));
+         }
+      else
+         {
+         if(fd > FD_SETSIZE)
+            {
+            ::close(fd);
+            throw Exception("Open of OS RNG succeeded but fd is too large for fd_set");
+            }
+
+         m_dev_fds.push_back(fd);
+         m_max_fd = std::max(m_max_fd, fd);
+         }
       }
    }
 
@@ -49,49 +70,57 @@ Device_EntropySource destructor: close all open devices
 */
 Device_EntropySource::~Device_EntropySource()
    {
-   for(size_t i = 0; i != m_devices.size(); ++i)
-      ::close(m_devices[i]);
+   for(int fd : m_dev_fds)
+      {
+      // ignoring return value here, can't throw in destructor anyway
+      ::close(fd);
+      }
    }
 
 /**
 * Gather entropy from a RNG device
 */
-void Device_EntropySource::poll(Entropy_Accumulator& accum)
+size_t Device_EntropySource::poll(RandomNumberGenerator& rng)
    {
-   if(m_devices.empty())
-      return;
+   size_t bits = 0;
 
-   const size_t ENTROPY_BITS_PER_BYTE = 8;
-   const size_t MS_WAIT_TIME = 32;
-   const size_t READ_ATTEMPT = std::max<size_t>(accum.desired_remaining_bits() / 8, 16);
-
-   int max_fd = m_devices[0];
-   fd_set read_set;
-   FD_ZERO(&read_set);
-   for(size_t i = 0; i != m_devices.size(); ++i)
+   if(m_dev_fds.size() > 0)
       {
-      FD_SET(m_devices[i], &read_set);
-      max_fd = std::max(m_devices[i], max_fd);
-      }
+      fd_set read_set;
+      FD_ZERO(&read_set);
 
-   struct ::timeval timeout;
-
-   timeout.tv_sec = (MS_WAIT_TIME / 1000);
-   timeout.tv_usec = (MS_WAIT_TIME % 1000) * 1000;
-
-   if(::select(max_fd + 1, &read_set, nullptr, nullptr, &timeout) < 0)
-      return;
-
-   secure_vector<byte>& io_buffer = accum.get_io_buffer(READ_ATTEMPT);
-
-   for(size_t i = 0; i != m_devices.size(); ++i)
-      {
-      if(FD_ISSET(m_devices[i], &read_set))
+      for(int dev_fd : m_dev_fds)
          {
-         const ssize_t got = ::read(m_devices[i], &io_buffer[0], io_buffer.size());
-         accum.add(&io_buffer[0], got, ENTROPY_BITS_PER_BYTE);
+         FD_SET(dev_fd, &read_set);
+         }
+
+      secure_vector<uint8_t> io_buf(BOTAN_SYSTEM_RNG_POLL_REQUEST);
+
+      struct ::timeval timeout;
+      timeout.tv_sec = (BOTAN_SYSTEM_RNG_POLL_TIMEOUT_MS / 1000);
+      timeout.tv_usec = (BOTAN_SYSTEM_RNG_POLL_TIMEOUT_MS % 1000) * 1000;
+
+      if(::select(m_max_fd + 1, &read_set, nullptr, nullptr, &timeout) > 0)
+         {
+         for(int dev_fd : m_dev_fds)
+            {
+            if(FD_ISSET(dev_fd, &read_set))
+               {
+               const ssize_t got = ::read(dev_fd, io_buf.data(), io_buf.size());
+
+               if(got > 0)
+                  {
+                  rng.add_entropy(io_buf.data(), static_cast<size_t>(got));
+                  bits += got * 8;
+                  }
+               }
+            }
          }
       }
+
+   return bits;
    }
 
 }
+
+#endif

@@ -2,11 +2,11 @@
 * PKCS #1 v1.5 signature padding
 * (C) 1999-2008 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_EMSA_PKCS1_H__
-#define BOTAN_EMSA_PKCS1_H__
+#ifndef BOTAN_EMSA_PKCS1_H_
+#define BOTAN_EMSA_PKCS1_H_
 
 #include <botan/emsa.h>
 #include <botan/hash.h>
@@ -18,26 +18,34 @@ namespace Botan {
 * aka PKCS #1 block type 1
 * aka EMSA3 from IEEE 1363
 */
-class BOTAN_DLL EMSA_PKCS1v15 : public EMSA
+class BOTAN_PUBLIC_API(2,0) EMSA_PKCS1v15 final : public EMSA
    {
    public:
       /**
-      * @param hash the hash object to use
+      * @param hash the hash function to use
       */
-      EMSA_PKCS1v15(HashFunction* hash);
+      explicit EMSA_PKCS1v15(HashFunction* hash);
 
-      void update(const byte[], size_t);
+      EMSA* clone() override { return new EMSA_PKCS1v15(m_hash->clone()); }
 
-      secure_vector<byte> raw_data();
+      void update(const uint8_t[], size_t) override;
 
-      secure_vector<byte> encoding_of(const secure_vector<byte>&, size_t,
-                                     RandomNumberGenerator& rng);
+      secure_vector<uint8_t> raw_data() override;
 
-      bool verify(const secure_vector<byte>&, const secure_vector<byte>&,
-                  size_t);
+      secure_vector<uint8_t> encoding_of(const secure_vector<uint8_t>&, size_t,
+                                     RandomNumberGenerator& rng) override;
+
+      bool verify(const secure_vector<uint8_t>&, const secure_vector<uint8_t>&,
+                  size_t) override;
+
+      std::string name() const override
+         { return "EMSA3(" + m_hash->name() + ")"; }
+
+      AlgorithmIdentifier config_for_x509(const Private_Key& key,
+                                          const std::string& cert_hash_name) const override;
    private:
       std::unique_ptr<HashFunction> m_hash;
-      std::vector<byte> m_hash_id;
+      std::vector<uint8_t> m_hash_id;
    };
 
 /**
@@ -45,21 +53,38 @@ class BOTAN_DLL EMSA_PKCS1v15 : public EMSA
 * (which according to QCA docs is "identical to PKCS#11's CKM_RSA_PKCS
 * mechanism", something I have not confirmed)
 */
-class BOTAN_DLL EMSA_PKCS1v15_Raw : public EMSA
+class BOTAN_PUBLIC_API(2,0) EMSA_PKCS1v15_Raw final : public EMSA
    {
    public:
-      void update(const byte[], size_t);
+      EMSA* clone() override { return new EMSA_PKCS1v15_Raw(); }
 
-      secure_vector<byte> raw_data();
+      void update(const uint8_t[], size_t) override;
 
-      secure_vector<byte> encoding_of(const secure_vector<byte>&, size_t,
-                                     RandomNumberGenerator& rng);
+      secure_vector<uint8_t> raw_data() override;
 
-      bool verify(const secure_vector<byte>&, const secure_vector<byte>&,
-                  size_t);
+      secure_vector<uint8_t> encoding_of(const secure_vector<uint8_t>&, size_t,
+                                     RandomNumberGenerator& rng) override;
+
+      bool verify(const secure_vector<uint8_t>&, const secure_vector<uint8_t>&,
+                  size_t) override;
+
+      /**
+      * @param hash_algo if non-empty, the digest id for that hash is
+      * included in the signature.
+      */
+      EMSA_PKCS1v15_Raw(const std::string& hash_algo = "");
+
+      std::string name() const override
+         {
+         if(m_hash_name.empty()) return "EMSA3(Raw)";
+         else return "EMSA3(Raw," + m_hash_name + ")";
+         }
 
    private:
-      secure_vector<byte> message;
+      size_t m_hash_output_len = 0;
+      std::string m_hash_name;
+      std::vector<uint8_t> m_hash_id;
+      secure_vector<uint8_t> m_message;
    };
 
 }

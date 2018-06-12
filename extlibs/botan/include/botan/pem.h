@@ -2,44 +2,45 @@
 * PEM Encoding/Decoding
 * (C) 1999-2007 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_PEM_H__
-#define BOTAN_PEM_H__
+#ifndef BOTAN_PEM_H_
+#define BOTAN_PEM_H_
 
-#include <botan/data_src.h>
+#include <botan/secmem.h>
+#include <string>
 
 namespace Botan {
+
+class DataSource;
 
 namespace PEM_Code {
 
 /**
 * Encode some binary data in PEM format
+* @param data binary data to encode
+* @param data_len length of binary data in bytes
+* @param label PEM label put after BEGIN and END
+* @param line_width after this many characters, a new line is inserted
 */
-BOTAN_DLL std::string encode(const byte data[],
-                             size_t data_len,
-                             const std::string& label,
-                             size_t line_width = 64);
+BOTAN_PUBLIC_API(2,0) std::string encode(const uint8_t data[],
+                                         size_t data_len,
+                                         const std::string& label,
+                                         size_t line_width = 64);
 
 /**
 * Encode some binary data in PEM format
+* @param data binary data to encode
+* @param label PEM label
+* @param line_width after this many characters, a new line is inserted
 */
-inline std::string encode(const std::vector<byte>& data,
-                          const std::string& label,
-                          size_t line_width = 64)
+template<typename Alloc>
+std::string encode(const std::vector<uint8_t, Alloc>& data,
+                   const std::string& label,
+                   size_t line_width = 64)
    {
-   return encode(&data[0], data.size(), label, line_width);
-   }
-
-/**
-* Encode some binary data in PEM format
-*/
-inline std::string encode(const secure_vector<byte>& data,
-                          const std::string& label,
-                          size_t line_width = 64)
-   {
-   return encode(&data[0], data.size(), label, line_width);
+   return encode(data.data(), data.size(), label, line_width);
    }
 
 /**
@@ -47,41 +48,41 @@ inline std::string encode(const secure_vector<byte>& data,
 * @param pem a datasource containing PEM encoded data
 * @param label is set to the PEM label found for later inspection
 */
-BOTAN_DLL secure_vector<byte> decode(DataSource& pem,
-                                     std::string& label);
+BOTAN_PUBLIC_API(2,0) secure_vector<uint8_t> decode(DataSource& pem,
+                                                    std::string& label);
 
 /**
 * Decode PEM data
 * @param pem a string containing PEM encoded data
 * @param label is set to the PEM label found for later inspection
 */
-BOTAN_DLL secure_vector<byte> decode(const std::string& pem,
-                                     std::string& label);
+BOTAN_PUBLIC_API(2,0) secure_vector<uint8_t> decode(const std::string& pem,
+                                                    std::string& label);
 
 /**
 * Decode PEM data
 * @param pem a datasource containing PEM encoded data
 * @param label is what we expect the label to be
 */
-BOTAN_DLL secure_vector<byte> decode_check_label(
-   DataSource& pem,
-   const std::string& label);
+BOTAN_PUBLIC_API(2,0)
+secure_vector<uint8_t> decode_check_label(DataSource& pem,
+                                          const std::string& label);
 
 /**
 * Decode PEM data
 * @param pem a string containing PEM encoded data
 * @param label is what we expect the label to be
 */
-BOTAN_DLL secure_vector<byte> decode_check_label(
-   const std::string& pem,
-   const std::string& label);
+BOTAN_PUBLIC_API(2,0)
+secure_vector<uint8_t> decode_check_label(const std::string& pem,
+                                          const std::string& label);
 
 /**
 * Heuristic test for PEM data.
 */
-BOTAN_DLL bool matches(DataSource& source,
-                       const std::string& extra = "",
-                       size_t search_range = 4096);
+BOTAN_PUBLIC_API(2,0) bool matches(DataSource& source,
+                                   const std::string& extra = "",
+                                   size_t search_range = 4096);
 
 }
 

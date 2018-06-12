@@ -13,13 +13,10 @@ many newer features are used that might not be supported by all compilers even
 though they claim C++11 support. Your mileage may vary.
 
 Dependencies:
- - ASIO (standalone C++11 version) provided in extlibs as a submodule
+ - ASIO (standalone C++11 version) provided in extlibs
  - Botan provided in extlibs
- - http-parser provided in extlibs as a submodule
+ - http-parser provided in extlibs
  - SFML 2.x for the optional SFML synchronization example (http://sfml-dev.org/)
-   Initialize all submodules with
-   git submodule update --init --recursive
-   in the root directory.
    ASIO is provided under the Boost Software License.
    Botan is provided under the Simplified BSD License.
    http-parser is provided under the MIT License.

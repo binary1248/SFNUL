@@ -1,12 +1,12 @@
 /*
 * Version Information
-* (C) 1999-2011 Jack Lloyd
+* (C) 1999-2011,2015 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_VERSION_H__
-#define BOTAN_VERSION_H__
+#ifndef BOTAN_VERSION_H_
+#define BOTAN_VERSION_H_
 
 #include <botan/types.h>
 #include <string>
@@ -22,7 +22,25 @@ namespace Botan {
 * No particular format should be assumed.
 * @return version string
 */
-BOTAN_DLL std::string version_string();
+BOTAN_PUBLIC_API(2,0) std::string version_string();
+
+/**
+* Same as version_string() except returning a pointer to a statically
+* allocated string.
+* @return version string
+*/
+BOTAN_PUBLIC_API(2,0) const char* version_cstr();
+
+/**
+* Return a version string of the form "MAJOR.MINOR.PATCH" where
+* each of the values is an integer.
+*/
+BOTAN_PUBLIC_API(2,4) std::string short_version_string();
+
+/**
+* Same as version_short_string except returning a pointer to the string.
+*/
+BOTAN_PUBLIC_API(2,4) const char* short_version_cstr();
 
 /**
 * Return the date this version of botan was released, in an integer of
@@ -32,25 +50,36 @@ BOTAN_DLL std::string version_string();
 *
 * @return release date, or zero if unreleased
 */
-BOTAN_DLL u32bit version_datestamp();
+BOTAN_PUBLIC_API(2,0) uint32_t version_datestamp();
 
 /**
 * Get the major version number.
 * @return major version number
 */
-BOTAN_DLL u32bit version_major();
+BOTAN_PUBLIC_API(2,0) uint32_t version_major();
 
 /**
 * Get the minor version number.
 * @return minor version number
 */
-BOTAN_DLL u32bit version_minor();
+BOTAN_PUBLIC_API(2,0) uint32_t version_minor();
 
 /**
 * Get the patch number.
 * @return patch number
 */
-BOTAN_DLL u32bit version_patch();
+BOTAN_PUBLIC_API(2,0) uint32_t version_patch();
+
+/**
+* Usable for checking that the DLL version loaded at runtime exactly
+* matches the compile-time version. Call using BOTAN_VERSION_* macro
+* values. Returns the empty string if an exact match, otherwise an
+* appropriate message. Added with 1.11.26.
+*/
+BOTAN_PUBLIC_API(2,0) std::string
+runtime_version_check(uint32_t major,
+                      uint32_t minor,
+                      uint32_t patch);
 
 /*
 * Macros for compile-time version checks

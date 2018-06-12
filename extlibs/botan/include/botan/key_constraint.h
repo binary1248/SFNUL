@@ -1,56 +1,48 @@
 /*
 * Enumerations
 * (C) 1999-2007 Jack Lloyd
+* (C) 2016 René Korthaus, Rohde & Schwarz Cybersecurity
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_ENUMS_H__
-#define BOTAN_ENUMS_H__
+#ifndef BOTAN_ENUMS_H_
+#define BOTAN_ENUMS_H_
 
-#include <botan/ber_dec.h>
+#include <botan/types.h>
+#include <string>
 
 namespace Botan {
 
 /**
 * X.509v3 Key Constraints.
+* If updating update copy in ffi.h
 */
 enum Key_Constraints {
    NO_CONSTRAINTS     = 0,
-   DIGITAL_SIGNATURE  = 32768,
-   NON_REPUDIATION    = 16384,
-   KEY_ENCIPHERMENT   = 8192,
-   DATA_ENCIPHERMENT  = 4096,
-   KEY_AGREEMENT      = 2048,
-   KEY_CERT_SIGN      = 1024,
-   CRL_SIGN           = 512,
-   ENCIPHER_ONLY      = 256,
-   DECIPHER_ONLY      = 128
+   DIGITAL_SIGNATURE  = 1 << 15,
+   NON_REPUDIATION    = 1 << 14,
+   KEY_ENCIPHERMENT   = 1 << 13,
+   DATA_ENCIPHERMENT  = 1 << 12,
+   KEY_AGREEMENT      = 1 << 11,
+   KEY_CERT_SIGN      = 1 << 10,
+   CRL_SIGN           = 1 << 9,
+   ENCIPHER_ONLY      = 1 << 8,
+   DECIPHER_ONLY      = 1 << 7
 };
 
 class Public_Key;
 
 /**
-* Create the key constraints for a specific public key.
-* @param pub_key the public key from which the basic set of
-* constraints to be placed in the return value is derived
-* @param limits additional limits that will be incorporated into the
-* return value
-* @return combination of key type specific constraints and
-* additional limits
+* Check that key constraints are permitted for a specific public key.
+* @param pub_key the public key on which the constraints shall be enforced on
+* @param constraints the constraints that shall be enforced on the key
+* @throw Exception if the given constraints are not permitted for this key
 */
+BOTAN_PUBLIC_API(2,0) void verify_cert_constraints_valid_for_key_type(const Public_Key& pub_key,
+                                                                Key_Constraints constraints);
 
-BOTAN_DLL Key_Constraints find_constraints(const Public_Key& pub_key,
-                                           Key_Constraints limits);
-
-/**
-* BER Decoding Function for key constraints
-*/
-namespace BER {
-
-void BOTAN_DLL decode(BER_Decoder&, Key_Constraints&);
-
-}
+std::string BOTAN_PUBLIC_API(2,0) key_constraints_to_string(Key_Constraints);
 
 }
 

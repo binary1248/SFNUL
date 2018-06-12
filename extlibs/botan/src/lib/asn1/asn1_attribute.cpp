@@ -2,7 +2,7 @@
 * Attribute
 * (C) 1999-2007 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/asn1_attribute.h>
@@ -15,21 +15,19 @@ namespace Botan {
 /*
 * Create an Attribute
 */
-Attribute::Attribute(const OID& attr_oid, const std::vector<byte>& attr_value)
-   {
-   oid = attr_oid;
-   parameters = attr_value;
-   }
+Attribute::Attribute(const OID& attr_oid, const std::vector<uint8_t>& attr_value) :
+   oid(attr_oid),
+   parameters(attr_value)
+   {}
 
 /*
 * Create an Attribute
 */
 Attribute::Attribute(const std::string& attr_oid,
-                     const std::vector<byte>& attr_value)
-   {
-   oid = OIDS::lookup(attr_oid);
-   parameters = attr_value;
-   }
+                     const std::vector<uint8_t>& attr_value) :
+   oid(OIDS::lookup(attr_oid)),
+   parameters(attr_value)
+   {}
 
 /*
 * DER encode a Attribute

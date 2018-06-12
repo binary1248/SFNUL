@@ -26,7 +26,7 @@ class UdpSocket::UdpSocketImpl {
 public:
 	UdpSocketImpl( UdpSocket* owner ) :
 		udp_socket{ owner },
-		asio_socket{ *static_cast<asio::io_service*>( owner->GetIOService() ) }
+		asio_socket{ *static_cast<asio::io_context*>( owner->GetIOService() ) }
 	{
 
 	}
@@ -52,7 +52,7 @@ public:
 				std::copy_n( buffer->begin() + static_cast<int>( bytes_sent ), new_buffer->size(), new_buffer->begin() );
 
 				asio_socket.async_send_to( asio::buffer( *new_buffer ), endpoint,
-					static_cast<asio::strand*>( udp_socket->GetStrand() )->wrap(
+					static_cast<asio::io_context::strand*>( udp_socket->GetStrand() )->wrap(
 						std::bind(
 							[]( std::weak_ptr<UdpSocket> socket, const asio::error_code& handler_error, std::size_t handler_bytes_sent, asio::ip::udp::endpoint handler_endpoint, std::shared_ptr<std::vector<char>> handler_buffer ) {
 								auto shared_socket = socket.lock();
@@ -106,7 +106,7 @@ public:
 				receiving = true;
 
 				asio_socket.async_receive_from( asio::buffer( receive_memory ), *receive_endpoint_ptr,
-					static_cast<asio::strand*>( udp_socket->GetStrand() )->wrap(
+					static_cast<asio::io_context::strand*>( udp_socket->GetStrand() )->wrap(
 						std::bind(
 							[]( std::weak_ptr<UdpSocket> socket, const asio::error_code& handler_error, std::size_t handler_bytes_received, std::shared_ptr<asio::ip::udp::endpoint> handler_endpoint_ptr ) {
 								auto shared_socket = socket.lock();

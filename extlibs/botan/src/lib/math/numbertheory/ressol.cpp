@@ -3,7 +3,7 @@
 * (C) 2007-2008 Falko Strenzke, FlexSecure GmbH
 * (C) 2008 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/numthry.h>
@@ -16,15 +16,19 @@ namespace Botan {
 */
 BigInt ressol(const BigInt& a, const BigInt& p)
    {
-   if(a < 0)
-      throw Invalid_Argument("ressol(): a to solve for must be positive");
-   if(p <= 1)
-      throw Invalid_Argument("ressol(): prime must be > 1");
-
    if(a == 0)
       return 0;
+   else if(a < 0)
+      throw Invalid_Argument("ressol: value to solve for must be positive");
+   else if(a >= p)
+      throw Invalid_Argument("ressol: value to solve for must be less than p");
+
    if(p == 2)
       return a;
+   else if(p <= 1)
+      throw Invalid_Argument("ressol: prime must be > 1 a");
+   else if(p.is_even())
+      throw Invalid_Argument("ressol: invalid prime");
 
    if(jacobi(a, p) != 1) // not a quadratic residue
       return -BigInt(1);
@@ -63,10 +67,12 @@ BigInt ressol(const BigInt& a, const BigInt& p)
          {
          q = mod_p.square(q);
          ++i;
-         }
 
-      if(s <= i)
-         return -BigInt(1);
+         if(i >= s)
+            {
+            return -BigInt(1);
+            }
+         }
 
       c = power_mod(c, BigInt::power_of_2(s-i-1), p);
       r = mod_p.multiply(r, c);

@@ -5,15 +5,15 @@
 #include <SFNUL/NetworkResource.hpp>
 #include <SFNUL/ConfigInternal.hpp>
 #include <SFNUL/MakeUnique.hpp>
-#include <asio/io_service.hpp>
+#include <asio/io_context.hpp>
 #include <asio/strand.hpp>
 #include <deque>
 
 namespace {
 
 std::deque<std::shared_ptr<sfn::Thread>> asio_threads;
-std::shared_ptr<asio::io_service::work> asio_work;
-std::weak_ptr<asio::io_service> shared_io_service;
+std::shared_ptr<asio::io_context::work> asio_work;
+std::weak_ptr<asio::io_context> shared_io_context;
 
 }
 
@@ -22,17 +22,17 @@ namespace sfn {
 class NetworkResource::NetworkResourceImpl {
 public:
 	NetworkResourceImpl() :
-		io_service{ shared_io_service.expired() ? std::make_shared<asio::io_service>() : shared_io_service.lock() },
-		strand{ *io_service }
+		io_context{ shared_io_context.expired() ? std::make_shared<asio::io_context>() : shared_io_context.lock() },
+		strand{ *io_context }
 	{
-		if( shared_io_service.expired() ) {
-			shared_io_service = io_service;
+		if( shared_io_context.expired() ) {
+			shared_io_context = io_context;
 		}
 	}
 
-	std::shared_ptr<asio::io_service> io_service;
+	std::shared_ptr<asio::io_context> io_context;
 
-	mutable asio::strand strand;
+	mutable asio::io_context::strand strand;
 };
 
 NetworkResource::NetworkResource() :
@@ -44,7 +44,7 @@ NetworkResource::~NetworkResource() {
 }
 
 void* NetworkResource::GetIOService() const {
-	return m_impl->io_service.get();
+	return m_impl->io_context.get();
 }
 
 void* NetworkResource::GetStrand() const {
@@ -52,33 +52,33 @@ void* NetworkResource::GetStrand() const {
 }
 
 void Start( std::size_t threads ) {
-	auto io_service = shared_io_service.lock();
+	auto io_context = shared_io_context.lock();
 
-	if( !io_service ) {
-		io_service = std::make_shared<asio::io_service>();
-		shared_io_service = io_service;
+	if( !io_context ) {
+		io_context = std::make_shared<asio::io_context>();
+		shared_io_context = io_context;
 	}
 
-	asio_work = std::make_shared<asio::io_service::work>( *io_service );
+	asio_work = std::make_shared<asio::io_context::work>( *io_context );
 
 	for( std::size_t index = 0; index < threads; index++ ) {
-		asio_threads.emplace_back( std::make_shared<Thread>( [=]() { io_service->run(); } ) );
+		asio_threads.emplace_back( std::make_shared<Thread>( [=]() { io_context->run(); } ) );
 	}
 }
 
 void Stop() {
-	auto io_service = shared_io_service.lock();
+	auto io_context = shared_io_context.lock();
 
-	if( !io_service ) {
+	if( !io_context ) {
 		return;
 	}
 
 	asio_work.reset();
-	io_service->stop();
+	io_context->stop();
 
 	asio_threads.clear();
 
-	io_service->reset();
+	io_context->reset();
 }
 
 }

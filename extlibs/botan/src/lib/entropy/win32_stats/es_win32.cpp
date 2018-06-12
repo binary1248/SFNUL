@@ -1,11 +1,16 @@
 /*
 * Win32 EntropySource
-* (C) 1999-2009 Jack Lloyd
+* (C) 1999-2009,2016 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/internal/es_win32.h>
+
+#if defined(BOTAN_HAS_ENTROPY_SRC_WIN32)
+
+#define NOMINMAX 1
+#define _WINSOCKAPI_ // stop windows.h including winsock.h
 #include <windows.h>
 #include <tlhelp32.h>
 
@@ -14,105 +19,107 @@ namespace Botan {
 /**
 * Win32 poll using stats functions including Tooltip32
 */
-void Win32_EntropySource::poll(Entropy_Accumulator& accum)
+size_t Win32_EntropySource::poll(RandomNumberGenerator& rng)
    {
+   const size_t POLL_TARGET = 128;
+   const size_t EST_ENTROPY_HEAP_INFO = 4;
+   const size_t EST_ENTROPY_THREAD_INFO = 2;
+
    /*
-   First query a bunch of basic statistical stuff, though
-   don't count it for much in terms of contributed entropy.
+   First query a bunch of basic statistical stuff
    */
-   accum.add(GetTickCount(), 0);
-   accum.add(GetMessagePos(), 0);
-   accum.add(GetMessageTime(), 0);
-   accum.add(GetInputState(), 0);
-   accum.add(GetCurrentProcessId(), 0);
-   accum.add(GetCurrentThreadId(), 0);
+   rng.add_entropy_T(::GetTickCount());
+   rng.add_entropy_T(::GetMessagePos());
+   rng.add_entropy_T(::GetMessageTime());
+   rng.add_entropy_T(::GetInputState());
+
+   rng.add_entropy_T(::GetCurrentProcessId());
+   rng.add_entropy_T(::GetCurrentThreadId());
 
    SYSTEM_INFO sys_info;
-   GetSystemInfo(&sys_info);
-   accum.add(sys_info, 1);
+   ::GetSystemInfo(&sys_info);
+   rng.add_entropy_T(sys_info);
 
-   MEMORYSTATUS mem_info;
-   GlobalMemoryStatus(&mem_info);
-   accum.add(mem_info, 1);
+   MEMORYSTATUSEX mem_info;
+   ::GlobalMemoryStatusEx(&mem_info);
+   rng.add_entropy_T(mem_info);
 
    POINT point;
-   GetCursorPos(&point);
-   accum.add(point, 1);
+   ::GetCursorPos(&point);
+   rng.add_entropy_T(point);
 
-   GetCaretPos(&point);
-   accum.add(point, 1);
-
-   LARGE_INTEGER perf_counter;
-   QueryPerformanceCounter(&perf_counter);
-   accum.add(perf_counter, 0);
+   ::GetCaretPos(&point);
+   rng.add_entropy_T(point);
 
    /*
-   Now use the Tooltip library to iterate throug various objects on
+   Now use the Tooltip library to iterate through various objects on
    the system, including processes, threads, and heap objects.
    */
 
-   HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPALL, 0);
+   HANDLE snapshot = ::CreateToolhelp32Snapshot(TH32CS_SNAPALL, 0);
+   size_t collected = 0;
 
-#define TOOLHELP32_ITER(DATA_TYPE, FUNC_FIRST, FUNC_NEXT) \
-   if(!accum.polling_goal_achieved())                     \
-      {                                                   \
-      DATA_TYPE info;                                     \
-      info.dwSize = sizeof(DATA_TYPE);                    \
-      if(FUNC_FIRST(snapshot, &info))                     \
-         {                                                \
-         do                                               \
-            {                                             \
-            accum.add(info, 1);                           \
-            } while(FUNC_NEXT(snapshot, &info));          \
-         }                                                \
+#define TOOLHELP32_ITER(DATA_TYPE, FUNC_FIRST, FUNC_NEXT)        \
+   if(collected < POLL_TARGET)                                   \
+      {                                                          \
+      DATA_TYPE info;                                            \
+      info.dwSize = sizeof(DATA_TYPE);                           \
+      if(FUNC_FIRST(snapshot, &info))                            \
+         {                                                       \
+         do                                                      \
+            {                                                    \
+            rng.add_entropy_T(info);                             \
+            collected += EST_ENTROPY_THREAD_INFO;                \
+            if(collected >= POLL_TARGET)                         \
+               break;                                            \
+            } while(FUNC_NEXT(snapshot, &info));                 \
+         }                                                       \
       }
 
-   TOOLHELP32_ITER(MODULEENTRY32, Module32First, Module32Next);
-   TOOLHELP32_ITER(PROCESSENTRY32, Process32First, Process32Next);
-   TOOLHELP32_ITER(THREADENTRY32, Thread32First, Thread32Next);
+   TOOLHELP32_ITER(MODULEENTRY32, ::Module32First, ::Module32Next);
+   TOOLHELP32_ITER(PROCESSENTRY32, ::Process32First, ::Process32Next);
+   TOOLHELP32_ITER(THREADENTRY32, ::Thread32First, ::Thread32Next);
 
 #undef TOOLHELP32_ITER
 
-   if(!accum.polling_goal_achieved())
+   if(collected < POLL_TARGET)
       {
-      size_t heap_lists_found = 0;
       HEAPLIST32 heap_list;
       heap_list.dwSize = sizeof(HEAPLIST32);
 
-      const size_t HEAP_LISTS_MAX = 32;
-      const size_t HEAP_OBJS_PER_LIST = 128;
-
-      if(Heap32ListFirst(snapshot, &heap_list))
+      if(::Heap32ListFirst(snapshot, &heap_list))
          {
          do
             {
-            accum.add(heap_list, 1);
+            rng.add_entropy_T(heap_list);
 
-            if(++heap_lists_found > HEAP_LISTS_MAX)
-               break;
-
-            size_t heap_objs_found = 0;
             HEAPENTRY32 heap_entry;
             heap_entry.dwSize = sizeof(HEAPENTRY32);
-            if(Heap32First(&heap_entry, heap_list.th32ProcessID,
-                           heap_list.th32HeapID))
+            if(::Heap32First(&heap_entry,
+                             heap_list.th32ProcessID,
+                             heap_list.th32HeapID))
                {
                do
                   {
-                  if(heap_objs_found++ > HEAP_OBJS_PER_LIST)
+                  rng.add_entropy_T(heap_entry);
+                  collected += EST_ENTROPY_HEAP_INFO;
+                  if(collected >= POLL_TARGET)
                      break;
-                  accum.add(heap_entry, 1);
-                  } while(Heap32Next(&heap_entry));
+                  } while(::Heap32Next(&heap_entry));
                }
 
-            if(accum.polling_goal_achieved())
+            if(collected >= POLL_TARGET)
                break;
 
-            } while(Heap32ListNext(snapshot, &heap_list));
+            } while(::Heap32ListNext(snapshot, &heap_list));
          }
       }
 
-   CloseHandle(snapshot);
+   ::CloseHandle(snapshot);
+
+   return collected;
    }
 
 }
+
+#endif

@@ -2,178 +2,230 @@
 * Exceptions
 * (C) 1999-2009 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_EXCEPTION_H__
-#define BOTAN_EXCEPTION_H__
+#ifndef BOTAN_EXCEPTION_H_
+#define BOTAN_EXCEPTION_H_
 
 #include <botan/types.h>
-#include <botan/parsing.h>
 #include <exception>
-#include <stdexcept>
 #include <string>
 
 namespace Botan {
 
-typedef std::runtime_error Exception;
-typedef std::invalid_argument Invalid_Argument;
+/**
+* Base class for all exceptions thrown by the library
+*/
+class BOTAN_PUBLIC_API(2,0) Exception : public std::exception
+   {
+   public:
+      Exception(const char* prefix, const std::string& msg);
+      explicit Exception(const std::string& msg);
+      const char* what() const BOTAN_NOEXCEPT override { return m_msg.c_str(); }
+   private:
+      std::string m_msg;
+   };
+
+/**
+* An invalid argument
+*/
+class BOTAN_PUBLIC_API(2,0) Invalid_Argument : public Exception
+   {
+   public:
+      explicit Invalid_Argument(const std::string& msg);
+
+      explicit Invalid_Argument(const std::string& msg, const std::string& where);
+};
+
+#define BOTAN_ARG_CHECK(expr) \
+   do { if(!(expr)) throw Invalid_Argument(#expr, BOTAN_CURRENT_FUNCTION); } while(0)
+
+/**
+* Unsupported_Argument Exception
+*
+* An argument that is invalid because it is not supported by Botan.
+* It might or might not be valid in another context like a standard.
+*/
+class BOTAN_PUBLIC_API(2,0) Unsupported_Argument final : public Invalid_Argument
+   {
+   public:
+      explicit Unsupported_Argument(const std::string& msg) : Invalid_Argument(msg) {}
+   };
 
 /**
 * Invalid_State Exception
 */
-struct BOTAN_DLL Invalid_State : public Exception
+class BOTAN_PUBLIC_API(2,0) Invalid_State : public Exception
    {
-   Invalid_State(const std::string& err) :
-      Exception(err)
-      {}
+   public:
+      explicit Invalid_State(const std::string& err) : Exception(err) {}
+   };
+
+class BOTAN_PUBLIC_API(2,4) Key_Not_Set : public Invalid_State
+   {
+   public:
+      explicit Key_Not_Set(const std::string& algo);
    };
 
 /**
 * Lookup_Error Exception
 */
-struct BOTAN_DLL Lookup_Error : public Exception
+class BOTAN_PUBLIC_API(2,0) Lookup_Error : public Exception
    {
-   Lookup_Error(const std::string& err) :
-      Exception(err)
-      {}
+   public:
+      explicit Lookup_Error(const std::string& err) : Exception(err) {}
+
+      Lookup_Error(const std::string& type,
+                   const std::string& algo,
+                   const std::string& provider);
    };
 
 /**
 * Internal_Error Exception
 */
-struct BOTAN_DLL Internal_Error : public Exception
+class BOTAN_PUBLIC_API(2,0) Internal_Error : public Exception
    {
-   Internal_Error(const std::string& err) :
-      Exception("Internal error: " + err)
-      {}
+   public:
+      explicit Internal_Error(const std::string& err);
    };
 
 /**
 * Invalid_Key_Length Exception
 */
-struct BOTAN_DLL Invalid_Key_Length : public Invalid_Argument
+class BOTAN_PUBLIC_API(2,0) Invalid_Key_Length final : public Invalid_Argument
    {
-   Invalid_Key_Length(const std::string& name, size_t length) :
-      Invalid_Argument(name + " cannot accept a key of length " +
-                       std::to_string(length))
-      {}
+   public:
+      Invalid_Key_Length(const std::string& name, size_t length);
    };
 
 /**
 * Invalid_IV_Length Exception
 */
-struct BOTAN_DLL Invalid_IV_Length : public Invalid_Argument
+class BOTAN_PUBLIC_API(2,0) Invalid_IV_Length final : public Invalid_Argument
    {
-   Invalid_IV_Length(const std::string& mode, size_t bad_len) :
-      Invalid_Argument("IV length " + std::to_string(bad_len) +
-                       " is invalid for " + mode)
-      {}
+   public:
+      Invalid_IV_Length(const std::string& mode, size_t bad_len);
    };
 
 /**
 * PRNG_Unseeded Exception
 */
-struct BOTAN_DLL PRNG_Unseeded : public Invalid_State
+class BOTAN_PUBLIC_API(2,0) PRNG_Unseeded final : public Invalid_State
    {
-   PRNG_Unseeded(const std::string& algo) :
-      Invalid_State("PRNG not seeded: " + algo)
-      {}
+   public:
+      explicit PRNG_Unseeded(const std::string& algo);
    };
 
 /**
 * Policy_Violation Exception
 */
-struct BOTAN_DLL Policy_Violation : public Invalid_State
+class BOTAN_PUBLIC_API(2,0) Policy_Violation final : public Invalid_State
    {
-   Policy_Violation(const std::string& err) :
-      Invalid_State("Policy violation: " + err)
-      {}
+   public:
+      BOTAN_DEPRECATED("deprecated") explicit Policy_Violation(const std::string& err);
    };
 
 /**
 * Algorithm_Not_Found Exception
 */
-struct BOTAN_DLL Algorithm_Not_Found : public Lookup_Error
+class BOTAN_PUBLIC_API(2,0) Algorithm_Not_Found final : public Lookup_Error
    {
-   Algorithm_Not_Found(const std::string& name) :
-      Lookup_Error("Could not find any algorithm named \"" + name + "\"")
-      {}
+   public:
+      explicit Algorithm_Not_Found(const std::string& name);
+   };
+
+/**
+* No_Provider_Found Exception
+*/
+class BOTAN_PUBLIC_API(2,0) No_Provider_Found final : public Exception
+   {
+   public:
+      BOTAN_DEPRECATED("deprecated") explicit No_Provider_Found(const std::string& name);
+   };
+
+/**
+* Provider_Not_Found is thrown when a specific provider was requested
+* but that provider is not available.
+*/
+class BOTAN_PUBLIC_API(2,0) Provider_Not_Found final : public Lookup_Error
+   {
+   public:
+      Provider_Not_Found(const std::string& algo, const std::string& provider);
    };
 
 /**
 * Invalid_Algorithm_Name Exception
 */
-struct BOTAN_DLL Invalid_Algorithm_Name : public Invalid_Argument
+class BOTAN_PUBLIC_API(2,0) Invalid_Algorithm_Name final : public Invalid_Argument
    {
-   Invalid_Algorithm_Name(const std::string& name):
-      Invalid_Argument("Invalid algorithm name: " + name)
-      {}
+   public:
+      explicit Invalid_Algorithm_Name(const std::string& name);
    };
 
 /**
 * Encoding_Error Exception
 */
-struct BOTAN_DLL Encoding_Error : public Invalid_Argument
+class BOTAN_PUBLIC_API(2,0) Encoding_Error final : public Invalid_Argument
    {
-   Encoding_Error(const std::string& name) :
-      Invalid_Argument("Encoding error: " + name) {}
+   public:
+      explicit Encoding_Error(const std::string& name);
    };
 
 /**
 * Decoding_Error Exception
 */
-struct BOTAN_DLL Decoding_Error : public Invalid_Argument
+class BOTAN_PUBLIC_API(2,0) Decoding_Error : public Invalid_Argument
    {
-   Decoding_Error(const std::string& name) :
-      Invalid_Argument("Decoding error: " + name) {}
+   public:
+      explicit Decoding_Error(const std::string& name);
+
+      Decoding_Error(const std::string& name, const char* exception_message);
    };
 
 /**
 * Integrity_Failure Exception
 */
-struct BOTAN_DLL Integrity_Failure : public Exception
+class BOTAN_PUBLIC_API(2,0) Integrity_Failure final : public Exception
    {
-   Integrity_Failure(const std::string& msg) :
-      Exception("Integrity failure: " + msg) {}
+   public:
+      explicit Integrity_Failure(const std::string& msg);
    };
 
 /**
 * Invalid_OID Exception
 */
-struct BOTAN_DLL Invalid_OID : public Decoding_Error
+class BOTAN_PUBLIC_API(2,0) Invalid_OID final : public Decoding_Error
    {
-   Invalid_OID(const std::string& oid) :
-      Decoding_Error("Invalid ASN.1 OID: " + oid) {}
+   public:
+      explicit Invalid_OID(const std::string& oid);
    };
 
 /**
 * Stream_IO_Error Exception
 */
-struct BOTAN_DLL Stream_IO_Error : public Exception
+class BOTAN_PUBLIC_API(2,0) Stream_IO_Error final : public Exception
    {
-   Stream_IO_Error(const std::string& err) :
-      Exception("I/O error: " + err)
-      {}
+   public:
+      explicit Stream_IO_Error(const std::string& err);
    };
 
 /**
 * Self Test Failure Exception
 */
-struct BOTAN_DLL Self_Test_Failure : public Internal_Error
+class BOTAN_PUBLIC_API(2,0) Self_Test_Failure final : public Internal_Error
    {
-   Self_Test_Failure(const std::string& err) :
-      Internal_Error("Self test failed: " + err)
-      {}
+   public:
+      BOTAN_DEPRECATED("deprecated") explicit Self_Test_Failure(const std::string& err);
    };
 
 /**
-* Memory Allocation Exception
+* Not Implemented Exception
 */
-struct BOTAN_DLL Memory_Exhaustion : public std::bad_alloc
+class BOTAN_PUBLIC_API(2,0) Not_Implemented final : public Exception
    {
-   const char* what() const BOTAN_NOEXCEPT
-      { return "Ran out of memory, allocation failed"; }
+   public:
+      explicit Not_Implemented(const std::string& err);
    };
 
 }

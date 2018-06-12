@@ -1,127 +1,38 @@
 /*
 * EntropySource
-* (C) 2008-2009 Jack Lloyd
+* (C) 2008,2009,2014,2015,2016 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_ENTROPY_SOURCE_BASE_H__
-#define BOTAN_ENTROPY_SOURCE_BASE_H__
+#ifndef BOTAN_ENTROPY_H_
+#define BOTAN_ENTROPY_H_
 
-#include <botan/buf_comp.h>
+#include <botan/secmem.h>
+#include <botan/rng.h>
 #include <string>
+#include <chrono>
+#include <memory>
+#include <vector>
 
 namespace Botan {
 
-/**
-* Class used to accumulate the poll results of EntropySources
-*/
-class BOTAN_DLL Entropy_Accumulator
-   {
-   public:
-      /**
-      * Initialize an Entropy_Accumulator
-      * @param goal is how many bits we would like to collect
-      */
-      Entropy_Accumulator(size_t goal) :
-         entropy_goal(goal), collected_bits(0) {}
-
-      virtual ~Entropy_Accumulator() {}
-
-      /**
-      * Get a cached I/O buffer (purely for minimizing allocation
-      * overhead to polls)
-      *
-      * @param size requested size for the I/O buffer
-      * @return cached I/O buffer for repeated polls
-      */
-      secure_vector<byte>& get_io_buffer(size_t size)
-         { io_buffer.resize(size); return io_buffer; }
-
-      /**
-      * @return number of bits collected so far
-      */
-      size_t bits_collected() const
-         { return static_cast<size_t>(collected_bits); }
-
-      /**
-      * @return if our polling goal has been achieved
-      */
-      bool polling_goal_achieved() const
-         { return (collected_bits >= entropy_goal); }
-
-      /**
-      * @return how many bits we need to reach our polling goal
-      */
-      size_t desired_remaining_bits() const
-         {
-         if(collected_bits >= entropy_goal)
-            return 0;
-         return static_cast<size_t>(entropy_goal - collected_bits);
-         }
-
-      /**
-      * Add entropy to the accumulator
-      * @param bytes the input bytes
-      * @param length specifies how many bytes the input is
-      * @param entropy_bits_per_byte is a best guess at how much
-      * entropy per byte is in this input
-      */
-      void add(const void* bytes, size_t length, double entropy_bits_per_byte)
-         {
-         add_bytes(reinterpret_cast<const byte*>(bytes), length);
-         collected_bits += entropy_bits_per_byte * length;
-         }
-
-      /**
-      * Add entropy to the accumulator
-      * @param v is some value
-      * @param entropy_bits_per_byte is a best guess at how much
-      * entropy per byte is in this input
-      */
-      template<typename T>
-      void add(const T& v, double entropy_bits_per_byte)
-         {
-         add(&v, sizeof(T), entropy_bits_per_byte);
-         }
-   private:
-      virtual void add_bytes(const byte bytes[], size_t length) = 0;
-
-      secure_vector<byte> io_buffer;
-      size_t entropy_goal;
-      double collected_bits;
-   };
-
-/**
-* Entropy accumulator that puts the input into a Buffered_Computation
-*/
-class BOTAN_DLL Entropy_Accumulator_BufferedComputation :
-   public Entropy_Accumulator
-   {
-   public:
-      /**
-      * @param sink the hash or MAC we are feeding the poll data into
-      * @param goal is how many bits we want to collect in this poll
-      */
-      Entropy_Accumulator_BufferedComputation(Buffered_Computation& sink,
-                                              size_t goal) :
-         Entropy_Accumulator(goal), entropy_sink(sink) {}
-
-   private:
-      void add_bytes(const byte bytes[], size_t length) override
-         {
-         entropy_sink.update(bytes, length);
-         }
-
-      Buffered_Computation& entropy_sink;
-   };
+class RandomNumberGenerator;
 
 /**
 * Abstract interface to a source of entropy
 */
-class BOTAN_DLL EntropySource
+class BOTAN_PUBLIC_API(2,0) Entropy_Source
    {
    public:
+      /**
+      * Return a new entropy source of a particular type, or null
+      * Each entropy source may require substantial resources (eg, a file handle
+      * or socket instance), so try to share them among multiple RNGs, or just
+      * use the preconfigured global list accessed by Entropy_Sources::global_sources()
+      */
+      static std::unique_ptr<Entropy_Source> create(const std::string& type);
+
       /**
       * @return name identifying this entropy source
       */
@@ -129,11 +40,46 @@ class BOTAN_DLL EntropySource
 
       /**
       * Perform an entropy gathering poll
-      * @param accum is an accumulator object that will be given entropy
+      * @param rng will be provided with entropy via calls to add_entropy
+      * @return conservative estimate of actual entropy added to rng during poll
       */
-      virtual void poll(Entropy_Accumulator& accum) = 0;
+      virtual size_t poll(RandomNumberGenerator& rng) = 0;
 
-      virtual ~EntropySource() {}
+      Entropy_Source() = default;
+      Entropy_Source(const Entropy_Source& other) = delete;
+      Entropy_Source(Entropy_Source&& other) = delete;
+      Entropy_Source& operator=(const Entropy_Source& other) = delete;
+
+      virtual ~Entropy_Source() = default;
+   };
+
+class BOTAN_PUBLIC_API(2,0) Entropy_Sources final
+   {
+   public:
+      static Entropy_Sources& global_sources();
+
+      void add_source(std::unique_ptr<Entropy_Source> src);
+
+      std::vector<std::string> enabled_sources() const;
+
+      size_t poll(RandomNumberGenerator& rng,
+                  size_t bits,
+                  std::chrono::milliseconds timeout);
+
+      /**
+      * Poll just a single named source. Ordinally only used for testing
+      */
+      size_t poll_just(RandomNumberGenerator& rng, const std::string& src);
+
+      Entropy_Sources() = default;
+      explicit Entropy_Sources(const std::vector<std::string>& sources);
+
+      Entropy_Sources(const Entropy_Sources& other) = delete;
+      Entropy_Sources(Entropy_Sources&& other) = delete;
+      Entropy_Sources& operator=(const Entropy_Sources& other) = delete;
+
+   private:
+      std::vector<std::unique_ptr<Entropy_Source>> m_srcs;
    };
 
 }

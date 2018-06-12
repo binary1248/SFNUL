@@ -2,7 +2,7 @@
 * Alert Message
 * (C) 2004-2006,2011 Jack Lloyd
 *
-* Released under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/tls_alert.h>
@@ -12,7 +12,7 @@ namespace Botan {
 
 namespace TLS {
 
-Alert::Alert(const secure_vector<byte>& buf)
+Alert::Alert(const secure_vector<uint8_t>& buf)
    {
    if(buf.size() != 2)
       throw Decoding_Error("Alert: Bad size " + std::to_string(buf.size()) +
@@ -23,16 +23,16 @@ Alert::Alert(const secure_vector<byte>& buf)
    else
       throw Decoding_Error("Alert: Bad code for alert level");
 
-   const byte dc = buf[1];
+   const uint8_t dc = buf[1];
 
    m_type_code = static_cast<Type>(dc);
    }
 
-std::vector<byte> Alert::serialize() const
+std::vector<uint8_t> Alert::serialize() const
    {
-   return std::vector<byte>({
-      static_cast<byte>(is_fatal() ? 2 : 1),
-      static_cast<byte>(type())
+   return std::vector<uint8_t>({
+      static_cast<uint8_t>(is_fatal() ? 2 : 1),
+      static_cast<uint8_t>(type())
       });
    }
 
@@ -84,6 +84,8 @@ std::string Alert::type_string() const
          return "insufficient_security";
       case INTERNAL_ERROR:
          return "internal_error";
+      case INAPPROPRIATE_FALLBACK:
+         return "inappropriate_fallback";
       case USER_CANCELED:
          return "user_canceled";
       case NO_RENEGOTIATION:
@@ -101,12 +103,11 @@ std::string Alert::type_string() const
          return "bad_certificate_hash_value";
       case UNKNOWN_PSK_IDENTITY:
          return "unknown_psk_identity";
+      case NO_APPLICATION_PROTOCOL:
+         return "no_application_protocol";
 
       case NULL_ALERT:
          return "none";
-
-      case HEARTBEAT_PAYLOAD:
-         return "heartbeat_payload";
       }
 
    /*

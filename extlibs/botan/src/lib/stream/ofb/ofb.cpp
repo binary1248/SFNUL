@@ -2,11 +2,10 @@
 * OFB Mode
 * (C) 1999-2007,2014 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/ofb.h>
-#include <botan/internal/xor_buf.h>
 
 namespace Botan {
 
@@ -24,7 +23,7 @@ void OFB::clear()
    m_buf_pos = 0;
    }
 
-void OFB::key_schedule(const byte key[], size_t key_len)
+void OFB::key_schedule(const uint8_t key[], size_t key_len)
    {
    m_cipher->set_key(key, key_len);
 
@@ -37,7 +36,7 @@ std::string OFB::name() const
    return "OFB(" + m_cipher->name() + ")";
    }
 
-void OFB::cipher(const byte in[], byte out[], size_t length)
+void OFB::cipher(const uint8_t in[], uint8_t out[], size_t length)
    {
    while(length >= m_buffer.size() - m_buf_pos)
       {
@@ -52,7 +51,7 @@ void OFB::cipher(const byte in[], byte out[], size_t length)
    m_buf_pos += length;
    }
 
-void OFB::set_iv(const byte iv[], size_t iv_len)
+void OFB::set_iv(const uint8_t iv[], size_t iv_len)
    {
    if(!valid_iv_length(iv_len))
       throw Invalid_IV_Length(name(), iv_len);
@@ -64,4 +63,9 @@ void OFB::set_iv(const byte iv[], size_t iv_len)
    m_buf_pos = 0;
    }
 
+
+void OFB::seek(uint64_t)
+   {
+   throw Not_Implemented("OFB does not support seeking");
+   }
 }

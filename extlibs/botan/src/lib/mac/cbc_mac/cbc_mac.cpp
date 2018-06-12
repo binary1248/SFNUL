@@ -2,20 +2,20 @@
 * CBC-MAC
 * (C) 1999-2007 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/cbc_mac.h>
-#include <botan/internal/xor_buf.h>
-#include <algorithm>
 
 namespace Botan {
 
 /*
 * Update an CBC-MAC Calculation
 */
-void CBC_MAC::add_data(const byte input[], size_t length)
+void CBC_MAC::add_data(const uint8_t input[], size_t length)
    {
+   verify_key_set(m_state.empty() == false);
+
    size_t xored = std::min(output_length() - m_position, length);
    xor_buf(&m_state[m_position], input, xored);
    m_position += xored;
@@ -41,12 +41,14 @@ void CBC_MAC::add_data(const byte input[], size_t length)
 /*
 * Finalize an CBC-MAC Calculation
 */
-void CBC_MAC::final_result(byte mac[])
+void CBC_MAC::final_result(uint8_t mac[])
    {
+   verify_key_set(m_state.empty() == false);
+
    if(m_position)
       m_cipher->encrypt(m_state);
 
-   copy_mem(mac, &m_state[0], m_state.size());
+   copy_mem(mac, m_state.data(), m_state.size());
    zeroise(m_state);
    m_position = 0;
    }
@@ -54,8 +56,9 @@ void CBC_MAC::final_result(byte mac[])
 /*
 * CBC-MAC Key Schedule
 */
-void CBC_MAC::key_schedule(const byte key[], size_t length)
+void CBC_MAC::key_schedule(const uint8_t key[], size_t length)
    {
+   m_state.resize(m_cipher->block_size());
    m_cipher->set_key(key, length);
    }
 
@@ -65,7 +68,7 @@ void CBC_MAC::key_schedule(const byte key[], size_t length)
 void CBC_MAC::clear()
    {
    m_cipher->clear();
-   zeroise(m_state);
+   zap(m_state);
    m_position = 0;
    }
 
@@ -89,7 +92,7 @@ MessageAuthenticationCode* CBC_MAC::clone() const
 * CBC-MAC Constructor
 */
 CBC_MAC::CBC_MAC(BlockCipher* cipher) :
-   m_cipher(cipher), m_state(cipher->block_size())
+   m_cipher(cipher)
    {
    }
 

@@ -2,7 +2,7 @@
 * Pipe I/O for Unix
 * (C) 1999-2007 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/pipe.h>
@@ -16,18 +16,19 @@ namespace Botan {
 */
 int operator<<(int fd, Pipe& pipe)
    {
-   secure_vector<byte> buffer(DEFAULT_BUFFERSIZE);
+   secure_vector<uint8_t> buffer(BOTAN_DEFAULT_BUFFER_SIZE);
    while(pipe.remaining())
       {
-      size_t got = pipe.read(&buffer[0], buffer.size());
+      size_t got = pipe.read(buffer.data(), buffer.size());
       size_t position = 0;
       while(got)
          {
-         ssize_t ret = write(fd, &buffer[position], got);
-         if(ret == -1)
+         ssize_t ret = ::write(fd, &buffer[position], got);
+         if(ret < 0)
             throw Stream_IO_Error("Pipe output operator (unixfd) has failed");
-         position += ret;
-         got -= ret;
+
+         position += static_cast<size_t>(ret);
+         got -= static_cast<size_t>(ret);
          }
       }
    return fd;
@@ -38,14 +39,15 @@ int operator<<(int fd, Pipe& pipe)
 */
 int operator>>(int fd, Pipe& pipe)
    {
-   secure_vector<byte> buffer(DEFAULT_BUFFERSIZE);
+   secure_vector<uint8_t> buffer(BOTAN_DEFAULT_BUFFER_SIZE);
    while(true)
       {
-      ssize_t ret = read(fd, &buffer[0], buffer.size());
-      if(ret == 0) break;
-      if(ret == -1)
+      ssize_t ret = ::read(fd, buffer.data(), buffer.size());
+      if(ret < 0)
          throw Stream_IO_Error("Pipe input operator (unixfd) has failed");
-      pipe.write(&buffer[0], ret);
+      else if(ret == 0)
+         break;
+      pipe.write(buffer.data(), static_cast<size_t>(ret));
       }
    return fd;
    }

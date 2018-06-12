@@ -2,11 +2,13 @@
 * Finished Message
 * (C) 2004-2006,2012 Jack Lloyd
 *
-* Released under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#include <botan/internal/tls_messages.h>
+#include <botan/tls_messages.h>
+#include <botan/kdf.h>
 #include <botan/internal/tls_handshake_io.h>
+#include <botan/internal/tls_handshake_state.h>
 
 namespace Botan {
 
@@ -17,47 +19,29 @@ namespace {
 /*
 * Compute the verify_data
 */
-std::vector<byte> finished_compute_verify(const Handshake_State& state,
+std::vector<uint8_t> finished_compute_verify(const Handshake_State& state,
                                           Connection_Side side)
    {
-   if(state.version() == Protocol_Version::SSL_V3)
-      {
-      const byte SSL_CLIENT_LABEL[] = { 0x43, 0x4C, 0x4E, 0x54 };
-      const byte SSL_SERVER_LABEL[] = { 0x53, 0x52, 0x56, 0x52 };
+   const uint8_t TLS_CLIENT_LABEL[] = {
+      0x63, 0x6C, 0x69, 0x65, 0x6E, 0x74, 0x20, 0x66, 0x69, 0x6E, 0x69,
+      0x73, 0x68, 0x65, 0x64 };
 
-      Handshake_Hash hash = state.hash(); // don't modify state
+   const uint8_t TLS_SERVER_LABEL[] = {
+      0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x20, 0x66, 0x69, 0x6E, 0x69,
+      0x73, 0x68, 0x65, 0x64 };
 
-      std::vector<byte> ssl3_finished;
+   std::unique_ptr<KDF> prf(state.protocol_specific_prf());
 
-      if(side == CLIENT)
-         hash.update(SSL_CLIENT_LABEL, sizeof(SSL_CLIENT_LABEL));
-      else
-         hash.update(SSL_SERVER_LABEL, sizeof(SSL_SERVER_LABEL));
-
-      return unlock(hash.final_ssl3(state.session_keys().master_secret()));
-      }
+   std::vector<uint8_t> input;
+   std::vector<uint8_t> label;
+   if(side == CLIENT)
+      label += std::make_pair(TLS_CLIENT_LABEL, sizeof(TLS_CLIENT_LABEL));
    else
-      {
-      const byte TLS_CLIENT_LABEL[] = {
-         0x63, 0x6C, 0x69, 0x65, 0x6E, 0x74, 0x20, 0x66, 0x69, 0x6E, 0x69,
-         0x73, 0x68, 0x65, 0x64 };
+      label += std::make_pair(TLS_SERVER_LABEL, sizeof(TLS_SERVER_LABEL));
 
-      const byte TLS_SERVER_LABEL[] = {
-         0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x20, 0x66, 0x69, 0x6E, 0x69,
-         0x73, 0x68, 0x65, 0x64 };
+   input += state.hash().final(state.version(), state.ciphersuite().prf_algo());
 
-      std::unique_ptr<KDF> prf(state.protocol_specific_prf());
-
-      std::vector<byte> input;
-      if(side == CLIENT)
-         input += std::make_pair(TLS_CLIENT_LABEL, sizeof(TLS_CLIENT_LABEL));
-      else
-         input += std::make_pair(TLS_SERVER_LABEL, sizeof(TLS_SERVER_LABEL));
-
-      input += state.hash().final(state.version(), state.ciphersuite().prf_algo());
-
-      return unlock(prf->derive_key(12, state.session_keys().master_secret(), input));
-      }
+   return unlock(prf->derive_key(12, state.session_keys().master_secret(), input, label));
    }
 
 }
@@ -67,16 +51,15 @@ std::vector<byte> finished_compute_verify(const Handshake_State& state,
 */
 Finished::Finished(Handshake_IO& io,
                    Handshake_State& state,
-                   Connection_Side side)
+                   Connection_Side side) : m_verification_data(finished_compute_verify( state, side ))
    {
-   m_verification_data = finished_compute_verify(state, side);
    state.hash().update(io.send(*this));
    }
 
 /*
 * Serialize a Finished message
 */
-std::vector<byte> Finished::serialize() const
+std::vector<uint8_t> Finished::serialize() const
    {
    return m_verification_data;
    }
@@ -84,10 +67,8 @@ std::vector<byte> Finished::serialize() const
 /*
 * Deserialize a Finished message
 */
-Finished::Finished(const std::vector<byte>& buf)
-   {
-   m_verification_data = buf;
-   }
+Finished::Finished(const std::vector<uint8_t>& buf) : m_verification_data(buf)
+   {}
 
 /*
 * Verify a Finished message
@@ -95,7 +76,14 @@ Finished::Finished(const std::vector<byte>& buf)
 bool Finished::verify(const Handshake_State& state,
                       Connection_Side side) const
    {
-   return (m_verification_data == finished_compute_verify(state, side));
+   std::vector<byte> computed_verify = finished_compute_verify(state, side);
+
+#if defined(BOTAN_UNSAFE_FUZZER_MODE)
+   return true;
+#else
+   return (m_verification_data.size() == computed_verify.size()) &&
+      constant_time_compare(m_verification_data.data(), computed_verify.data(), computed_verify.size());
+#endif
    }
 
 }

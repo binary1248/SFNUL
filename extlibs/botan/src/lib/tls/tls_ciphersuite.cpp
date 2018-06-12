@@ -2,168 +2,192 @@
 * TLS Cipher Suite
 * (C) 2004-2010,2012,2013 Jack Lloyd
 *
-* Released under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/tls_ciphersuite.h>
-#include <botan/libstate.h>
 #include <botan/parsing.h>
-#include <sstream>
-#include <stdexcept>
+#include <botan/block_cipher.h>
+#include <botan/stream_cipher.h>
+#include <botan/hash.h>
+#include <algorithm>
 
 namespace Botan {
 
 namespace TLS {
 
-namespace {
-
-/*
-* This way all work happens at the constuctor call, and we can
-* rely on that happening only once in C++11.
-*/
-std::vector<Ciphersuite> gather_known_ciphersuites()
+size_t Ciphersuite::nonce_bytes_from_handshake() const
    {
-   std::vector<Ciphersuite> ciphersuites;
-
-   for(size_t i = 0; i <= 0xFFFF; ++i)
+   switch(m_nonce_format)
       {
-      Ciphersuite suite = Ciphersuite::by_id(i);
-
-      if(suite.valid())
-         ciphersuites.push_back(suite);
+      case Nonce_Format::CBC_MODE:
+         {
+         if(cipher_algo() == "3DES")
+            return 8;
+         else
+            return 16;
+         }
+      case Nonce_Format::AEAD_IMPLICIT_4:
+         return 4;
+      case Nonce_Format::AEAD_XOR_12:
+         return 12;
       }
 
-   return ciphersuites;
+   throw Invalid_State("In Ciphersuite::nonce_bytes_from_handshake invalid enum value");
    }
 
-}
-
-const std::vector<Ciphersuite>& Ciphersuite::all_known_ciphersuites()
+bool Ciphersuite::is_scsv(uint16_t suite)
    {
-   static std::vector<Ciphersuite> all_ciphersuites(gather_known_ciphersuites());
-   return all_ciphersuites;
+   // TODO: derive from IANA file in script
+   return (suite == 0x00FF || suite == 0x5600);
    }
 
-Ciphersuite Ciphersuite::by_name(const std::string& name)
+bool Ciphersuite::psk_ciphersuite() const
    {
-   for(auto suite : all_known_ciphersuites())
+   return kex_method() == Kex_Algo::PSK ||
+          kex_method() == Kex_Algo::DHE_PSK ||
+          kex_method() == Kex_Algo::ECDHE_PSK;
+   }
+
+bool Ciphersuite::ecc_ciphersuite() const
+   {
+   return kex_method() == Kex_Algo::ECDH ||
+          kex_method() == Kex_Algo::ECDHE_PSK ||
+          auth_method() == Auth_Method::ECDSA;
+   }
+
+bool Ciphersuite::cbc_ciphersuite() const
+   {
+   return (mac_algo() != "AEAD");
+   }
+
+bool Ciphersuite::signature_used() const
+   {
+   return auth_method() != Auth_Method::ANONYMOUS &&
+          auth_method() != Auth_Method::IMPLICIT;
+   }
+
+Ciphersuite Ciphersuite::by_id(uint16_t suite)
+   {
+   const std::vector<Ciphersuite>& all_suites = all_known_ciphersuites();
+   auto s = std::lower_bound(all_suites.begin(), all_suites.end(), suite);
+
+   if(s != all_suites.end() && s->ciphersuite_code() == suite)
       {
-      if(suite.to_string() == name)
-         return suite;
+      return *s;
       }
 
    return Ciphersuite(); // some unknown ciphersuite
    }
 
-Ciphersuite::Ciphersuite(u16bit ciphersuite_code,
-                         const char* sig_algo,
-                         const char* kex_algo,
-                         const char* cipher_algo,
-                         size_t cipher_keylen,
-                         size_t cipher_ivlen,
-                         const char* mac_algo,
-                         size_t mac_keylen,
-                         const char* prf_algo) :
-   m_ciphersuite_code(ciphersuite_code),
-   m_sig_algo(sig_algo),
-   m_kex_algo(kex_algo),
-   m_cipher_algo(cipher_algo),
-   m_mac_algo(mac_algo),
-   m_prf_algo(prf_algo),
-   m_cipher_keylen(cipher_keylen),
-   m_cipher_ivlen(cipher_ivlen),
-   m_mac_keylen(mac_keylen)
+namespace {
+
+bool have_hash(const std::string& prf)
    {
+   return (HashFunction::providers(prf).size() > 0);
    }
 
-bool Ciphersuite::psk_ciphersuite() const
+bool have_cipher(const std::string& cipher)
    {
-   return (kex_algo() == "PSK" ||
-           kex_algo() == "DHE_PSK" ||
-           kex_algo() == "ECDHE_PSK");
+   return (BlockCipher::providers(cipher).size() > 0) ||
+      (StreamCipher::providers(cipher).size() > 0);
    }
 
-bool Ciphersuite::ecc_ciphersuite() const
-   {
-   return (sig_algo() == "ECDSA" || kex_algo() == "ECDH" || kex_algo() == "ECDHE_PSK");
-   }
+}
 
-bool Ciphersuite::valid() const
+bool Ciphersuite::is_usable() const
    {
    if(!m_cipher_keylen) // uninitialized object
       return false;
 
-   Algorithm_Factory& af = global_state().algorithm_factory();
-
-   if(!af.prototype_hash_function(prf_algo()))
+   if(!have_hash(prf_algo()))
       return false;
+
+#if !defined(BOTAN_HAS_TLS_CBC)
+   if(cbc_ciphersuite())
+      return false;
+#endif
 
    if(mac_algo() == "AEAD")
       {
-      auto cipher_and_mode = split_on(cipher_algo(), '/');
-      BOTAN_ASSERT(cipher_and_mode.size() == 2, "Expected format for AEAD algo");
-      if(!af.prototype_block_cipher(cipher_and_mode[0]))
+      if(cipher_algo() == "ChaCha20Poly1305")
+         {
+#if !defined(BOTAN_HAS_AEAD_CHACHA20_POLY1305)
          return false;
+#endif
+         }
+      else
+         {
+         auto cipher_and_mode = split_on(cipher_algo(), '/');
+         BOTAN_ASSERT(cipher_and_mode.size() == 2, "Expected format for AEAD algo");
+         if(!have_cipher(cipher_and_mode[0]))
+            return false;
 
-      const auto mode = cipher_and_mode[1];
+         const auto mode = cipher_and_mode[1];
 
 #if !defined(BOTAN_HAS_AEAD_CCM)
-      if(mode == "CCM" || mode == "CCM-8")
-         return false;
+         if(mode == "CCM" || mode == "CCM-8")
+            return false;
 #endif
 
 #if !defined(BOTAN_HAS_AEAD_GCM)
-      if(mode == "GCM")
-         return false;
+         if(mode == "GCM")
+            return false;
 #endif
 
 #if !defined(BOTAN_HAS_AEAD_OCB)
-      if(mode == "OCB")
-         return false;
+         if(mode == "OCB(12)" || mode == "OCB")
+            return false;
 #endif
+         }
       }
    else
       {
-      if(!af.prototype_block_cipher(cipher_algo()) &&
-         !af.prototype_stream_cipher(cipher_algo()))
+      // Old non-AEAD schemes
+      if(!have_cipher(cipher_algo()))
          return false;
-
-      if(!af.prototype_hash_function(mac_algo()))
+      if(!have_hash(mac_algo())) // HMAC
          return false;
       }
 
-   if(kex_algo() == "SRP_SHA")
+   if(kex_method() == Kex_Algo::SRP_SHA)
       {
 #if !defined(BOTAN_HAS_SRP6)
       return false;
 #endif
       }
-   else if(kex_algo() == "ECDH" || kex_algo() == "ECDHE_PSK")
+   else if(kex_method() == Kex_Algo::ECDH || kex_method() == Kex_Algo::ECDHE_PSK)
       {
 #if !defined(BOTAN_HAS_ECDH)
       return false;
 #endif
       }
-   else if(kex_algo() == "DH" || kex_algo() == "DHE_PSK")
+   else if(kex_method() == Kex_Algo::DH || kex_method() == Kex_Algo::DHE_PSK)
       {
 #if !defined(BOTAN_HAS_DIFFIE_HELLMAN)
       return false;
 #endif
       }
+   else if(kex_method() == Kex_Algo::CECPQ1)
+      {
+#if !defined(BOTAN_HAS_CECPQ1)
+      return false;
+#endif
+      }
 
-   if(sig_algo() == "DSA")
+   if(auth_method() == Auth_Method::DSA)
       {
 #if !defined(BOTAN_HAS_DSA)
       return false;
 #endif
       }
-   else if(sig_algo() == "ECDSA")
+   else if(auth_method() == Auth_Method::ECDSA)
       {
 #if !defined(BOTAN_HAS_ECDSA)
       return false;
 #endif
       }
-   else if(sig_algo() == "RSA")
+   else if(auth_method() == Auth_Method::RSA)
       {
 #if !defined(BOTAN_HAS_RSA)
       return false;
@@ -171,63 +195,6 @@ bool Ciphersuite::valid() const
       }
 
    return true;
-   }
-
-std::string Ciphersuite::to_string() const
-   {
-   if(m_cipher_keylen == 0)
-      throw std::runtime_error("Ciphersuite::to_string - no value set");
-
-   std::ostringstream out;
-
-   out << "TLS_";
-
-   if(kex_algo() != "RSA")
-      {
-      if(kex_algo() == "DH")
-         out << "DHE";
-      else if(kex_algo() == "ECDH")
-         out << "ECDHE";
-      else
-         out << kex_algo();
-
-      out << '_';
-      }
-
-   if(sig_algo() == "DSA")
-      out << "DSS_";
-   else if(sig_algo() != "")
-      out << sig_algo() << '_';
-
-   out << "WITH_";
-
-   if(cipher_algo() == "RC4")
-      {
-      out << "RC4_128_";
-      }
-   else
-      {
-      if(cipher_algo() == "3DES")
-         out << "3DES_EDE";
-      else if(cipher_algo().find("Camellia") == 0)
-         out << "CAMELLIA_" << std::to_string(8*cipher_keylen());
-      else
-         out << replace_chars(cipher_algo(), {'-', '/'}, '_');
-
-      if(cipher_algo().find("/") != std::string::npos)
-         out << "_"; // some explicit mode already included
-      else
-         out << "_CBC_";
-      }
-
-   if(mac_algo() == "SHA-1")
-      out << "SHA";
-   else if(mac_algo() == "AEAD")
-      out << erase_chars(prf_algo(), {'-'});
-   else
-      out << erase_chars(mac_algo(), {'-'});
-
-   return out.str();
    }
 
 }

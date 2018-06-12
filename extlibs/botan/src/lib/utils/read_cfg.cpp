@@ -1,117 +1,63 @@
 /*
 * Simple config/test file reader
-* (C) 2013 Jack Lloyd
+* (C) 2013,2014,2015 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/parsing.h>
-//#include <boost/algorithm/string.hpp>
+#include <botan/exceptn.h>
 
 namespace Botan {
 
-void lex_cfg(std::istream& is,
-             std::function<void (std::string)> cb)
+std::string clean_ws(const std::string& s)
    {
-   /*
+   const char* ws = " \t\n";
+   auto start = s.find_first_not_of(ws);
+   auto end = s.find_last_not_of(ws);
+
+   if(start == std::string::npos)
+      return "";
+
+   if(end == std::string::npos)
+      return s.substr(start, end);
+   else
+      return s.substr(start, start + end + 1);
+   }
+
+std::map<std::string, std::string> read_cfg(std::istream& is)
+   {
+   std::map<std::string, std::string> kv;
+   size_t line = 0;
+
    while(is.good())
       {
       std::string s;
 
       std::getline(is, s);
 
-      while(is.good() && s.back() == '\\')
-         {
-         boost::trim_if(s, boost::is_any_of("\\\n"));
-         std::string x;
-         std::getline(is, x);
-         boost::trim_left(x);
-         s += x;
-         }
+      ++line;
 
-      auto comment = s.find('#');
-      if(comment)
-         s = s.substr(0, comment);
+      if(s.empty() || s[0] == '#')
+         continue;
+
+      s = clean_ws(s.substr(0, s.find('#')));
 
       if(s.empty())
          continue;
 
-      std::vector<std::string> parts;
-      boost::split(parts, s, boost::is_any_of(" \t\n"), boost::token_compress_on);
+      auto eq = s.find("=");
 
-      for(auto p : parts)
-         {
-         if(p.empty())
-            continue;
+      if(eq == std::string::npos || eq == 0 || eq == s.size() - 1)
+         throw Exception("Bad read_cfg input '" + s + "' on line " + std::to_string(line));
 
-         auto eq = p.find("=");
+      const std::string key = clean_ws(s.substr(0, eq));
+      const std::string val = clean_ws(s.substr(eq + 1, std::string::npos));
 
-         if(eq == std::string::npos || p.size() < 2)
-            {
-            cb(p);
-            }
-         else if(eq == 0)
-            {
-            cb("=");
-            cb(p.substr(1, std::string::npos));
-            }
-         else if(eq == p.size() - 1)
-            {
-            cb(p.substr(0, p.size() - 1));
-            cb("=");
-            }
-         else if(eq != std::string::npos)
-            {
-            cb(p.substr(0, eq));
-            cb("=");
-            cb(p.substr(eq + 1, std::string::npos));
-            }
-         }
+      kv[key] = val;
       }
-   */
-   }
 
-void lex_cfg_w_headers(std::istream& is,
-                       std::function<void (std::string)> cb,
-                       std::function<void (std::string)> hdr_cb)
-   {
-   auto intercept = [cb,hdr_cb](const std::string& s)
-      {
-      if(s[0] == '[' && s[s.length()-1] == ']')
-         hdr_cb(s.substr(1, s.length()-2));
-      else
-         cb(s);
-      };
-
-   lex_cfg(is, intercept);
-   }
-
-std::map<std::string, std::map<std::string, std::string>>
-   parse_cfg(std::istream& is)
-   {
-   std::string header = "default";
-   std::map<std::string, std::map<std::string, std::string>> vals;
-   std::string key;
-
-   auto header_cb = [&header](const std::string i) { header = i; };
-   auto cb = [&header,&key,&vals](const std::string s)
-      {
-      if(s == "=")
-         {
-         BOTAN_ASSERT(!key.empty(), "Valid assignment in config");
-         }
-      else if(key.empty())
-         key = s;
-      else
-         {
-         vals[header][key] = s;
-         key = "";
-         }
-      };
-
-   lex_cfg_w_headers(is, cb, header_cb);
-
-   return vals;
+   return kv;
    }
 
 }

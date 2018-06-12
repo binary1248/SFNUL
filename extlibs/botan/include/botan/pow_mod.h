@@ -2,11 +2,11 @@
 * Modular Exponentiator
 * (C) 1999-2007 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_POWER_MOD_H__
-#define BOTAN_POWER_MOD_H__
+#ifndef BOTAN_POWER_MOD_H_
+#define BOTAN_POWER_MOD_H_
 
 #include <botan/bigint.h>
 
@@ -15,20 +15,24 @@ namespace Botan {
 /**
 * Modular Exponentiator Interface
 */
-class BOTAN_DLL Modular_Exponentiator
+class BOTAN_PUBLIC_API(2,0) Modular_Exponentiator
    {
    public:
       virtual void set_base(const BigInt&) = 0;
       virtual void set_exponent(const BigInt&) = 0;
       virtual BigInt execute() const = 0;
       virtual Modular_Exponentiator* copy() const = 0;
-      virtual ~Modular_Exponentiator() {}
+
+      Modular_Exponentiator() = default;
+      Modular_Exponentiator(const Modular_Exponentiator&) = default;
+      Modular_Exponentiator & operator=(const Modular_Exponentiator&) = default;
+      virtual ~Modular_Exponentiator() = default;
    };
 
 /**
 * Modular Exponentiator Proxy
 */
-class BOTAN_DLL Power_Mod
+class BOTAN_PUBLIC_API(2,0) Power_Mod
    {
    public:
 
@@ -51,32 +55,59 @@ class BOTAN_DLL Power_Mod
       static size_t window_bits(size_t exp_bits, size_t base_bits,
                                 Power_Mod::Usage_Hints hints);
 
-      void set_modulus(const BigInt&, Usage_Hints = NO_HINTS) const;
-      void set_base(const BigInt&) const;
-      void set_exponent(const BigInt&) const;
+      /**
+      * @param modulus the modulus
+      * @param hints Passed to set_modulus if modulus > 0
+      * @param disable_montgomery_arith Disables use of Montgomery
+      * representation. Likely only useful for testing.
+      */
+      void set_modulus(const BigInt& modulus,
+                       Usage_Hints hints = NO_HINTS,
+                       bool disable_montgomery_arith = false) const;
 
+      /**
+      * Set the base
+      */
+      void set_base(const BigInt& base) const;
+
+      /**
+      * Set the exponent
+      */
+      void set_exponent(const BigInt& exponent) const;
+
+      /**
+      * All three of the above functions must have already been called.
+      * @return result of g^x%p
+      */
       BigInt execute() const;
 
       Power_Mod& operator=(const Power_Mod&);
 
-      Power_Mod(const BigInt& = 0, Usage_Hints = NO_HINTS);
+      /**
+      * @param modulus Optionally call set_modulus
+      * @param hints Passed to set_modulus if modulus > 0
+      * @param disable_montgomery_arith Disables use of Montgomery
+      * representation. Likely only useful for testing.
+      */
+      Power_Mod(const BigInt& modulus = 0,
+                Usage_Hints hints = NO_HINTS,
+                bool disable_montgomery_arith = false);
       Power_Mod(const Power_Mod&);
-      virtual ~Power_Mod();
+      virtual ~Power_Mod() = default;
    private:
-      mutable Modular_Exponentiator* core;
-      Usage_Hints hints;
+      mutable std::unique_ptr<Modular_Exponentiator> m_core;
    };
 
 /**
 * Fixed Exponent Modular Exponentiator Proxy
 */
-class BOTAN_DLL Fixed_Exponent_Power_Mod : public Power_Mod
+class BOTAN_PUBLIC_API(2,0) Fixed_Exponent_Power_Mod final : public Power_Mod
    {
    public:
       BigInt operator()(const BigInt& b) const
          { set_base(b); return execute(); }
 
-      Fixed_Exponent_Power_Mod() {}
+      Fixed_Exponent_Power_Mod() = default;
 
       Fixed_Exponent_Power_Mod(const BigInt& exponent,
                                const BigInt& modulus,
@@ -86,13 +117,13 @@ class BOTAN_DLL Fixed_Exponent_Power_Mod : public Power_Mod
 /**
 * Fixed Base Modular Exponentiator Proxy
 */
-class BOTAN_DLL Fixed_Base_Power_Mod : public Power_Mod
+class BOTAN_PUBLIC_API(2,0) Fixed_Base_Power_Mod final : public Power_Mod
    {
    public:
       BigInt operator()(const BigInt& e) const
          { set_exponent(e); return execute(); }
 
-      Fixed_Base_Power_Mod() {}
+      Fixed_Base_Power_Mod() = default;
 
       Fixed_Base_Power_Mod(const BigInt& base,
                            const BigInt& modulus,

@@ -1,43 +1,47 @@
 /*
 * OAEP
-* (C) 1999-2010 Jack Lloyd
+* (C) 1999-2010,2015,2018 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/oaep.h>
 #include <botan/mgf1.h>
-#include <botan/mem_ops.h>
+#include <botan/exceptn.h>
+#include <botan/rng.h>
+#include <botan/internal/ct_utils.h>
 
 namespace Botan {
 
 /*
 * OAEP Pad Operation
 */
-secure_vector<byte> OAEP::pad(const byte in[], size_t in_length,
+secure_vector<uint8_t> OAEP::pad(const uint8_t in[], size_t in_length,
                              size_t key_length,
                              RandomNumberGenerator& rng) const
    {
    key_length /= 8;
 
-   if(key_length < in_length + 2*m_Phash.size() + 1)
+   if(in_length > maximum_input_size(key_length * 8))
+      {
       throw Invalid_Argument("OAEP: Input is too large");
+      }
 
-   secure_vector<byte> out(key_length);
+   secure_vector<uint8_t> out(key_length);
 
-   rng.randomize(&out[0], m_Phash.size());
+   rng.randomize(out.data(), m_Phash.size());
 
-   buffer_insert(out, m_Phash.size(), &m_Phash[0], m_Phash.size());
+   buffer_insert(out, m_Phash.size(), m_Phash.data(), m_Phash.size());
    out[out.size() - in_length - 1] = 0x01;
    buffer_insert(out, out.size() - in_length, in, in_length);
 
-   mgf1_mask(*m_hash,
-             &out[0], m_Phash.size(),
+   mgf1_mask(*m_mgf1_hash,
+             out.data(), m_Phash.size(),
              &out[m_Phash.size()], out.size() - m_Phash.size());
 
-   mgf1_mask(*m_hash,
+   mgf1_mask(*m_mgf1_hash,
              &out[m_Phash.size()], out.size() - m_Phash.size(),
-             &out[0], m_Phash.size());
+             out.data(), m_Phash.size());
 
    return out;
    }
@@ -45,8 +49,8 @@ secure_vector<byte> OAEP::pad(const byte in[], size_t in_length,
 /*
 * OAEP Unpad Operation
 */
-secure_vector<byte> OAEP::unpad(const byte in[], size_t in_length,
-                               size_t key_length) const
+secure_vector<uint8_t> OAEP::unpad(uint8_t& valid_mask,
+                                const uint8_t in[], size_t in_length) const
    {
    /*
    Must be careful about error messages here; if an attacker can
@@ -57,58 +61,65 @@ secure_vector<byte> OAEP::unpad(const byte in[], size_t in_length,
 
    Also have to be careful about timing attacks! Pointed out by Falko
    Strenzke.
+    
+   According to the standard (Section 7.1.1), the encryptor always 
+   creates a message as follows:
+      i. Concatenate a single octet with hexadecimal value 0x00,
+         maskedSeed, and maskedDB to form an encoded message EM of
+         length k octets as
+            EM = 0x00 || maskedSeed || maskedDB.
+   where k is the length of the modulus N.
+   Therefore, the first byte can always be skipped safely.
    */
 
-   key_length /= 8;
+   uint8_t skip_first = CT::is_zero<uint8_t>(in[0]) & 0x01;
+   
+   secure_vector<uint8_t> input(in + skip_first, in + in_length);
 
-   // Invalid input: truncate to zero length input, causing later
-   // checks to fail
-   if(in_length > key_length)
-      in_length = 0;
+   CT::poison(input.data(), input.size());
 
-   secure_vector<byte> input(key_length);
-   buffer_insert(input, key_length - in_length, in, in_length);
+   const size_t hlen = m_Phash.size();
 
-   mgf1_mask(*m_hash,
-             &input[m_Phash.size()], input.size() - m_Phash.size(),
-             &input[0], m_Phash.size());
+   mgf1_mask(*m_mgf1_hash,
+             &input[hlen], input.size() - hlen,
+             input.data(), hlen);
 
-   mgf1_mask(*m_hash,
-             &input[0], m_Phash.size(),
-             &input[m_Phash.size()], input.size() - m_Phash.size());
+   mgf1_mask(*m_mgf1_hash,
+             input.data(), hlen,
+             &input[hlen], input.size() - hlen);
 
-   bool waiting_for_delim = true;
-   bool bad_input = false;
-   size_t delim_idx = 2 * m_Phash.size();
+   size_t delim_idx = 2 * hlen;
+   uint8_t waiting_for_delim = 0xFF;
+   uint8_t bad_input = 0;
 
-   /*
-   * GCC 4.5 on x86-64 compiles this in a way that is still vunerable
-   * to timing analysis. Other compilers, or GCC on other platforms,
-   * may or may not.
-   */
    for(size_t i = delim_idx; i < input.size(); ++i)
       {
-      const bool zero_p = !input[i];
-      const bool one_p = input[i] == 0x01;
+      const uint8_t zero_m = CT::is_zero<uint8_t>(input[i]);
+      const uint8_t one_m = CT::is_equal<uint8_t>(input[i], 1);
 
-      const bool add_1 = waiting_for_delim && zero_p;
+      const uint8_t add_m = waiting_for_delim & zero_m;
 
-      bad_input |= waiting_for_delim && !(zero_p || one_p);
+      bad_input |= waiting_for_delim & ~(zero_m | one_m);
 
-      delim_idx += add_1;
+      delim_idx += CT::select<uint8_t>(add_m, 1, 0);
 
-      waiting_for_delim &= zero_p;
+      waiting_for_delim &= zero_m;
       }
 
    // If we never saw any non-zero byte, then it's not valid input
    bad_input |= waiting_for_delim;
+   bad_input |= CT::is_equal<uint8_t>(constant_time_compare(&input[hlen], m_Phash.data(), hlen), false);
 
-   bad_input |= !same_mem(&input[m_Phash.size()], &m_Phash[0], m_Phash.size());
+   CT::unpoison(input.data(), input.size());
+   CT::unpoison(&bad_input, 1);
+   CT::unpoison(&delim_idx, 1);
 
-   if(bad_input)
-      throw Decoding_Error("Invalid OAEP encoding");
+   valid_mask = ~bad_input;
 
-   return secure_vector<byte>(&input[delim_idx + 1], &input[input.size()]);
+   secure_vector<uint8_t> output(input.begin() + delim_idx + 1, input.end());
+   CT::cond_zero_mem(bad_input, output.data(), output.size());
+
+   return output;
    }
 
 /*
@@ -125,9 +136,17 @@ size_t OAEP::maximum_input_size(size_t keybits) const
 /*
 * OAEP Constructor
 */
-OAEP::OAEP(HashFunction* hash, const std::string& P) : m_hash(hash)
+OAEP::OAEP(HashFunction* hash, const std::string& P) : m_mgf1_hash(hash)
    {
-   m_Phash = m_hash->process(P);
+   m_Phash = m_mgf1_hash->process(P);
+   }
+
+OAEP::OAEP(HashFunction* hash,
+           HashFunction* mgf1_hash,
+           const std::string& P) : m_mgf1_hash(mgf1_hash)
+   {
+   std::unique_ptr<HashFunction> phash(hash); // takes ownership
+   m_Phash = phash->process(P);
    }
 
 }

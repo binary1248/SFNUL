@@ -2,105 +2,94 @@
 * TLS v1.0 and v1.2 PRFs
 * (C) 2004-2010 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/prf_tls.h>
-#include <botan/internal/xor_buf.h>
-#include <botan/hmac.h>
-#include <botan/md5.h>
-#include <botan/sha160.h>
 
 namespace Botan {
+
+TLS_PRF::TLS_PRF() :
+   m_hmac_md5(MessageAuthenticationCode::create_or_throw("HMAC(MD5)")),
+   m_hmac_sha1(MessageAuthenticationCode::create_or_throw("HMAC(SHA-1)"))
+   {
+   }
 
 namespace {
 
 /*
 * TLS PRF P_hash function
 */
-void P_hash(secure_vector<byte>& output,
+void P_hash(uint8_t out[], size_t out_len,
             MessageAuthenticationCode& mac,
-            const byte secret[], size_t secret_len,
-            const byte seed[], size_t seed_len)
+            const uint8_t secret[], size_t secret_len,
+            const uint8_t salt[], size_t salt_len)
    {
    try
       {
       mac.set_key(secret, secret_len);
       }
-   catch(Invalid_Key_Length)
+   catch(Invalid_Key_Length&)
       {
       throw Internal_Error("The premaster secret of " +
                            std::to_string(secret_len) +
                            " bytes is too long for the PRF");
       }
 
-   secure_vector<byte> A(seed, seed + seed_len);
+   secure_vector<uint8_t> A(salt, salt + salt_len);
+   secure_vector<uint8_t> h;
 
    size_t offset = 0;
 
-   while(offset != output.size())
+   while(offset != out_len)
       {
-      const size_t this_block_len =
-         std::min<size_t>(mac.output_length(), output.size() - offset);
-
       A = mac.process(A);
 
       mac.update(A);
-      mac.update(seed, seed_len);
-      secure_vector<byte> block = mac.final();
+      mac.update(salt, salt_len);
+      mac.final(h);
 
-      xor_buf(&output[offset], &block[0], this_block_len);
-      offset += this_block_len;
+      const size_t writing = std::min(h.size(), out_len - offset);
+      xor_buf(&out[offset], h.data(), writing);
+      offset += writing;
       }
    }
 
 }
 
-/*
-* TLS PRF Constructor and Destructor
-*/
-TLS_PRF::TLS_PRF()
+size_t TLS_PRF::kdf(uint8_t key[], size_t key_len,
+                    const uint8_t secret[], size_t secret_len,
+                    const uint8_t salt[], size_t salt_len,
+                    const uint8_t label[], size_t label_len) const
    {
-   hmac_md5.reset(new HMAC(new MD5));
-   hmac_sha1.reset(new HMAC(new SHA_160));
+   const size_t S1_len = (secret_len + 1) / 2,
+                S2_len = (secret_len + 1) / 2;
+   const uint8_t* S1 = secret;
+   const uint8_t* S2 = secret + (secret_len - S2_len);
+   secure_vector<uint8_t> msg;
+
+   msg.reserve(label_len + salt_len);
+   msg += std::make_pair(label, label_len);
+   msg += std::make_pair(salt, salt_len);
+
+   P_hash(key, key_len, *m_hmac_md5,  S1, S1_len, msg.data(), msg.size());
+   P_hash(key, key_len, *m_hmac_sha1, S2, S2_len, msg.data(), msg.size());
+   return key_len;
    }
 
-/*
-* TLS PRF
-*/
-secure_vector<byte> TLS_PRF::derive(size_t key_len,
-                                   const byte secret[], size_t secret_len,
-                                   const byte seed[], size_t seed_len) const
+size_t TLS_12_PRF::kdf(uint8_t key[], size_t key_len,
+                       const uint8_t secret[], size_t secret_len,
+                       const uint8_t salt[], size_t salt_len,
+                       const uint8_t label[], size_t label_len) const
    {
-   secure_vector<byte> output(key_len);
+   secure_vector<uint8_t> msg;
 
-   size_t S1_len = (secret_len + 1) / 2,
-          S2_len = (secret_len + 1) / 2;
-   const byte* S1 = secret;
-   const byte* S2 = secret + (secret_len - S2_len);
+   msg.reserve(label_len + salt_len);
+   msg += std::make_pair(label, label_len);
+   msg += std::make_pair(salt, salt_len);
 
-   P_hash(output, *hmac_md5,  S1, S1_len, seed, seed_len);
-   P_hash(output, *hmac_sha1, S2, S2_len, seed, seed_len);
-
-   return output;
-   }
-
-/*
-* TLS v1.2 PRF Constructor and Destructor
-*/
-TLS_12_PRF::TLS_12_PRF(MessageAuthenticationCode* mac) : hmac(mac)
-   {
-   }
-
-secure_vector<byte> TLS_12_PRF::derive(size_t key_len,
-                                      const byte secret[], size_t secret_len,
-                                      const byte seed[], size_t seed_len) const
-   {
-   secure_vector<byte> output(key_len);
-
-   P_hash(output, *hmac, secret, secret_len, seed, seed_len);
-
-   return output;
+   P_hash(key, key_len, *m_mac, secret, secret_len, msg.data(), msg.size());
+   return key_len;
    }
 
 }

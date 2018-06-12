@@ -1,63 +1,97 @@
 /*
 * RSA
-* (C) 1999-2008 Jack Lloyd
+* (C) 1999-2008,2016 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_RSA_H__
-#define BOTAN_RSA_H__
+#ifndef BOTAN_RSA_H_
+#define BOTAN_RSA_H_
 
-#include <botan/if_algo.h>
-#include <botan/pk_ops.h>
-#include <botan/reducer.h>
-#include <botan/blinding.h>
+#include <botan/pk_keys.h>
+#include <botan/bigint.h>
 
 namespace Botan {
 
 /**
 * RSA Public Key
 */
-class BOTAN_DLL RSA_PublicKey : public virtual IF_Scheme_PublicKey
+class BOTAN_PUBLIC_API(2,0) RSA_PublicKey : public virtual Public_Key
    {
    public:
-      std::string algo_name() const { return "RSA"; }
-
+      /**
+      * Load a public key.
+      * @param alg_id the X.509 algorithm identifier
+      * @param key_bits DER encoded public key bits
+      */
       RSA_PublicKey(const AlgorithmIdentifier& alg_id,
-                    const secure_vector<byte>& key_bits) :
-         IF_Scheme_PublicKey(alg_id, key_bits)
-         {}
+                    const std::vector<uint8_t>& key_bits);
 
       /**
-      * Create a RSA_PublicKey
+      * Create a public key.
       * @arg n the modulus
       * @arg e the exponent
       */
       RSA_PublicKey(const BigInt& n, const BigInt& e) :
-         IF_Scheme_PublicKey(n, e)
-         {}
+         m_n(n), m_e(e) {}
+
+      std::string algo_name() const override { return "RSA"; }
+
+      bool check_key(RandomNumberGenerator& rng, bool) const override;
+
+      AlgorithmIdentifier algorithm_identifier() const override;
+
+      std::vector<uint8_t> public_key_bits() const override;
+
+      /**
+      * @return public modulus
+      */
+      const BigInt& get_n() const { return m_n; }
+
+      /**
+      * @return public exponent
+      */
+      const BigInt& get_e() const { return m_e; }
+
+      size_t key_length() const override;
+      size_t estimated_strength() const override;
+
+      std::unique_ptr<PK_Ops::Encryption>
+         create_encryption_op(RandomNumberGenerator& rng,
+                              const std::string& params,
+                              const std::string& provider) const override;
+
+      std::unique_ptr<PK_Ops::KEM_Encryption>
+         create_kem_encryption_op(RandomNumberGenerator& rng,
+                                  const std::string& params,
+                                  const std::string& provider) const override;
+
+      std::unique_ptr<PK_Ops::Verification>
+         create_verification_op(const std::string& params,
+                                const std::string& provider) const override;
 
    protected:
-      RSA_PublicKey() {}
+      RSA_PublicKey() = default;
+
+      BigInt m_n, m_e;
    };
 
 /**
 * RSA Private Key
 */
-class BOTAN_DLL RSA_PrivateKey : public RSA_PublicKey,
-                                 public IF_Scheme_PrivateKey
+class BOTAN_PUBLIC_API(2,0) RSA_PrivateKey final : public Private_Key, public RSA_PublicKey
    {
    public:
-      bool check_key(RandomNumberGenerator& rng, bool) const;
-
+      /**
+      * Load a private key.
+      * @param alg_id the X.509 algorithm identifier
+      * @param key_bits PKCS#1 RSAPrivateKey bits
+      */
       RSA_PrivateKey(const AlgorithmIdentifier& alg_id,
-                     const secure_vector<byte>& key_bits,
-                     RandomNumberGenerator& rng) :
-         IF_Scheme_PrivateKey(rng, alg_id, key_bits) {}
+                     const secure_vector<uint8_t>& key_bits);
 
       /**
       * Construct a private key from the specified parameters.
-      * @param rng a random number generator
       * @param p the first prime
       * @param q the second prime
       * @param e the exponent
@@ -67,11 +101,9 @@ class BOTAN_DLL RSA_PrivateKey : public RSA_PublicKey,
       * @param n if specified, this must be n = p * q. Leave it as 0
       * if you wish to the constructor to calculate it.
       */
-      RSA_PrivateKey(RandomNumberGenerator& rng,
-                     const BigInt& p, const BigInt& q,
+      RSA_PrivateKey(const BigInt& p, const BigInt& q,
                      const BigInt& e, const BigInt& d = 0,
-                     const BigInt& n = 0) :
-         IF_Scheme_PrivateKey(rng, p, q, e, d, n) {}
+                     const BigInt& n = 0);
 
       /**
       * Create a new private key with the specified bit length
@@ -81,73 +113,50 @@ class BOTAN_DLL RSA_PrivateKey : public RSA_PublicKey,
       */
       RSA_PrivateKey(RandomNumberGenerator& rng,
                      size_t bits, size_t exp = 65537);
-   };
 
-/**
-* RSA private (decrypt/sign) operation
-*/
-class BOTAN_DLL RSA_Private_Operation : public PK_Ops::Signature,
-                                        public PK_Ops::Decryption
-   {
-   public:
-      RSA_Private_Operation(const RSA_PrivateKey& rsa,
-                            RandomNumberGenerator& rng);
+      bool check_key(RandomNumberGenerator& rng, bool) const override;
 
-      size_t max_input_bits() const { return (n.bits() - 1); }
+      /**
+      * Get the first prime p.
+      * @return prime p
+      */
+      const BigInt& get_p() const { return m_p; }
 
-      secure_vector<byte> sign(const byte msg[], size_t msg_len,
-                              RandomNumberGenerator& rng);
+      /**
+      * Get the second prime q.
+      * @return prime q
+      */
+      const BigInt& get_q() const { return m_q; }
 
-      secure_vector<byte> decrypt(const byte msg[], size_t msg_len);
+      /**
+      * Get d with exp * d = 1 mod (p - 1, q - 1).
+      * @return d
+      */
+      const BigInt& get_d() const { return m_d; }
 
-   private:
-      BigInt private_op(const BigInt& m) const;
+      const BigInt& get_c() const { return m_c; }
+      const BigInt& get_d1() const { return m_d1; }
+      const BigInt& get_d2() const { return m_d2; }
 
-      const BigInt& n;
-      const BigInt& q;
-      const BigInt& c;
-      Fixed_Exponent_Power_Mod powermod_e_n, powermod_d1_p, powermod_d2_q;
-      Modular_Reducer mod_p;
-      Blinder blinder;
-   };
+      secure_vector<uint8_t> private_key_bits() const override;
 
-/**
-* RSA public (encrypt/verify) operation
-*/
-class BOTAN_DLL RSA_Public_Operation : public PK_Ops::Verification,
-                                       public PK_Ops::Encryption
-   {
-   public:
-      RSA_Public_Operation(const RSA_PublicKey& rsa) :
-         n(rsa.get_n()), powermod_e_n(rsa.get_e(), rsa.get_n())
-         {}
+      std::unique_ptr<PK_Ops::Decryption>
+         create_decryption_op(RandomNumberGenerator& rng,
+                              const std::string& params,
+                              const std::string& provider) const override;
 
-      size_t max_input_bits() const { return (n.bits() - 1); }
-      bool with_recovery() const { return true; }
+      std::unique_ptr<PK_Ops::KEM_Decryption>
+         create_kem_decryption_op(RandomNumberGenerator& rng,
+                                  const std::string& params,
+                                  const std::string& provider) const override;
 
-      secure_vector<byte> encrypt(const byte msg[], size_t msg_len,
-                                 RandomNumberGenerator&)
-         {
-         BigInt m(msg, msg_len);
-         return BigInt::encode_1363(public_op(m), n.bytes());
-         }
-
-      secure_vector<byte> verify_mr(const byte msg[], size_t msg_len)
-         {
-         BigInt m(msg, msg_len);
-         return BigInt::encode_locked(public_op(m));
-         }
+      std::unique_ptr<PK_Ops::Signature>
+         create_signature_op(RandomNumberGenerator& rng,
+                             const std::string& params,
+                             const std::string& provider) const override;
 
    private:
-      BigInt public_op(const BigInt& m) const
-         {
-         if(m >= n)
-            throw Invalid_Argument("RSA public op - input is too large");
-         return powermod_e_n(m);
-         }
-
-      const BigInt& n;
-      Fixed_Exponent_Power_Mod powermod_e_n;
+      BigInt m_d, m_p, m_q, m_d1, m_d2, m_c;
    };
 
 }

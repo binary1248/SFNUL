@@ -2,11 +2,12 @@
 * BigInt Input/Output
 * (C) 1999-2007 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/bigint.h>
-#include <iostream>
+#include <istream>
+#include <ostream>
 
 namespace Botan {
 
@@ -19,7 +20,7 @@ std::ostream& operator<<(std::ostream& stream, const BigInt& n)
    if(stream.flags() & std::ios::hex)
       base = BigInt::Hexadecimal;
    else if(stream.flags() & std::ios::oct)
-      throw std::runtime_error("Octal output of BigInt not supported");
+      throw Exception("Octal output of BigInt not supported");
 
    if(n == 0)
       stream.write("0", 1);
@@ -27,11 +28,11 @@ std::ostream& operator<<(std::ostream& stream, const BigInt& n)
       {
       if(n < 0)
          stream.write("-", 1);
-      const std::vector<byte> buffer = BigInt::encode(n, base);
+      const std::vector<uint8_t> buffer = BigInt::encode(n, base);
       size_t skip = 0;
       while(skip < buffer.size() && buffer[skip] == '0')
          ++skip;
-      stream.write(reinterpret_cast<const char*>(&buffer[0]) + skip,
+      stream.write(cast_uint8_ptr_to_char(buffer.data()) + skip,
                    buffer.size() - skip);
       }
    if(!stream.good())

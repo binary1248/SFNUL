@@ -1,24 +1,26 @@
 /*
 * 64x64->128 bit multiply operation
-* (C) 2013 Jack Lloyd
+* (C) 2013,2015 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_UTIL_MUL128_H__
-#define BOTAN_UTIL_MUL128_H__
+#ifndef BOTAN_UTIL_MUL128_H_
+#define BOTAN_UTIL_MUL128_H_
 
 #include <botan/types.h>
 
 namespace Botan {
 
-#if defined(__SIZEOF_INT128__)
+#if defined(__SIZEOF_INT128__) && defined(BOTAN_TARGET_CPU_HAS_NATIVE_64BIT) && !defined(__xlc__)
    #define BOTAN_TARGET_HAS_NATIVE_UINT128
-   typedef unsigned __int128 uint128_t;
 
-#elif (BOTAN_GCC_VERSION > 440) && defined(BOTAN_TARGET_CPU_HAS_NATIVE_64BIT)
-   #define BOTAN_TARGET_HAS_NATIVE_UINT128
-   typedef unsigned int uint128_t __attribute__((mode(TI)));
+   // Prefer TI mode over __int128 as GCC rejects the latter in pendantic mode
+   #if defined(__GNUG__)
+     typedef unsigned int uint128_t __attribute__((mode(TI)));
+   #else
+     typedef unsigned __int128 uint128_t;
+   #endif
 #endif
 
 }
@@ -78,7 +80,7 @@ namespace Botan {
 /**
 * Perform a 64x64->128 bit multiplication
 */
-inline void mul64x64_128(u64bit a, u64bit b, u64bit* lo, u64bit* hi)
+inline void mul64x64_128(uint64_t a, uint64_t b, uint64_t* lo, uint64_t* hi)
    {
 #if defined(BOTAN_FAST_64X64_MUL)
    BOTAN_FAST_64X64_MUL(a, b, lo, hi);
@@ -90,17 +92,17 @@ inline void mul64x64_128(u64bit a, u64bit b, u64bit* lo, u64bit* hi)
    * 64-bit registers/ALU, but no 64x64->128 multiply) or 32-bit CPUs.
    */
    const size_t HWORD_BITS = 32;
-   const u32bit HWORD_MASK = 0xFFFFFFFF;
+   const uint32_t HWORD_MASK = 0xFFFFFFFF;
 
-   const u32bit a_hi = (a >> HWORD_BITS);
-   const u32bit a_lo = (a  & HWORD_MASK);
-   const u32bit b_hi = (b >> HWORD_BITS);
-   const u32bit b_lo = (b  & HWORD_MASK);
+   const uint32_t a_hi = (a >> HWORD_BITS);
+   const uint32_t a_lo = (a  & HWORD_MASK);
+   const uint32_t b_hi = (b >> HWORD_BITS);
+   const uint32_t b_lo = (b  & HWORD_MASK);
 
-   u64bit x0 = static_cast<u64bit>(a_hi) * b_hi;
-   u64bit x1 = static_cast<u64bit>(a_lo) * b_hi;
-   u64bit x2 = static_cast<u64bit>(a_hi) * b_lo;
-   u64bit x3 = static_cast<u64bit>(a_lo) * b_lo;
+   uint64_t x0 = static_cast<uint64_t>(a_hi) * b_hi;
+   uint64_t x1 = static_cast<uint64_t>(a_lo) * b_hi;
+   uint64_t x2 = static_cast<uint64_t>(a_hi) * b_lo;
+   uint64_t x3 = static_cast<uint64_t>(a_lo) * b_lo;
 
    // this cannot overflow as (2^32-1)^2 + 2^32-1 < 2^64-1
    x2 += x3 >> HWORD_BITS;
@@ -109,7 +111,7 @@ inline void mul64x64_128(u64bit a, u64bit b, u64bit* lo, u64bit* hi)
    x2 += x1;
 
    // propagate the carry if any
-   x0 += static_cast<u64bit>(static_cast<bool>(x2 < x1)) << HWORD_BITS;
+   x0 += static_cast<uint64_t>(static_cast<bool>(x2 < x1)) << HWORD_BITS;
 
    *hi = x0 + (x2 >> HWORD_BITS);
    *lo  = ((x2 & HWORD_MASK) << HWORD_BITS) + (x3 & HWORD_MASK);

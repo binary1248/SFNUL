@@ -1,159 +1,146 @@
 /*
-* PK Operation Types
-* (C) 2010 Jack Lloyd
+* (C) 2010,2015 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_PK_OPERATIONS_H__
-#define BOTAN_PK_OPERATIONS_H__
+#ifndef BOTAN_PK_OPERATIONS_H_
+#define BOTAN_PK_OPERATIONS_H_
 
+/**
+* Ordinary applications should never need to include or use this
+* header. It is exposed only for specialized applications which want
+* to implement new versions of public key crypto without merging them
+* as changes to the library. One actual example of such usage is an
+* application which creates RSA signatures using a custom TPM library.
+* Unless you're doing something like that, you don't need anything
+* here. Instead use pubkey.h which wraps these types safely and
+* provides a stable application-oriented API.
+*/
+
+#include <botan/pk_keys.h>
 #include <botan/secmem.h>
-#include <botan/rng.h>
 
 namespace Botan {
+
+class RandomNumberGenerator;
+class EME;
+class KDF;
+class EMSA;
 
 namespace PK_Ops {
 
 /**
 * Public key encryption interface
 */
-class BOTAN_DLL Encryption
+class BOTAN_PUBLIC_API(2,0) Encryption
    {
    public:
+      virtual secure_vector<uint8_t> encrypt(const uint8_t msg[],
+                                          size_t msg_len,
+                                          RandomNumberGenerator& rng) = 0;
+
       virtual size_t max_input_bits() const = 0;
 
-      virtual secure_vector<byte> encrypt(const byte msg[], size_t msg_len,
-                                         RandomNumberGenerator& rng) = 0;
-
-      virtual ~Encryption() {}
+      virtual ~Encryption() = default;
    };
 
 /**
 * Public key decryption interface
 */
-class BOTAN_DLL Decryption
+class BOTAN_PUBLIC_API(2,0) Decryption
    {
    public:
-      virtual size_t max_input_bits() const = 0;
+      virtual secure_vector<uint8_t> decrypt(uint8_t& valid_mask,
+                                          const uint8_t ciphertext[],
+                                          size_t ciphertext_len) = 0;
 
-      virtual secure_vector<byte> decrypt(const byte msg[],
-                                         size_t msg_len) = 0;
-
-      virtual ~Decryption() {}
-   };
-
-/**
-* Public key signature creation interface
-*/
-class BOTAN_DLL Signature
-   {
-   public:
-      /**
-      * Find out the number of message parts supported by this scheme.
-      * @return number of message parts
-      */
-      virtual size_t message_parts() const { return 1; }
-
-      /**
-      * Find out the message part size supported by this scheme/key.
-      * @return size of the message parts
-      */
-      virtual size_t message_part_size() const { return 0; }
-
-      /**
-      * Get the maximum message size in bits supported by this public key.
-      * @return maximum message in bits
-      */
-      virtual size_t max_input_bits() const = 0;
-
-      /*
-      * Perform a signature operation
-      * @param msg the message
-      * @param msg_len the length of msg in bytes
-      * @param rng a random number generator
-      */
-      virtual secure_vector<byte> sign(const byte msg[], size_t msg_len,
-                                      RandomNumberGenerator& rng) = 0;
-
-      virtual ~Signature() {}
+      virtual ~Decryption() = default;
    };
 
 /**
 * Public key signature verification interface
 */
-class BOTAN_DLL Verification
+class BOTAN_PUBLIC_API(2,0) Verification
    {
    public:
-      /**
-      * Get the maximum message size in bits supported by this public key.
-      * @return maximum message in bits
-      */
-      virtual size_t max_input_bits() const = 0;
-
-      /**
-      * Find out the number of message parts supported by this scheme.
-      * @return number of message parts
-      */
-      virtual size_t message_parts() const { return 1; }
-
-      /**
-      * Find out the message part size supported by this scheme/key.
-      * @return size of the message parts
-      */
-      virtual size_t message_part_size() const { return 0; }
-
-      /**
-      * @return boolean specifying if this key type supports message
-      * recovery and thus if you need to call verify() or verify_mr()
-      */
-      virtual bool with_recovery() const = 0;
-
       /*
-      * Perform a signature check operation
+      * Add more data to the message currently being signed
       * @param msg the message
       * @param msg_len the length of msg in bytes
-      * @param sig the signature
-      * @param sig_len the length of sig in bytes
-      * @returns if signature is a valid one for message
       */
-      virtual bool verify(const byte[], size_t,
-                          const byte[], size_t)
-         {
-         throw Invalid_State("Message recovery required");
-         }
+      virtual void update(const uint8_t msg[], size_t msg_len) = 0;
 
       /*
-      * Perform a signature operation (with message recovery)
-      * Only call this if with_recovery() returns true
-      * @param msg the message
-      * @param msg_len the length of msg in bytes
-      * @returns recovered message
+      * Perform a verification operation
+      * @param rng a random number generator
       */
-      virtual secure_vector<byte> verify_mr(const byte[],
-                                           size_t)
-         {
-         throw Invalid_State("Message recovery not supported");
-         }
+      virtual bool is_valid_signature(const uint8_t sig[], size_t sig_len) = 0;
 
-      virtual ~Verification() {}
+      virtual ~Verification() = default;
    };
 
 /**
-* A generic key agreement Operation (eg DH or ECDH)
+* Public key signature creation interface
 */
-class BOTAN_DLL Key_Agreement
+class BOTAN_PUBLIC_API(2,0) Signature
    {
    public:
       /*
-      * Perform a key agreement operation
-      * @param w the other key value
-      * @param w_len the length of w in bytes
-      * @returns the agreed key
+      * Add more data to the message currently being signed
+      * @param msg the message
+      * @param msg_len the length of msg in bytes
       */
-      virtual secure_vector<byte> agree(const byte w[], size_t w_len) = 0;
+      virtual void update(const uint8_t msg[], size_t msg_len) = 0;
 
-      virtual ~Key_Agreement() {}
+      /*
+      * Perform a signature operation
+      * @param rng a random number generator
+      */
+      virtual secure_vector<uint8_t> sign(RandomNumberGenerator& rng) = 0;
+
+      virtual ~Signature() = default;
+   };
+
+/**
+* A generic key agreement operation (eg DH or ECDH)
+*/
+class BOTAN_PUBLIC_API(2,0) Key_Agreement
+   {
+   public:
+      virtual secure_vector<uint8_t> agree(size_t key_len,
+                                        const uint8_t other_key[], size_t other_key_len,
+                                        const uint8_t salt[], size_t salt_len) = 0;
+
+      virtual ~Key_Agreement() = default;
+   };
+
+/**
+* KEM (key encapsulation)
+*/
+class BOTAN_PUBLIC_API(2,0) KEM_Encryption
+   {
+   public:
+      virtual void kem_encrypt(secure_vector<uint8_t>& out_encapsulated_key,
+                               secure_vector<uint8_t>& out_shared_key,
+                               size_t desired_shared_key_len,
+                               Botan::RandomNumberGenerator& rng,
+                               const uint8_t salt[],
+                               size_t salt_len) = 0;
+
+      virtual ~KEM_Encryption() = default;
+   };
+
+class BOTAN_PUBLIC_API(2,0) KEM_Decryption
+   {
+   public:
+      virtual secure_vector<uint8_t> kem_decrypt(const uint8_t encap_key[],
+                                              size_t len,
+                                              size_t desired_shared_key_len,
+                                              const uint8_t salt[],
+                                              size_t salt_len) = 0;
+
+      virtual ~KEM_Decryption() = default;
    };
 
 }

@@ -2,18 +2,17 @@
 * MISTY1
 * (C) 1999-2009 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/misty1.h>
 #include <botan/loadstor.h>
-#include <botan/parsing.h>
 
 namespace Botan {
 
 namespace {
 
-static const byte MISTY1_SBOX_S7[128] = {
+static const uint8_t MISTY1_SBOX_S7[128] = {
    0x1B, 0x32, 0x33, 0x5A, 0x3B, 0x10, 0x17, 0x54, 0x5B, 0x1A, 0x72, 0x73,
    0x6B, 0x2C, 0x66, 0x49, 0x1F, 0x24, 0x13, 0x6C, 0x37, 0x2E, 0x3F, 0x4A,
    0x5D, 0x0F, 0x40, 0x56, 0x25, 0x51, 0x1C, 0x04, 0x0B, 0x46, 0x20, 0x0D,
@@ -26,7 +25,7 @@ static const byte MISTY1_SBOX_S7[128] = {
    0x2D, 0x7A, 0x7F, 0x61, 0x50, 0x22, 0x11, 0x06, 0x47, 0x16, 0x52, 0x4E,
    0x71, 0x3E, 0x69, 0x43, 0x34, 0x5C, 0x58, 0x7D };
 
-static const u16bit MISTY1_SBOX_S9[512] = {
+static const uint16_t MISTY1_SBOX_S9[512] = {
    0x01C3, 0x00CB, 0x0153, 0x019F, 0x01E3, 0x00E9, 0x00FB, 0x0035, 0x0181,
    0x00B9, 0x0117, 0x01EB, 0x0133, 0x0009, 0x002D, 0x00D3, 0x00C7, 0x014A,
    0x0037, 0x007E, 0x00EB, 0x0164, 0x0193, 0x01D8, 0x00A3, 0x011E, 0x0055,
@@ -88,13 +87,13 @@ static const u16bit MISTY1_SBOX_S9[512] = {
 /*
 * MISTY1 FI Function
 */
-u16bit FI(u16bit input, u16bit key7, u16bit key9)
+uint16_t FI(uint16_t input, uint16_t key7, uint16_t key9)
    {
-   u16bit D9 = input >> 7, D7 = input & 0x7F;
+   uint16_t D9 = input >> 7, D7 = input & 0x7F;
    D9 = MISTY1_SBOX_S9[D9] ^ D7;
    D7 = (MISTY1_SBOX_S7[D7] ^ key7 ^ D9) & 0x7F;
    D9 = MISTY1_SBOX_S9[D9 ^ key9] ^ D7;
-   return static_cast<u16bit>((D7 << 9) | D9);
+   return static_cast<uint16_t>(D7 << 9) | D9;
    }
 
 }
@@ -102,25 +101,27 @@ u16bit FI(u16bit input, u16bit key7, u16bit key9)
 /*
 * MISTY1 Encryption
 */
-void MISTY1::encrypt_n(const byte in[], byte out[], size_t blocks) const
+void MISTY1::encrypt_n(const uint8_t in[], uint8_t out[], size_t blocks) const
    {
+   verify_key_set(m_EK.empty() == false);
+
    for(size_t i = 0; i != blocks; ++i)
       {
-      u16bit B0 = load_be<u16bit>(in, 0);
-      u16bit B1 = load_be<u16bit>(in, 1);
-      u16bit B2 = load_be<u16bit>(in, 2);
-      u16bit B3 = load_be<u16bit>(in, 3);
+      uint16_t B0 = load_be<uint16_t>(in, 0);
+      uint16_t B1 = load_be<uint16_t>(in, 1);
+      uint16_t B2 = load_be<uint16_t>(in, 2);
+      uint16_t B3 = load_be<uint16_t>(in, 3);
 
       for(size_t j = 0; j != 12; j += 3)
          {
-         const u16bit* RK = &EK[8 * j];
+         const uint16_t* RK = &m_EK[8 * j];
 
          B1 ^= B0 & RK[0];
          B0 ^= B1 | RK[1];
          B3 ^= B2 & RK[2];
          B2 ^= B3 | RK[3];
 
-         u32bit T0, T1;
+         uint16_t T0, T1;
 
          T0  = FI(B0 ^ RK[ 4], RK[ 5], RK[ 6]) ^ B1;
          T1  = FI(B1 ^ RK[ 7], RK[ 8], RK[ 9]) ^ T0;
@@ -137,10 +138,10 @@ void MISTY1::encrypt_n(const byte in[], byte out[], size_t blocks) const
          B1 ^= T0;
          }
 
-      B1 ^= B0 & EK[96];
-      B0 ^= B1 | EK[97];
-      B3 ^= B2 & EK[98];
-      B2 ^= B3 | EK[99];
+      B1 ^= B0 & m_EK[96];
+      B0 ^= B1 | m_EK[97];
+      B3 ^= B2 & m_EK[98];
+      B2 ^= B3 | m_EK[99];
 
       store_be(out, B2, B3, B0, B1);
 
@@ -152,25 +153,27 @@ void MISTY1::encrypt_n(const byte in[], byte out[], size_t blocks) const
 /*
 * MISTY1 Decryption
 */
-void MISTY1::decrypt_n(const byte in[], byte out[], size_t blocks) const
+void MISTY1::decrypt_n(const uint8_t in[], uint8_t out[], size_t blocks) const
    {
+   verify_key_set(m_DK.empty() == false);
+
    for(size_t i = 0; i != blocks; ++i)
       {
-      u16bit B0 = load_be<u16bit>(in, 2);
-      u16bit B1 = load_be<u16bit>(in, 3);
-      u16bit B2 = load_be<u16bit>(in, 0);
-      u16bit B3 = load_be<u16bit>(in, 1);
+      uint16_t B0 = load_be<uint16_t>(in, 2);
+      uint16_t B1 = load_be<uint16_t>(in, 3);
+      uint16_t B2 = load_be<uint16_t>(in, 0);
+      uint16_t B3 = load_be<uint16_t>(in, 1);
 
       for(size_t j = 0; j != 12; j += 3)
          {
-         const u16bit* RK = &DK[8 * j];
+         const uint16_t* RK = &m_DK[8 * j];
 
          B2 ^= B3 | RK[0];
          B3 ^= B2 & RK[1];
          B0 ^= B1 | RK[2];
          B1 ^= B0 & RK[3];
 
-         u32bit T0, T1;
+         uint16_t T0, T1;
 
          T0  = FI(B2 ^ RK[ 4], RK[ 5], RK[ 6]) ^ B3;
          T1  = FI(B3 ^ RK[ 7], RK[ 8], RK[ 9]) ^ T0;
@@ -187,10 +190,10 @@ void MISTY1::decrypt_n(const byte in[], byte out[], size_t blocks) const
          B3 ^= T0;
          }
 
-      B2 ^= B3 | DK[96];
-      B3 ^= B2 & DK[97];
-      B0 ^= B1 | DK[98];
-      B1 ^= B0 & DK[99];
+      B2 ^= B3 | m_DK[96];
+      B3 ^= B2 & m_DK[97];
+      B0 ^= B1 | m_DK[98];
+      B1 ^= B0 & m_DK[99];
 
       store_be(out, B0, B1, B2, B3);
 
@@ -202,11 +205,11 @@ void MISTY1::decrypt_n(const byte in[], byte out[], size_t blocks) const
 /*
 * MISTY1 Key Schedule
 */
-void MISTY1::key_schedule(const byte key[], size_t length)
+void MISTY1::key_schedule(const uint8_t key[], size_t length)
    {
-   secure_vector<u16bit> KS(32);
+   secure_vector<uint16_t> KS(32);
    for(size_t i = 0; i != length / 2; ++i)
-      KS[i] = load_be<u16bit>(key, i);
+      KS[i] = load_be<uint16_t>(key, i);
 
    for(size_t i = 0; i != 8; ++i)
       {
@@ -219,7 +222,7 @@ void MISTY1::key_schedule(const byte key[], size_t length)
    * Precomputed indexes for the orderings of the subkeys (MISTY1 reuses
    * values)
    */
-   static const byte EK_ORDER[100] = {
+   static const uint8_t EK_ORDER[100] = {
       0x00, 0x0E, 0x0A, 0x04, 0x00, 0x15, 0x1D, 0x02, 0x11, 0x19, 0x07, 0x13,
       0x1B, 0x04, 0x01, 0x16, 0x1E, 0x03, 0x12, 0x1A, 0x00, 0x14, 0x1C, 0x05,
       0x01, 0x0F, 0x0B, 0x05, 0x02, 0x17, 0x1F, 0x04, 0x13, 0x1B, 0x01, 0x15,
@@ -230,7 +233,7 @@ void MISTY1::key_schedule(const byte key[], size_t length)
       0x19, 0x02, 0x07, 0x14, 0x1C, 0x01, 0x10, 0x18, 0x06, 0x12, 0x1A, 0x03,
       0x04, 0x0A, 0x0E, 0x00 };
 
-   static const byte DK_ORDER[100] = {
+   static const uint8_t DK_ORDER[100] = {
       0x00, 0x0E, 0x0A, 0x04, 0x07, 0x14, 0x1C, 0x01, 0x10, 0x18, 0x06, 0x12,
       0x1A, 0x03, 0x06, 0x13, 0x1B, 0x00, 0x17, 0x1F, 0x05, 0x11, 0x19, 0x02,
       0x07, 0x0D, 0x09, 0x03, 0x05, 0x12, 0x1A, 0x07, 0x16, 0x1E, 0x04, 0x10,
@@ -241,30 +244,20 @@ void MISTY1::key_schedule(const byte key[], size_t length)
       0x1C, 0x05, 0x00, 0x15, 0x1D, 0x02, 0x11, 0x19, 0x07, 0x13, 0x1B, 0x04,
       0x04, 0x0A, 0x0E, 0x00 };
 
-   EK.resize(100);
-   DK.resize(100);
+   m_EK.resize(100);
+   m_DK.resize(100);
 
    for(size_t i = 0; i != 100; ++i)
       {
-      EK[i] = KS[EK_ORDER[i]];
-      DK[i] = KS[DK_ORDER[i]];
+      m_EK[i] = KS[EK_ORDER[i]];
+      m_DK[i] = KS[DK_ORDER[i]];
       }
    }
 
 void MISTY1::clear()
    {
-   zap(EK);
-   zap(DK);
-   }
-
-/*
-* MISTY1 Constructor
-*/
-MISTY1::MISTY1(size_t rounds)
-   {
-   if(rounds != 8)
-      throw Invalid_Argument("MISTY1: Invalid number of rounds: "
-                             + std::to_string(rounds));
+   zap(m_EK);
+   zap(m_DK);
    }
 
 }

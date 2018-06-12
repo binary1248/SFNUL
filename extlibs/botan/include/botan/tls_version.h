@@ -2,13 +2,13 @@
 * TLS Protocol Version Management
 * (C) 2012 Jack Lloyd
 *
-* Released under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_TLS_PROTOCOL_VERSION_H__
-#define BOTAN_TLS_PROTOCOL_VERSION_H__
+#ifndef BOTAN_TLS_PROTOCOL_VERSION_H_
+#define BOTAN_TLS_PROTOCOL_VERSION_H_
 
-#include <botan/get_byte.h>
+#include <botan/loadstor.h>
 #include <string>
 
 namespace Botan {
@@ -18,11 +18,10 @@ namespace TLS {
 /**
 * TLS Protocol Version
 */
-class BOTAN_DLL Protocol_Version
+class BOTAN_PUBLIC_API(2,0) Protocol_Version final
    {
    public:
       enum Version_Code {
-         SSL_V3             = 0x0300,
          TLS_V10            = 0x0301,
          TLS_V11            = 0x0302,
          TLS_V12            = 0x0303,
@@ -31,11 +30,17 @@ class BOTAN_DLL Protocol_Version
          DTLS_V12           = 0xFEFD
       };
 
+      /**
+      * @return latest known TLS version
+      */
       static Protocol_Version latest_tls_version()
          {
          return Protocol_Version(TLS_V12);
          }
 
+      /**
+      * @return latest known DTLS version
+      */
       static Protocol_Version latest_dtls_version()
          {
          return Protocol_Version(DTLS_V12);
@@ -47,14 +52,14 @@ class BOTAN_DLL Protocol_Version
       * @param named_version a specific named version of the protocol
       */
       Protocol_Version(Version_Code named_version) :
-         m_version(static_cast<u16bit>(named_version)) {}
+         m_version(static_cast<uint16_t>(named_version)) {}
 
       /**
       * @param major the major version
       * @param minor the minor version
       */
-      Protocol_Version(byte major, byte minor) :
-         m_version((static_cast<u16bit>(major) << 8) | minor) {}
+      Protocol_Version(uint8_t major, uint8_t minor) :
+         m_version(static_cast<uint16_t>((static_cast<uint16_t>(major) << 8) | minor)) {}
 
       /**
       * @return true if this is a valid protocol version
@@ -69,24 +74,17 @@ class BOTAN_DLL Protocol_Version
       /**
       * @return major version of the protocol version
       */
-      byte major_version() const { return get_byte(0, m_version); }
+      uint8_t major_version() const { return get_byte(0, m_version); }
 
       /**
       * @return minor version of the protocol version
       */
-      byte minor_version() const { return get_byte(1, m_version); }
+      uint8_t minor_version() const { return get_byte(1, m_version); }
 
       /**
       * @return human-readable description of this version
       */
       std::string to_string() const;
-
-      /**
-      * If this version is known, return that. Otherwise return the
-      * best (most recent) version we know of.
-      * @return best matching protocol version
-      */
-      Protocol_Version best_known_match() const;
 
       /**
       * @return true iff this is a DTLS version
@@ -140,7 +138,7 @@ class BOTAN_DLL Protocol_Version
          }
 
    private:
-      u16bit m_version;
+      uint16_t m_version;
    };
 
 }

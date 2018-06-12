@@ -2,22 +2,20 @@
 * Modular Exponentiation Proxy
 * (C) 1999-2007 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/pow_mod.h>
-#include <botan/libstate.h>
-#include <botan/engine.h>
+#include <botan/internal/def_powm.h>
 
 namespace Botan {
 
 /*
 * Power_Mod Constructor
 */
-Power_Mod::Power_Mod(const BigInt& n, Usage_Hints hints)
+Power_Mod::Power_Mod(const BigInt& n, Usage_Hints hints, bool disable_monty)
    {
-   core = nullptr;
-   set_modulus(n, hints);
+   set_modulus(n, hints, disable_monty);
    }
 
 /*
@@ -25,9 +23,8 @@ Power_Mod::Power_Mod(const BigInt& n, Usage_Hints hints)
 */
 Power_Mod::Power_Mod(const Power_Mod& other)
    {
-   core = nullptr;
-   if(other.core)
-      core = other.core->copy();
+   if(other.m_core.get())
+      m_core.reset(other.m_core->copy());
    }
 
 /*
@@ -35,43 +32,31 @@ Power_Mod::Power_Mod(const Power_Mod& other)
 */
 Power_Mod& Power_Mod::operator=(const Power_Mod& other)
    {
-   delete core;
-   core = nullptr;
-   if(other.core)
-      core = other.core->copy();
+   if(this != &other)
+      {
+      if(other.m_core)
+         m_core.reset(other.m_core->copy());
+      else
+         m_core.reset();
+      }
    return (*this);
-   }
-
-/*
-* Power_Mod Destructor
-*/
-Power_Mod::~Power_Mod()
-   {
-   delete core;
    }
 
 /*
 * Set the modulus
 */
-void Power_Mod::set_modulus(const BigInt& n, Usage_Hints hints) const
+void Power_Mod::set_modulus(const BigInt& n, Usage_Hints hints, bool disable_monty) const
    {
-   delete core;
-   core = nullptr;
+   // Allow set_modulus(0) to mean "drop old state"
+
+   m_core.reset();
 
    if(n != 0)
       {
-      Algorithm_Factory::Engine_Iterator i(global_state().algorithm_factory());
-
-      while(const Engine* engine = i.next())
-         {
-         core = engine->mod_exp(n, hints);
-
-         if(core)
-            break;
-         }
-
-      if(!core)
-         throw Lookup_Error("Power_Mod: Unable to find a working engine");
+      if(n.is_odd() && disable_monty == false)
+         m_core.reset(new Montgomery_Exponentiator(n, hints));
+      else
+         m_core.reset(new Fixed_Window_Exponentiator(n, hints));
       }
    }
 
@@ -83,9 +68,9 @@ void Power_Mod::set_base(const BigInt& b) const
    if(b.is_zero() || b.is_negative())
       throw Invalid_Argument("Power_Mod::set_base: arg must be > 0");
 
-   if(!core)
-      throw Internal_Error("Power_Mod::set_base: core was NULL");
-   core->set_base(b);
+   if(!m_core)
+      throw Internal_Error("Power_Mod::set_base: m_core was NULL");
+   m_core->set_base(b);
    }
 
 /*
@@ -96,9 +81,9 @@ void Power_Mod::set_exponent(const BigInt& e) const
    if(e.is_negative())
       throw Invalid_Argument("Power_Mod::set_exponent: arg must be > 0");
 
-   if(!core)
-      throw Internal_Error("Power_Mod::set_exponent: core was NULL");
-   core->set_exponent(e);
+   if(!m_core)
+      throw Internal_Error("Power_Mod::set_exponent: m_core was NULL");
+   m_core->set_exponent(e);
    }
 
 /*
@@ -106,9 +91,9 @@ void Power_Mod::set_exponent(const BigInt& e) const
 */
 BigInt Power_Mod::execute() const
    {
-   if(!core)
-      throw Internal_Error("Power_Mod::execute: core was NULL");
-   return core->execute();
+   if(!m_core)
+      throw Internal_Error("Power_Mod::execute: m_core was NULL");
+   return m_core->execute();
    }
 
 /*
@@ -122,7 +107,7 @@ size_t Power_Mod::window_bits(size_t exp_bits, size_t,
       {  539, 6 },
       {  197, 4 },
       {   70, 3 },
-      {   25, 2 },
+      {   17, 2 },
       {    0, 0 }
    };
 

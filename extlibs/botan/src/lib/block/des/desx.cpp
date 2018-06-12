@@ -2,24 +2,25 @@
 * DES
 * (C) 1999-2007 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/desx.h>
-#include <botan/internal/xor_buf.h>
 
 namespace Botan {
 
 /*
 * DESX Encryption
 */
-void DESX::encrypt_n(const byte in[], byte out[], size_t blocks) const
+void DESX::encrypt_n(const uint8_t in[], uint8_t out[], size_t blocks) const
    {
+   verify_key_set(m_K1.empty() == false);
+
    for(size_t i = 0; i != blocks; ++i)
       {
-      xor_buf(out, in, &K1[0], BLOCK_SIZE);
-      des.encrypt(out);
-      xor_buf(out, &K2[0], BLOCK_SIZE);
+      xor_buf(out, in, m_K1.data(), BLOCK_SIZE);
+      m_des.encrypt(out);
+      xor_buf(out, m_K2.data(), BLOCK_SIZE);
 
       in += BLOCK_SIZE;
       out += BLOCK_SIZE;
@@ -29,13 +30,15 @@ void DESX::encrypt_n(const byte in[], byte out[], size_t blocks) const
 /*
 * DESX Decryption
 */
-void DESX::decrypt_n(const byte in[], byte out[], size_t blocks) const
+void DESX::decrypt_n(const uint8_t in[], uint8_t out[], size_t blocks) const
    {
+   verify_key_set(m_K1.empty() == false);
+
    for(size_t i = 0; i != blocks; ++i)
       {
-      xor_buf(out, in, &K2[0], BLOCK_SIZE);
-      des.decrypt(out);
-      xor_buf(out, &K1[0], BLOCK_SIZE);
+      xor_buf(out, in, m_K2.data(), BLOCK_SIZE);
+      m_des.decrypt(out);
+      xor_buf(out, m_K1.data(), BLOCK_SIZE);
 
       in += BLOCK_SIZE;
       out += BLOCK_SIZE;
@@ -45,18 +48,18 @@ void DESX::decrypt_n(const byte in[], byte out[], size_t blocks) const
 /*
 * DESX Key Schedule
 */
-void DESX::key_schedule(const byte key[], size_t)
+void DESX::key_schedule(const uint8_t key[], size_t)
    {
-   K1.assign(key, key + 8);
-   des.set_key(key + 8, 8);
-   K2.assign(key + 16, key + 24);
+   m_K1.assign(key, key + 8);
+   m_des.set_key(key + 8, 8);
+   m_K2.assign(key + 16, key + 24);
    }
 
 void DESX::clear()
    {
-   des.clear();
-   zap(K1);
-   zap(K2);
+   m_des.clear();
+   zap(m_K1);
+   zap(m_K2);
    }
 
 }

@@ -1,36 +1,24 @@
 /*
 * SHA-{224,256}
-* (C) 1999-2010 Jack Lloyd
+* (C) 1999-2010,2017 Jack Lloyd
 *     2007 FlexSecure GmbH
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/sha2_32.h>
-#include <botan/loadstor.h>
-#include <botan/rotate.h>
+#include <botan/cpuid.h>
 
 namespace Botan {
 
-namespace {
-
-namespace SHA2_32 {
-
-/*
-* SHA-256 Rho Function
-*/
-inline u32bit rho(u32bit X, u32bit rot1, u32bit rot2, u32bit rot3)
+std::unique_ptr<HashFunction> SHA_224::copy_state() const
    {
-   return (rotate_right(X, rot1) ^ rotate_right(X, rot2) ^
-           rotate_right(X, rot3));
+   return std::unique_ptr<HashFunction>(new SHA_224(*this));
    }
 
-/*
-* SHA-256 Sigma Function
-*/
-inline u32bit sigma(u32bit X, u32bit rot1, u32bit rot2, u32bit shift)
+std::unique_ptr<HashFunction> SHA_256::copy_state() const
    {
-   return (rotate_right(X, rot1) ^ rotate_right(X, rot2) ^ (X >> shift));
+   return std::unique_ptr<HashFunction>(new SHA_256(*this));
    }
 
 /*
@@ -39,42 +27,59 @@ inline u32bit sigma(u32bit X, u32bit rot1, u32bit rot2, u32bit shift)
 * Use a macro as many compilers won't inline a function this big,
 * even though it is much faster if inlined.
 */
-#define SHA2_32_F(A, B, C, D, E, F, G, H, M1, M2, M3, M4, magic)   \
-   do {                                                            \
-      H += magic + rho(E, 6, 11, 25) + ((E & F) ^ (~E & G)) + M1;  \
-      D += H;                                                      \
-      H += rho(A, 2, 13, 22) + ((A & B) | ((A | B) & C));          \
-      M1 += sigma(M2, 17, 19, 10) + M3 + sigma(M4, 7, 18, 3);      \
+#define SHA2_32_F(A, B, C, D, E, F, G, H, M1, M2, M3, M4, magic) do {               \
+   uint32_t A_rho = rotr<2>(A) ^ rotr<13>(A) ^ rotr<22>(A); \
+   uint32_t E_rho = rotr<6>(E) ^ rotr<11>(E) ^ rotr<25>(E); \
+   uint32_t M2_sigma = rotr<17>(M2) ^ rotr<19>(M2) ^ (M2 >> 10);    \
+   uint32_t M4_sigma = rotr<7>(M4) ^ rotr<18>(M4) ^ (M4 >> 3);      \
+   H += magic + E_rho + ((E & F) ^ (~E & G)) + M1;                                  \
+   D += H;                                                                          \
+   H += A_rho + ((A & B) | ((A | B) & C));                                          \
+   M1 += M2_sigma + M3 + M4_sigma;                                                  \
    } while(0);
 
 /*
 * SHA-224 / SHA-256 compression function
 */
-void compress(secure_vector<u32bit>& digest,
-              const byte input[], size_t blocks)
+void SHA_256::compress_digest(secure_vector<uint32_t>& digest,
+                              const uint8_t input[], size_t blocks)
    {
-   u32bit A = digest[0], B = digest[1], C = digest[2],
+#if defined(BOTAN_HAS_SHA2_32_X86)
+   if(CPUID::has_intel_sha())
+      {
+      return SHA_256::compress_digest_x86(digest, input, blocks);
+      }
+#endif
+
+#if defined(BOTAN_HAS_SHA2_32_ARMV8)
+   if(CPUID::has_arm_sha2())
+      {
+      return SHA_256::compress_digest_armv8(digest, input, blocks);
+      }
+#endif
+
+   uint32_t A = digest[0], B = digest[1], C = digest[2],
           D = digest[3], E = digest[4], F = digest[5],
           G = digest[6], H = digest[7];
 
    for(size_t i = 0; i != blocks; ++i)
       {
-      u32bit W00 = load_be<u32bit>(input,  0);
-      u32bit W01 = load_be<u32bit>(input,  1);
-      u32bit W02 = load_be<u32bit>(input,  2);
-      u32bit W03 = load_be<u32bit>(input,  3);
-      u32bit W04 = load_be<u32bit>(input,  4);
-      u32bit W05 = load_be<u32bit>(input,  5);
-      u32bit W06 = load_be<u32bit>(input,  6);
-      u32bit W07 = load_be<u32bit>(input,  7);
-      u32bit W08 = load_be<u32bit>(input,  8);
-      u32bit W09 = load_be<u32bit>(input,  9);
-      u32bit W10 = load_be<u32bit>(input, 10);
-      u32bit W11 = load_be<u32bit>(input, 11);
-      u32bit W12 = load_be<u32bit>(input, 12);
-      u32bit W13 = load_be<u32bit>(input, 13);
-      u32bit W14 = load_be<u32bit>(input, 14);
-      u32bit W15 = load_be<u32bit>(input, 15);
+      uint32_t W00 = load_be<uint32_t>(input,  0);
+      uint32_t W01 = load_be<uint32_t>(input,  1);
+      uint32_t W02 = load_be<uint32_t>(input,  2);
+      uint32_t W03 = load_be<uint32_t>(input,  3);
+      uint32_t W04 = load_be<uint32_t>(input,  4);
+      uint32_t W05 = load_be<uint32_t>(input,  5);
+      uint32_t W06 = load_be<uint32_t>(input,  6);
+      uint32_t W07 = load_be<uint32_t>(input,  7);
+      uint32_t W08 = load_be<uint32_t>(input,  8);
+      uint32_t W09 = load_be<uint32_t>(input,  9);
+      uint32_t W10 = load_be<uint32_t>(input, 10);
+      uint32_t W11 = load_be<uint32_t>(input, 11);
+      uint32_t W12 = load_be<uint32_t>(input, 12);
+      uint32_t W13 = load_be<uint32_t>(input, 13);
+      uint32_t W14 = load_be<uint32_t>(input, 14);
+      uint32_t W15 = load_be<uint32_t>(input, 15);
 
       SHA2_32_F(A, B, C, D, E, F, G, H, W00, W14, W09, W01, 0x428A2F98);
       SHA2_32_F(H, A, B, C, D, E, F, G, W01, W15, W10, W02, 0x71374491);
@@ -154,25 +159,20 @@ void compress(secure_vector<u32bit>& digest,
       }
    }
 
-}
-
-}
-
 /*
 * SHA-224 compression function
 */
-void SHA_224::compress_n(const byte input[], size_t blocks)
+void SHA_224::compress_n(const uint8_t input[], size_t blocks)
    {
-   SHA2_32::compress(digest, input, blocks);
+   SHA_256::compress_digest(m_digest, input, blocks);
    }
 
 /*
 * Copy out the digest
 */
-void SHA_224::copy_out(byte output[])
+void SHA_224::copy_out(uint8_t output[])
    {
-   for(size_t i = 0; i != output_length(); i += 4)
-      store_be(digest[i/4], output + i);
+   copy_out_vec_be(output, output_length(), m_digest);
    }
 
 /*
@@ -181,31 +181,30 @@ void SHA_224::copy_out(byte output[])
 void SHA_224::clear()
    {
    MDx_HashFunction::clear();
-   digest[0] = 0xC1059ED8;
-   digest[1] = 0x367CD507;
-   digest[2] = 0x3070DD17;
-   digest[3] = 0xF70E5939;
-   digest[4] = 0xFFC00B31;
-   digest[5] = 0x68581511;
-   digest[6] = 0x64F98FA7;
-   digest[7] = 0xBEFA4FA4;
+   m_digest[0] = 0xC1059ED8;
+   m_digest[1] = 0x367CD507;
+   m_digest[2] = 0x3070DD17;
+   m_digest[3] = 0xF70E5939;
+   m_digest[4] = 0xFFC00B31;
+   m_digest[5] = 0x68581511;
+   m_digest[6] = 0x64F98FA7;
+   m_digest[7] = 0xBEFA4FA4;
    }
 
 /*
 * SHA-256 compression function
 */
-void SHA_256::compress_n(const byte input[], size_t blocks)
+void SHA_256::compress_n(const uint8_t input[], size_t blocks)
    {
-   SHA2_32::compress(digest, input, blocks);
+   SHA_256::compress_digest(m_digest, input, blocks);
    }
 
 /*
 * Copy out the digest
 */
-void SHA_256::copy_out(byte output[])
+void SHA_256::copy_out(uint8_t output[])
    {
-   for(size_t i = 0; i != output_length(); i += 4)
-      store_be(digest[i/4], output + i);
+   copy_out_vec_be(output, output_length(), m_digest);
    }
 
 /*
@@ -214,14 +213,14 @@ void SHA_256::copy_out(byte output[])
 void SHA_256::clear()
    {
    MDx_HashFunction::clear();
-   digest[0] = 0x6A09E667;
-   digest[1] = 0xBB67AE85;
-   digest[2] = 0x3C6EF372;
-   digest[3] = 0xA54FF53A;
-   digest[4] = 0x510E527F;
-   digest[5] = 0x9B05688C;
-   digest[6] = 0x1F83D9AB;
-   digest[7] = 0x5BE0CD19;
+   m_digest[0] = 0x6A09E667;
+   m_digest[1] = 0xBB67AE85;
+   m_digest[2] = 0x3C6EF372;
+   m_digest[3] = 0xA54FF53A;
+   m_digest[4] = 0x510E527F;
+   m_digest[5] = 0x9B05688C;
+   m_digest[6] = 0x1F83D9AB;
+   m_digest[7] = 0x5BE0CD19;
    }
 
 }

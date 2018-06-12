@@ -1,18 +1,16 @@
 /*
 * SCAN Name Abstraction
-* (C) 2008 Jack Lloyd
+* (C) 2008,2015 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_SCAN_NAME_H__
-#define BOTAN_SCAN_NAME_H__
+#ifndef BOTAN_SCAN_NAME_H_
+#define BOTAN_SCAN_NAME_H_
 
 #include <botan/types.h>
 #include <string>
 #include <vector>
-#include <mutex>
-#include <map>
 
 namespace Botan {
 
@@ -20,33 +18,35 @@ namespace Botan {
 A class encapsulating a SCAN name (similar to JCE conventions)
 http://www.users.zetnet.co.uk/hopwood/crypto/scan/
 */
-class BOTAN_DLL SCAN_Name
+class BOTAN_PUBLIC_API(2,0) SCAN_Name final
    {
    public:
       /**
+      * Create a SCAN_Name
       * @param algo_spec A SCAN-format name
       */
-      SCAN_Name(std::string algo_spec);
+      explicit SCAN_Name(const char* algo_spec);
+
+      /**
+      * Create a SCAN_Name
+      * @param algo_spec A SCAN-format name
+      */
+      explicit SCAN_Name(std::string algo_spec);
 
       /**
       * @return original input string
       */
-      std::string as_string() const { return orig_algo_spec; }
+      const std::string& as_string() const { return m_orig_algo_spec; }
 
       /**
       * @return algorithm name
       */
-      std::string algo_name() const { return alg_name; }
-
-      /**
-      * @return algorithm name plus any arguments
-      */
-      std::string algo_name_and_args() const;
+      const std::string& algo_name() const { return m_alg_name; }
 
       /**
       * @return number of arguments
       */
-      size_t arg_count() const { return args.size(); }
+      size_t arg_count() const { return m_args.size(); }
 
       /**
       * @param lower is the lower bound
@@ -80,28 +80,37 @@ class BOTAN_DLL SCAN_Name
       * @return cipher mode (if any)
       */
       std::string cipher_mode() const
-         { return (mode_info.size() >= 1) ? mode_info[0] : ""; }
+         { return (m_mode_info.size() >= 1) ? m_mode_info[0] : ""; }
 
       /**
       * @return cipher mode padding (if any)
       */
       std::string cipher_mode_pad() const
-         { return (mode_info.size() >= 2) ? mode_info[1] : ""; }
+         { return (m_mode_info.size() >= 2) ? m_mode_info[1] : ""; }
 
-      static void add_alias(const std::string& alias, const std::string& basename);
-
-      static std::string deref_alias(const std::string& alias);
-
-      static void set_default_aliases();
    private:
-      static std::mutex s_alias_map_mutex;
-      static std::map<std::string, std::string> s_alias_map;
-
-      std::string orig_algo_spec;
-      std::string alg_name;
-      std::vector<std::string> args;
-      std::vector<std::string> mode_info;
+      std::string m_orig_algo_spec;
+      std::string m_alg_name;
+      std::vector<std::string> m_args;
+      std::vector<std::string> m_mode_info;
    };
+
+// This is unrelated but it is convenient to stash it here
+template<typename T>
+std::vector<std::string> probe_providers_of(const std::string& algo_spec,
+                                            const std::vector<std::string>& possible)
+   {
+   std::vector<std::string> providers;
+   for(auto&& prov : possible)
+      {
+      std::unique_ptr<T> o(T::create(algo_spec, prov));
+      if(o)
+         {
+         providers.push_back(prov); // available
+         }
+      }
+   return providers;
+   }
 
 }
 

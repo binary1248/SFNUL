@@ -2,11 +2,11 @@
 * Hex Encoder/Decoder
 * (C) 1999-2010 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_HEX_FILTER_H__
-#define BOTAN_HEX_FILTER_H__
+#ifndef BOTAN_HEX_FILTER_H_
+#define BOTAN_HEX_FILTER_H_
 
 #include <botan/filter.h>
 
@@ -16,7 +16,7 @@ namespace Botan {
 * Converts arbitrary binary data to hex strings, optionally with
 * newlines inserted
 */
-class BOTAN_DLL Hex_Encoder : public Filter
+class BOTAN_PUBLIC_API(2,0) Hex_Encoder final : public Filter
    {
    public:
       /**
@@ -24,16 +24,16 @@ class BOTAN_DLL Hex_Encoder : public Filter
       */
       enum Case { Uppercase, Lowercase };
 
-      std::string name() const { return "Hex_Encoder"; }
+      std::string name() const override { return "Hex_Encoder"; }
 
-      void write(const byte in[], size_t length);
-      void end_msg();
+      void write(const uint8_t in[], size_t length) override;
+      void end_msg() override;
 
       /**
       * Create a hex encoder.
       * @param the_case the case to use in the encoded strings.
       */
-      Hex_Encoder(Case the_case);
+      explicit Hex_Encoder(Case the_case);
 
       /**
       * Create a hex encoder.
@@ -45,35 +45,35 @@ class BOTAN_DLL Hex_Encoder : public Filter
                   size_t line_length = 72,
                   Case the_case = Uppercase);
    private:
-      void encode_and_send(const byte[], size_t);
+      void encode_and_send(const uint8_t[], size_t);
 
-      const Case casing;
-      const size_t line_length;
-      std::vector<byte> in, out;
-      size_t position, counter;
+      const Case m_casing;
+      const size_t m_line_length;
+      std::vector<uint8_t> m_in, m_out;
+      size_t m_position, m_counter;
    };
 
 /**
 * Converts hex strings to bytes
 */
-class BOTAN_DLL Hex_Decoder : public Filter
+class BOTAN_PUBLIC_API(2,0) Hex_Decoder final : public Filter
    {
    public:
-      std::string name() const { return "Hex_Decoder"; }
+      std::string name() const override { return "Hex_Decoder"; }
 
-      void write(const byte[], size_t);
-      void end_msg();
+      void write(const uint8_t[], size_t) override;
+      void end_msg() override;
 
       /**
       * Construct a Hex Decoder using the specified
       * character checking.
       * @param checking the checking to use during decoding.
       */
-      Hex_Decoder(Decoder_Checking checking = NONE);
+      explicit Hex_Decoder(Decoder_Checking checking = NONE);
    private:
-      const Decoder_Checking checking;
-      std::vector<byte> in, out;
-      size_t position;
+      const Decoder_Checking m_checking;
+      std::vector<uint8_t> m_in, m_out;
+      size_t m_position;
    };
 
 }

@@ -1,34 +1,34 @@
 /*
 * GCM Mode
 * (C) 2013 Jack Lloyd
+* (C) 2016 Daniel Neus, Rohde & Schwarz Cybersecurity
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_AEAD_GCM_H__
-#define BOTAN_AEAD_GCM_H__
+#ifndef BOTAN_AEAD_GCM_H_
+#define BOTAN_AEAD_GCM_H_
 
 #include <botan/aead.h>
-#include <botan/block_cipher.h>
-#include <botan/stream_cipher.h>
+#include <botan/sym_algo.h>
 
 namespace Botan {
 
+class BlockCipher;
+class StreamCipher;
 class GHASH;
 
 /**
 * GCM Mode
 */
-class BOTAN_DLL GCM_Mode : public AEAD_Mode
+class BOTAN_PUBLIC_API(2,0) GCM_Mode : public AEAD_Mode
    {
    public:
-      secure_vector<byte> start(const byte nonce[], size_t nonce_len) override;
-
-      void set_associated_data(const byte ad[], size_t ad_len) override;
+      void set_associated_data(const uint8_t ad[], size_t ad_len) override;
 
       std::string name() const override;
 
-      size_t update_granularity() const;
+      size_t update_granularity() const override;
 
       Key_Length_Specification key_spec() const override;
 
@@ -38,24 +38,32 @@ class BOTAN_DLL GCM_Mode : public AEAD_Mode
       size_t tag_size() const override { return m_tag_size; }
 
       void clear() override;
-   protected:
-      void key_schedule(const byte key[], size_t length) override;
 
+      void reset() override;
+
+      std::string provider() const override;
+   protected:
       GCM_Mode(BlockCipher* cipher, size_t tag_size);
 
-      const size_t BS = 16;
+      ~GCM_Mode();
+
+      static const size_t GCM_BS = 16;
 
       const size_t m_tag_size;
       const std::string m_cipher_name;
 
       std::unique_ptr<StreamCipher> m_ctr;
       std::unique_ptr<GHASH> m_ghash;
+   private:
+      void start_msg(const uint8_t nonce[], size_t nonce_len) override;
+
+      void key_schedule(const uint8_t key[], size_t length) override;
    };
 
 /**
 * GCM Encryption
 */
-class BOTAN_DLL GCM_Encryption : public GCM_Mode
+class BOTAN_PUBLIC_API(2,0) GCM_Encryption final : public GCM_Mode
    {
    public:
       /**
@@ -70,15 +78,15 @@ class BOTAN_DLL GCM_Encryption : public GCM_Mode
 
       size_t minimum_final_size() const override { return 0; }
 
-      void update(secure_vector<byte>& blocks, size_t offset = 0) override;
+      size_t process(uint8_t buf[], size_t size) override;
 
-      void finish(secure_vector<byte>& final_block, size_t offset = 0) override;
+      void finish(secure_vector<uint8_t>& final_block, size_t offset = 0) override;
    };
 
 /**
 * GCM Decryption
 */
-class BOTAN_DLL GCM_Decryption : public GCM_Mode
+class BOTAN_PUBLIC_API(2,0) GCM_Decryption final : public GCM_Mode
    {
    public:
       /**
@@ -90,58 +98,15 @@ class BOTAN_DLL GCM_Decryption : public GCM_Mode
 
       size_t output_length(size_t input_length) const override
          {
-         BOTAN_ASSERT(input_length > tag_size(), "Sufficient input");
+         BOTAN_ASSERT(input_length >= tag_size(), "Sufficient input");
          return input_length - tag_size();
          }
 
       size_t minimum_final_size() const override { return tag_size(); }
 
-      void update(secure_vector<byte>& blocks, size_t offset = 0) override;
+      size_t process(uint8_t buf[], size_t size) override;
 
-      void finish(secure_vector<byte>& final_block, size_t offset = 0) override;
-   };
-
-/**
-* GCM's GHASH
-* Maybe a Transform?
-*/
-class BOTAN_DLL GHASH : public SymmetricAlgorithm
-   {
-   public:
-      void set_associated_data(const byte ad[], size_t ad_len);
-
-      secure_vector<byte> nonce_hash(const byte nonce[], size_t len);
-
-      void start(const byte nonce[], size_t len);
-
-      /*
-      * Assumes input len is multiple of 16
-      */
-      void update(const byte in[], size_t len);
-
-      secure_vector<byte> final();
-
-      Key_Length_Specification key_spec() const { return Key_Length_Specification(16); }
-
-      void clear() override;
-
-      std::string name() const { return "GHASH"; }
-   private:
-      void key_schedule(const byte key[], size_t key_len) override;
-
-      void gcm_multiply(secure_vector<byte>& x) const;
-
-      void ghash_update(secure_vector<byte>& x,
-                        const byte input[], size_t input_len);
-
-      void add_final_block(secure_vector<byte>& x,
-                           size_t ad_len, size_t pt_len);
-
-      secure_vector<byte> m_H;
-      secure_vector<byte> m_H_ad;
-      secure_vector<byte> m_nonce;
-      secure_vector<byte> m_ghash;
-      size_t m_ad_len = 0, m_text_len = 0;
+      void finish(secure_vector<uint8_t>& final_block, size_t offset = 0) override;
    };
 
 }

@@ -2,11 +2,11 @@
 * OctetString
 * (C) 1999-2007 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_SYMKEY_H__
-#define BOTAN_SYMKEY_H__
+#ifndef BOTAN_SYMKEY_H_
+#define BOTAN_SYMKEY_H_
 
 #include <botan/secmem.h>
 #include <string>
@@ -16,28 +16,29 @@ namespace Botan {
 /**
 * Octet String
 */
-class BOTAN_DLL OctetString
+class BOTAN_PUBLIC_API(2,0) OctetString final
    {
    public:
       /**
       * @return size of this octet string in bytes
       */
-      size_t length() const { return bits.size(); }
+      size_t length() const { return m_data.size(); }
+      size_t size() const { return m_data.size(); }
 
       /**
-      * @return this object as a secure_vector<byte>
+      * @return this object as a secure_vector<uint8_t>
       */
-      secure_vector<byte> bits_of() const { return bits; }
+      secure_vector<uint8_t> bits_of() const { return m_data; }
 
       /**
       * @return start of this string
       */
-      const byte* begin() const { return &bits[0]; }
+      const uint8_t* begin() const { return m_data.data(); }
 
       /**
       * @return end of this string
       */
-      const byte* end() const   { return &bits[bits.size()]; }
+      const uint8_t* end() const   { return begin() + m_data.size(); }
 
       /**
       * @return this encoded as hex
@@ -60,7 +61,7 @@ class BOTAN_DLL OctetString
       * Create a new OctetString
       * @param str is a hex encoded string
       */
-      OctetString(const std::string& str = "");
+      explicit OctetString(const std::string& str = "");
 
       /**
       * Create a new random OctetString
@@ -74,21 +75,22 @@ class BOTAN_DLL OctetString
       * @param in is an array
       * @param len is the length of in in bytes
       */
-      OctetString(const byte in[], size_t len);
+      OctetString(const uint8_t in[], size_t len);
 
       /**
       * Create a new OctetString
       * @param in a bytestring
       */
-      OctetString(const secure_vector<byte>& in) : bits(in) {}
+      OctetString(const secure_vector<uint8_t>& in) : m_data(in) {}
 
       /**
       * Create a new OctetString
       * @param in a bytestring
       */
-      OctetString(const std::vector<byte>& in) : bits(&in[0], &in[in.size()]) {}
+      OctetString(const std::vector<uint8_t>& in) : m_data(in.begin(), in.end()) {}
+
    private:
-      secure_vector<byte> bits;
+      secure_vector<uint8_t> m_data;
    };
 
 /**
@@ -97,7 +99,7 @@ class BOTAN_DLL OctetString
 * @param y an octet string
 * @return if x is equal to y
 */
-BOTAN_DLL bool operator==(const OctetString& x,
+BOTAN_PUBLIC_API(2,0) bool operator==(const OctetString& x,
                           const OctetString& y);
 
 /**
@@ -106,7 +108,7 @@ BOTAN_DLL bool operator==(const OctetString& x,
 * @param y an octet string
 * @return if x is not equal to y
 */
-BOTAN_DLL bool operator!=(const OctetString& x,
+BOTAN_PUBLIC_API(2,0) bool operator!=(const OctetString& x,
                           const OctetString& y);
 
 /**
@@ -115,7 +117,7 @@ BOTAN_DLL bool operator!=(const OctetString& x,
 * @param y an octet string
 * @return x concatenated with y
 */
-BOTAN_DLL OctetString operator+(const OctetString& x,
+BOTAN_PUBLIC_API(2,0) OctetString operator+(const OctetString& x,
                                 const OctetString& y);
 
 /**
@@ -124,19 +126,19 @@ BOTAN_DLL OctetString operator+(const OctetString& x,
 * @param y an octet string
 * @return x XORed with y
 */
-BOTAN_DLL OctetString operator^(const OctetString& x,
+BOTAN_PUBLIC_API(2,0) OctetString operator^(const OctetString& x,
                                 const OctetString& y);
 
 
 /**
 * Alternate name for octet string showing intent to use as a key
 */
-typedef OctetString SymmetricKey;
+using SymmetricKey = OctetString;
 
 /**
 * Alternate name for octet string showing intent to use as an IV
 */
-typedef OctetString InitializationVector;
+using InitializationVector = OctetString;
 
 }
 

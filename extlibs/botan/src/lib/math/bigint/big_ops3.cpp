@@ -1,8 +1,9 @@
 /*
 * BigInt Binary Operators
 * (C) 1999-2007 Jack Lloyd
+*     2016 Matthias Gierlings
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/bigint.h>
@@ -22,11 +23,11 @@ BigInt operator+(const BigInt& x, const BigInt& y)
 
    BigInt z(x.sign(), std::max(x_sw, y_sw) + 1);
 
-   if((x.sign() == y.sign()))
+   if(x.sign() == y.sign())
       bigint_add3(z.mutable_data(), x.data(), x_sw, y.data(), y_sw);
    else
       {
-      s32bit relative_size = bigint_cmp(x.data(), x_sw, y.data(), y_sw);
+      int32_t relative_size = bigint_cmp(x.data(), x_sw, y.data(), y_sw);
 
       if(relative_size < 0)
          {
@@ -49,7 +50,7 @@ BigInt operator-(const BigInt& x, const BigInt& y)
    {
    const size_t x_sw = x.sig_words(), y_sw = y.sig_words();
 
-   s32bit relative_size = bigint_cmp(x.data(), x_sw, y.data(), y_sw);
+   int32_t relative_size = bigint_cmp(x.data(), x_sw, y.data(), y_sw);
 
    BigInt z(BigInt::Positive, std::max(x_sw, y_sw) + 1);
 
@@ -65,6 +66,7 @@ BigInt operator-(const BigInt& x, const BigInt& y)
       {
       if(x.sign() != y.sign())
          bigint_shl2(z.mutable_data(), x.data(), x_sw, 0, 1);
+      z.set_sign(y.reverse_sign());
       }
    else if(relative_size > 0)
       {
@@ -93,9 +95,11 @@ BigInt operator*(const BigInt& x, const BigInt& y)
    else if(x_sw && y_sw)
       {
       secure_vector<word> workspace(z.size());
-      bigint_mul(z.mutable_data(), z.size(), &workspace[0],
+
+      bigint_mul(z.mutable_data(), z.size(),
                  x.data(), x.size(), x_sw,
-                 y.data(), y.size(), y_sw);
+                 y.data(), y.size(), y_sw,
+                 workspace.data(), workspace.size());
       }
 
    if(x_sw && y_sw && x.sign() != y.sign())
@@ -108,6 +112,9 @@ BigInt operator*(const BigInt& x, const BigInt& y)
 */
 BigInt operator/(const BigInt& x, const BigInt& y)
    {
+   if(y.sig_words() == 1 && is_power_of_2(y.word_at(0)))
+      return (x >> (y.bits() - 1));
+
    BigInt q, r;
    divide(x, y, q, r);
    return q;
@@ -138,6 +145,9 @@ word operator%(const BigInt& n, word mod)
    if(mod == 0)
       throw BigInt::DivideByZero();
 
+   if(mod == 1)
+      return 0;
+
    if(is_power_of_2(mod))
       return (n.word_at(0) & (mod - 1));
 
@@ -159,8 +169,8 @@ BigInt operator<<(const BigInt& x, size_t shift)
    if(shift == 0)
       return x;
 
-   const size_t shift_words = shift / MP_WORD_BITS,
-                shift_bits  = shift % MP_WORD_BITS;
+   const size_t shift_words = shift / BOTAN_MP_WORD_BITS,
+                shift_bits  = shift % BOTAN_MP_WORD_BITS;
 
    const size_t x_sw = x.sig_words();
 
@@ -179,8 +189,8 @@ BigInt operator>>(const BigInt& x, size_t shift)
    if(x.bits() <= shift)
       return 0;
 
-   const size_t shift_words = shift / MP_WORD_BITS,
-                shift_bits  = shift % MP_WORD_BITS,
+   const size_t shift_words = shift / BOTAN_MP_WORD_BITS,
+                shift_bits  = shift % BOTAN_MP_WORD_BITS,
                 x_sw = x.sig_words();
 
    BigInt y(x.sign(), x_sw - shift_words);

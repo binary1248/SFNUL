@@ -2,11 +2,11 @@
 * Buffered Filter
 * (C) 1999-2007 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_BUFFERED_FILTER_H__
-#define BOTAN_BUFFERED_FILTER_H__
+#ifndef BOTAN_BUFFERED_FILTER_H_
+#define BOTAN_BUFFERED_FILTER_H_
 
 #include <botan/secmem.h>
 
@@ -16,7 +16,7 @@ namespace Botan {
 * Filter mixin that breaks input into blocks, useful for
 * cipher modes
 */
-class BOTAN_DLL Buffered_Filter
+class BOTAN_PUBLIC_API(2,0) Buffered_Filter
    {
    public:
       /**
@@ -25,12 +25,12 @@ class BOTAN_DLL Buffered_Filter
       * @param in the input bytes
       * @param length of in in bytes
       */
-      void write(const byte in[], size_t length);
+      void write(const uint8_t in[], size_t length);
 
       template<typename Alloc>
-         void write(const std::vector<byte, Alloc>& in, size_t length)
+         void write(const std::vector<uint8_t, Alloc>& in, size_t length)
          {
-         write(&in[0], length);
+         write(in.data(), length);
          }
 
       /**
@@ -49,7 +49,7 @@ class BOTAN_DLL Buffered_Filter
       */
       Buffered_Filter(size_t block_size, size_t final_minimum);
 
-      virtual ~Buffered_Filter() {}
+      virtual ~Buffered_Filter() = default;
    protected:
       /**
       * The block processor, implemented by subclasses
@@ -57,7 +57,7 @@ class BOTAN_DLL Buffered_Filter
       * @param length the size of input, guaranteed to be a multiple
       *        of block_size
       */
-      virtual void buffered_block(const byte input[], size_t length) = 0;
+      virtual void buffered_block(const uint8_t input[], size_t length) = 0;
 
       /**
       * The final block, implemented by subclasses
@@ -65,27 +65,27 @@ class BOTAN_DLL Buffered_Filter
       * @param length the size of input, guaranteed to be at least
       *        final_minimum bytes
       */
-      virtual void buffered_final(const byte input[], size_t length) = 0;
+      virtual void buffered_final(const uint8_t input[], size_t length) = 0;
 
       /**
       * @return block size of inputs
       */
-      size_t buffered_block_size() const { return main_block_mod; }
+      size_t buffered_block_size() const { return m_main_block_mod; }
 
       /**
       * @return current position in the buffer
       */
-      size_t current_position() const { return buffer_pos; }
+      size_t current_position() const { return m_buffer_pos; }
 
       /**
       * Reset the buffer position
       */
-      void buffer_reset() { buffer_pos = 0; }
+      void buffer_reset() { m_buffer_pos = 0; }
    private:
-      size_t main_block_mod, final_minimum;
+      size_t m_main_block_mod, m_final_minimum;
 
-      secure_vector<byte> buffer;
-      size_t buffer_pos;
+      secure_vector<uint8_t> m_buffer;
+      size_t m_buffer_pos;
    };
 
 }

@@ -2,19 +2,19 @@
 * SRP-6a (RFC 5054 compatatible)
 * (C) 2011,2012 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_RFC5054_SRP6_H__
-#define BOTAN_RFC5054_SRP6_H__
+#ifndef BOTAN_RFC5054_SRP6_H_
+#define BOTAN_RFC5054_SRP6_H_
 
 #include <botan/bigint.h>
-#include <botan/hash.h>
-#include <botan/rng.h>
 #include <botan/symkey.h>
 #include <string>
 
 namespace Botan {
+
+class RandomNumberGenerator;
 
 /**
 * SRP6a Client side
@@ -29,11 +29,11 @@ namespace Botan {
 * @return (A,K) the client public key and the shared secret key
 */
 std::pair<BigInt,SymmetricKey>
-BOTAN_DLL srp6_client_agree(const std::string& username,
+BOTAN_PUBLIC_API(2,0) srp6_client_agree(const std::string& username,
                             const std::string& password,
                             const std::string& group_id,
                             const std::string& hash_id,
-                            const std::vector<byte>& salt,
+                            const std::vector<uint8_t>& salt,
                             const BigInt& B,
                             RandomNumberGenerator& rng);
 
@@ -45,9 +45,9 @@ BOTAN_DLL srp6_client_agree(const std::string& username,
 * @param group_id specifies the shared SRP group
 * @param hash_id specifies a secure hash function
 */
-BigInt BOTAN_DLL generate_srp6_verifier(const std::string& identifier,
+BigInt BOTAN_PUBLIC_API(2,0) generate_srp6_verifier(const std::string& identifier,
                                         const std::string& password,
-                                        const std::vector<byte>& salt,
+                                        const std::vector<uint8_t>& salt,
                                         const std::string& group_id,
                                         const std::string& hash_id);
 
@@ -58,12 +58,12 @@ BigInt BOTAN_DLL generate_srp6_verifier(const std::string& identifier,
 * @param g the group generator
 * @return group identifier
 */
-std::string BOTAN_DLL srp6_group_identifier(const BigInt& N, const BigInt& g);
+std::string BOTAN_PUBLIC_API(2,0) srp6_group_identifier(const BigInt& N, const BigInt& g);
 
 /**
 * Represents a SRP-6a server session
 */
-class BOTAN_DLL SRP6_Server_Session
+class BOTAN_PUBLIC_API(2,0) SRP6_Server_Session final
    {
    public:
       /**
@@ -87,9 +87,9 @@ class BOTAN_DLL SRP6_Server_Session
       SymmetricKey step2(const BigInt& A);
 
    private:
-      std::string hash_id;
-      BigInt B, b, v, S, p;
-      size_t p_bytes;
+      std::string m_hash_id;
+      BigInt m_B, m_b, m_v, m_S, m_p;
+      size_t m_p_bytes = 0;
    };
 
 }

@@ -2,11 +2,12 @@
 * TLS Session Management
 * (C) 2011,2012 Jack Lloyd
 *
-* Released under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/tls_session_manager.h>
 #include <botan/hex.h>
+#include <botan/rng.h>
 #include <chrono>
 
 namespace Botan {
@@ -20,7 +21,7 @@ Session_Manager_In_Memory::Session_Manager_In_Memory(
    m_max_sessions(max_sessions),
    m_session_lifetime(session_lifetime),
    m_rng(rng),
-   m_session_key(m_rng, 32)
+   m_session_key(m_rng.random_vec(32))
    {}
 
 bool Session_Manager_In_Memory::load_from_session_str(
@@ -55,9 +56,9 @@ bool Session_Manager_In_Memory::load_from_session_str(
    }
 
 bool Session_Manager_In_Memory::load_from_session_id(
-   const std::vector<byte>& session_id, Session& session)
+   const std::vector<uint8_t>& session_id, Session& session)
    {
-   std::lock_guard<std::mutex> lock(m_mutex);
+   lock_guard_type<mutex_type> lock(m_mutex);
 
    return load_from_session_str(hex_encode(session_id), session);
    }
@@ -65,7 +66,7 @@ bool Session_Manager_In_Memory::load_from_session_id(
 bool Session_Manager_In_Memory::load_from_server_info(
    const Server_Information& info, Session& session)
    {
-   std::lock_guard<std::mutex> lock(m_mutex);
+   lock_guard_type<mutex_type> lock(m_mutex);
 
    auto i = m_info_sessions.find(info);
 
@@ -85,9 +86,9 @@ bool Session_Manager_In_Memory::load_from_server_info(
    }
 
 void Session_Manager_In_Memory::remove_entry(
-   const std::vector<byte>& session_id)
+   const std::vector<uint8_t>& session_id)
    {
-   std::lock_guard<std::mutex> lock(m_mutex);
+   lock_guard_type<mutex_type> lock(m_mutex);
 
    auto i = m_sessions.find(hex_encode(session_id));
 
@@ -95,9 +96,18 @@ void Session_Manager_In_Memory::remove_entry(
       m_sessions.erase(i);
    }
 
+size_t Session_Manager_In_Memory::remove_all()
+   {
+   const size_t removed = m_sessions.size();
+   m_info_sessions.clear();
+   m_sessions.clear();
+   m_session_key = m_rng.random_vec(32);
+   return removed;
+   }
+
 void Session_Manager_In_Memory::save(const Session& session)
    {
-   std::lock_guard<std::mutex> lock(m_mutex);
+   lock_guard_type<mutex_type> lock(m_mutex);
 
    if(m_max_sessions != 0)
       {

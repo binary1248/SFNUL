@@ -2,12 +2,12 @@
 * Noekeon
 * (C) 1999-2008 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/noekeon.h>
 #include <botan/loadstor.h>
-#include <botan/rotate.h>
+#include <botan/cpuid.h>
 
 namespace Botan {
 
@@ -16,12 +16,12 @@ namespace {
 /*
 * Noekeon's Theta Operation
 */
-inline void theta(u32bit& A0, u32bit& A1,
-                  u32bit& A2, u32bit& A3,
-                  const u32bit EK[4])
+inline void theta(uint32_t& A0, uint32_t& A1,
+                  uint32_t& A2, uint32_t& A3,
+                  const uint32_t EK[4])
    {
-   u32bit T = A0 ^ A2;
-   T ^= rotate_left(T, 8) ^ rotate_right(T, 8);
+   uint32_t T = A0 ^ A2;
+   T ^= rotl<8>(T) ^ rotr<8>(T);
    A1 ^= T;
    A3 ^= T;
 
@@ -31,7 +31,7 @@ inline void theta(u32bit& A0, u32bit& A1,
    A3 ^= EK[3];
 
    T = A1 ^ A3;
-   T ^= rotate_left(T, 8) ^ rotate_right(T, 8);
+   T ^= rotl<8>(T) ^ rotr<8>(T);
    A0 ^= T;
    A2 ^= T;
    }
@@ -39,16 +39,16 @@ inline void theta(u32bit& A0, u32bit& A1,
 /*
 * Theta With Null Key
 */
-inline void theta(u32bit& A0, u32bit& A1,
-                  u32bit& A2, u32bit& A3)
+inline void theta(uint32_t& A0, uint32_t& A1,
+                  uint32_t& A2, uint32_t& A3)
    {
-   u32bit T = A0 ^ A2;
-   T ^= rotate_left(T, 8) ^ rotate_right(T, 8);
+   uint32_t T = A0 ^ A2;
+   T ^= rotl<8>(T) ^ rotr<8>(T);
    A1 ^= T;
    A3 ^= T;
 
    T = A1 ^ A3;
-   T ^= rotate_left(T, 8) ^ rotate_right(T, 8);
+   T ^= rotl<8>(T) ^ rotr<8>(T);
    A0 ^= T;
    A2 ^= T;
    }
@@ -56,12 +56,12 @@ inline void theta(u32bit& A0, u32bit& A1,
 /*
 * Noekeon's Gamma S-Box Layer
 */
-inline void gamma(u32bit& A0, u32bit& A1, u32bit& A2, u32bit& A3)
+inline void gamma(uint32_t& A0, uint32_t& A1, uint32_t& A2, uint32_t& A3)
    {
    A1 ^= ~A3 & ~A2;
    A0 ^= A2 & A1;
 
-   u32bit T = A3;
+   uint32_t T = A3;
    A3 = A0;
    A0 = T;
 
@@ -73,10 +73,34 @@ inline void gamma(u32bit& A0, u32bit& A1, u32bit& A2, u32bit& A3)
 
 }
 
+size_t Noekeon::parallelism() const
+   {
+#if defined(BOTAN_HAS_NOEKEON_SIMD)
+   if(CPUID::has_simd_32())
+      {
+      return 4;
+      }
+#endif
+
+   return 1;
+   }
+
+std::string Noekeon::provider() const
+   {
+#if defined(BOTAN_HAS_NOEKEON_SIMD)
+   if(CPUID::has_simd_32())
+      {
+      return "simd";
+      }
+#endif
+
+   return "base";
+   }
+
 /*
 * Noekeon Round Constants
 */
-const byte Noekeon::RC[] = {
+const uint8_t Noekeon::RC[] = {
    0x80, 0x1B, 0x36, 0x6C, 0xD8, 0xAB, 0x4D, 0x9A,
    0x2F, 0x5E, 0xBC, 0x63, 0xC6, 0x97, 0x35, 0x6A,
    0xD4 };
@@ -84,33 +108,48 @@ const byte Noekeon::RC[] = {
 /*
 * Noekeon Encryption
 */
-void Noekeon::encrypt_n(const byte in[], byte out[], size_t blocks) const
+void Noekeon::encrypt_n(const uint8_t in[], uint8_t out[], size_t blocks) const
    {
+   verify_key_set(m_EK.empty() == false);
+
+#if defined(BOTAN_HAS_NOEKEON_SIMD)
+   if(CPUID::has_simd_32())
+      {
+      while(blocks >= 4)
+         {
+         simd_encrypt_4(in, out);
+         in += 4 * BLOCK_SIZE;
+         out += 4 * BLOCK_SIZE;
+         blocks -= 4;
+         }
+      }
+#endif
+
    for(size_t i = 0; i != blocks; ++i)
       {
-      u32bit A0 = load_be<u32bit>(in, 0);
-      u32bit A1 = load_be<u32bit>(in, 1);
-      u32bit A2 = load_be<u32bit>(in, 2);
-      u32bit A3 = load_be<u32bit>(in, 3);
+      uint32_t A0 = load_be<uint32_t>(in, 0);
+      uint32_t A1 = load_be<uint32_t>(in, 1);
+      uint32_t A2 = load_be<uint32_t>(in, 2);
+      uint32_t A3 = load_be<uint32_t>(in, 3);
 
       for(size_t j = 0; j != 16; ++j)
          {
          A0 ^= RC[j];
-         theta(A0, A1, A2, A3, &EK[0]);
+         theta(A0, A1, A2, A3, m_EK.data());
 
-         A1 = rotate_left(A1, 1);
-         A2 = rotate_left(A2, 5);
-         A3 = rotate_left(A3, 2);
+         A1 = rotl<1>(A1);
+         A2 = rotl<5>(A2);
+         A3 = rotl<2>(A3);
 
          gamma(A0, A1, A2, A3);
 
-         A1 = rotate_right(A1, 1);
-         A2 = rotate_right(A2, 5);
-         A3 = rotate_right(A3, 2);
+         A1 = rotr<1>(A1);
+         A2 = rotr<5>(A2);
+         A3 = rotr<2>(A3);
          }
 
       A0 ^= RC[16];
-      theta(A0, A1, A2, A3, &EK[0]);
+      theta(A0, A1, A2, A3, m_EK.data());
 
       store_be(out, A0, A1, A2, A3);
 
@@ -122,32 +161,47 @@ void Noekeon::encrypt_n(const byte in[], byte out[], size_t blocks) const
 /*
 * Noekeon Encryption
 */
-void Noekeon::decrypt_n(const byte in[], byte out[], size_t blocks) const
+void Noekeon::decrypt_n(const uint8_t in[], uint8_t out[], size_t blocks) const
    {
+   verify_key_set(m_DK.empty() == false);
+
+#if defined(BOTAN_HAS_NOEKEON_SIMD)
+   if(CPUID::has_simd_32())
+      {
+      while(blocks >= 4)
+         {
+         simd_decrypt_4(in, out);
+         in += 4 * BLOCK_SIZE;
+         out += 4 * BLOCK_SIZE;
+         blocks -= 4;
+         }
+      }
+#endif
+
    for(size_t i = 0; i != blocks; ++i)
       {
-      u32bit A0 = load_be<u32bit>(in, 0);
-      u32bit A1 = load_be<u32bit>(in, 1);
-      u32bit A2 = load_be<u32bit>(in, 2);
-      u32bit A3 = load_be<u32bit>(in, 3);
+      uint32_t A0 = load_be<uint32_t>(in, 0);
+      uint32_t A1 = load_be<uint32_t>(in, 1);
+      uint32_t A2 = load_be<uint32_t>(in, 2);
+      uint32_t A3 = load_be<uint32_t>(in, 3);
 
       for(size_t j = 16; j != 0; --j)
          {
-         theta(A0, A1, A2, A3, &DK[0]);
+         theta(A0, A1, A2, A3, m_DK.data());
          A0 ^= RC[j];
 
-         A1 = rotate_left(A1, 1);
-         A2 = rotate_left(A2, 5);
-         A3 = rotate_left(A3, 2);
+         A1 = rotl<1>(A1);
+         A2 = rotl<5>(A2);
+         A3 = rotl<2>(A3);
 
          gamma(A0, A1, A2, A3);
 
-         A1 = rotate_right(A1, 1);
-         A2 = rotate_right(A2, 5);
-         A3 = rotate_right(A3, 2);
+         A1 = rotr<1>(A1);
+         A2 = rotr<5>(A2);
+         A3 = rotr<2>(A3);
          }
 
-      theta(A0, A1, A2, A3, &DK[0]);
+      theta(A0, A1, A2, A3, m_DK.data());
       A0 ^= RC[0];
 
       store_be(out, A0, A1, A2, A3);
@@ -160,44 +214,44 @@ void Noekeon::decrypt_n(const byte in[], byte out[], size_t blocks) const
 /*
 * Noekeon Key Schedule
 */
-void Noekeon::key_schedule(const byte key[], size_t)
+void Noekeon::key_schedule(const uint8_t key[], size_t)
    {
-   u32bit A0 = load_be<u32bit>(key, 0);
-   u32bit A1 = load_be<u32bit>(key, 1);
-   u32bit A2 = load_be<u32bit>(key, 2);
-   u32bit A3 = load_be<u32bit>(key, 3);
+   uint32_t A0 = load_be<uint32_t>(key, 0);
+   uint32_t A1 = load_be<uint32_t>(key, 1);
+   uint32_t A2 = load_be<uint32_t>(key, 2);
+   uint32_t A3 = load_be<uint32_t>(key, 3);
 
    for(size_t i = 0; i != 16; ++i)
       {
       A0 ^= RC[i];
       theta(A0, A1, A2, A3);
 
-      A1 = rotate_left(A1, 1);
-      A2 = rotate_left(A2, 5);
-      A3 = rotate_left(A3, 2);
+      A1 = rotl<1>(A1);
+      A2 = rotl<5>(A2);
+      A3 = rotl<2>(A3);
 
       gamma(A0, A1, A2, A3);
 
-      A1 = rotate_right(A1, 1);
-      A2 = rotate_right(A2, 5);
-      A3 = rotate_right(A3, 2);
+      A1 = rotr<1>(A1);
+      A2 = rotr<5>(A2);
+      A3 = rotr<2>(A3);
       }
 
    A0 ^= RC[16];
 
-   DK.resize(4);
-   DK[0] = A0;
-   DK[1] = A1;
-   DK[2] = A2;
-   DK[3] = A3;
+   m_DK.resize(4);
+   m_DK[0] = A0;
+   m_DK[1] = A1;
+   m_DK[2] = A2;
+   m_DK[3] = A3;
 
    theta(A0, A1, A2, A3);
 
-   EK.resize(4);
-   EK[0] = A0;
-   EK[1] = A1;
-   EK[2] = A2;
-   EK[3] = A3;
+   m_EK.resize(4);
+   m_EK[0] = A0;
+   m_EK[1] = A1;
+   m_EK[2] = A2;
+   m_EK[3] = A3;
    }
 
 /*
@@ -205,8 +259,8 @@ void Noekeon::key_schedule(const byte key[], size_t)
 */
 void Noekeon::clear()
    {
-   zap(EK);
-   zap(DK);
+   zap(m_EK);
+   zap(m_DK);
    }
 
 }

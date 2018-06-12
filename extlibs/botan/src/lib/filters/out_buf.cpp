@@ -3,7 +3,7 @@
 * (C) 1999-2007,2011 Jack Lloyd
 *     2012 Markus Wanner
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/internal/out_buf.h>
@@ -14,7 +14,7 @@ namespace Botan {
 /*
 * Read data from a message
 */
-size_t Output_Buffers::read(byte output[], size_t length,
+size_t Output_Buffers::read(uint8_t output[], size_t length,
                             Pipe::message_id msg)
    {
    SecureQueue* q = get(msg);
@@ -26,7 +26,7 @@ size_t Output_Buffers::read(byte output[], size_t length,
 /*
 * Peek at data in a message
 */
-size_t Output_Buffers::peek(byte output[], size_t length,
+size_t Output_Buffers::peek(uint8_t output[], size_t length,
                             size_t stream_offset,
                             Pipe::message_id msg) const
    {
@@ -65,10 +65,10 @@ void Output_Buffers::add(SecureQueue* queue)
    {
    BOTAN_ASSERT(queue, "queue was provided");
 
-   BOTAN_ASSERT(buffers.size() < buffers.max_size(),
+   BOTAN_ASSERT(m_buffers.size() < m_buffers.max_size(),
                 "Room was available in container");
 
-   buffers.push_back(queue);
+   m_buffers.push_back(std::unique_ptr<SecureQueue>(queue));
    }
 
 /*
@@ -76,17 +76,16 @@ void Output_Buffers::add(SecureQueue* queue)
 */
 void Output_Buffers::retire()
    {
-   for(size_t i = 0; i != buffers.size(); ++i)
-      if(buffers[i] && buffers[i]->size() == 0)
+   for(size_t i = 0; i != m_buffers.size(); ++i)
+      if(m_buffers[i] && m_buffers[i]->size() == 0)
          {
-         delete buffers[i];
-         buffers[i] = nullptr;
+         m_buffers[i].reset();
          }
 
-   while(buffers.size() && !buffers[0])
+   while(m_buffers.size() && !m_buffers[0])
       {
-      buffers.pop_front();
-      offset = offset + Pipe::message_id(1);
+      m_buffers.pop_front();
+      m_offset = m_offset + Pipe::message_id(1);
       }
    }
 
@@ -95,12 +94,12 @@ void Output_Buffers::retire()
 */
 SecureQueue* Output_Buffers::get(Pipe::message_id msg) const
    {
-   if(msg < offset)
+   if(msg < m_offset)
       return nullptr;
 
    BOTAN_ASSERT(msg < message_count(), "Message number is in range");
 
-   return buffers[msg-offset];
+   return m_buffers[msg-m_offset].get();
    }
 
 /*
@@ -108,7 +107,7 @@ SecureQueue* Output_Buffers::get(Pipe::message_id msg) const
 */
 Pipe::message_id Output_Buffers::message_count() const
    {
-   return (offset + buffers.size());
+   return (m_offset + m_buffers.size());
    }
 
 /*
@@ -116,16 +115,7 @@ Pipe::message_id Output_Buffers::message_count() const
 */
 Output_Buffers::Output_Buffers()
    {
-   offset = 0;
-   }
-
-/*
-* Output_Buffers Destructor
-*/
-Output_Buffers::~Output_Buffers()
-   {
-   for(size_t j = 0; j != buffers.size(); ++j)
-      delete buffers[j];
+   m_offset = 0;
    }
 
 }

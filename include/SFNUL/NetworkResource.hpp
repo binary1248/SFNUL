@@ -36,8 +36,8 @@ protected:
 	NetworkResource& operator=( NetworkResource&& other ) = default;
 #endif
 
-	/** Get the associated asio io_service.
-	 * @return associated asio io_service.
+	/** Get the associated asio io_context.
+	 * @return associated asio io_context.
 	 */
 	void* GetIOService() const;
 

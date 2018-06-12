@@ -2,7 +2,7 @@
 * Jacobi Function
 * (C) 1999-2007 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/numthry.h>
@@ -12,7 +12,7 @@ namespace Botan {
 /*
 * Calculate the Jacobi symbol
 */
-s32bit jacobi(const BigInt& a, const BigInt& n)
+int32_t jacobi(const BigInt& a, const BigInt& n)
    {
    if(a.is_negative())
       throw Invalid_Argument("jacobi: first argument must be non-negative");
@@ -20,7 +20,7 @@ s32bit jacobi(const BigInt& a, const BigInt& n)
       throw Invalid_Argument("jacobi: second argument must be odd and > 1");
 
    BigInt x = a, y = n;
-   s32bit J = 1;
+   int32_t J = 1;
 
    while(y > 1)
       {

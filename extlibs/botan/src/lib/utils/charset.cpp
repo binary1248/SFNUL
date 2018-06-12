@@ -2,15 +2,131 @@
 * Character Set Handling
 * (C) 1999-2007 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/charset.h>
-#include <botan/parsing.h>
 #include <botan/exceptn.h>
+#include <botan/loadstor.h>
 #include <cctype>
 
 namespace Botan {
+
+namespace {
+
+void append_utf8_for(std::string& s, uint32_t c)
+   {
+   if(c >= 0xD800 && c < 0xE000)
+      throw Decoding_Error("Invalid Unicode character");
+
+   if(c <= 0x7F)
+      {
+      const uint8_t b0 = static_cast<uint8_t>(c);
+      s.push_back(static_cast<char>(b0));
+      }
+   else if(c <= 0x7FF)
+      {
+      const uint8_t b0 = 0xC0 | static_cast<uint8_t>(c >> 6);
+      const uint8_t b1 = 0x80 | static_cast<uint8_t>(c & 0x3F);
+      s.push_back(static_cast<char>(b0));
+      s.push_back(static_cast<char>(b1));
+      }
+   else if(c <= 0xFFFF)
+      {
+      const uint8_t b0 = 0xE0 | static_cast<uint8_t>(c >> 12);
+      const uint8_t b1 = 0x80 | static_cast<uint8_t>((c >> 6) & 0x3F);
+      const uint8_t b2 = 0x80 | static_cast<uint8_t>(c & 0x3F);
+      s.push_back(static_cast<char>(b0));
+      s.push_back(static_cast<char>(b1));
+      s.push_back(static_cast<char>(b2));
+      }
+   else if(c <= 0x10FFFF)
+      {
+      const uint8_t b0 = 0xF0 | static_cast<uint8_t>(c >> 18);
+      const uint8_t b1 = 0x80 | static_cast<uint8_t>((c >> 12) & 0x3F);
+      const uint8_t b2 = 0x80 | static_cast<uint8_t>((c >> 6) & 0x3F);
+      const uint8_t b3 = 0x80 | static_cast<uint8_t>(c & 0x3F);
+      s.push_back(static_cast<char>(b0));
+      s.push_back(static_cast<char>(b1));
+      s.push_back(static_cast<char>(b2));
+      s.push_back(static_cast<char>(b3));
+      }
+   else
+      throw Decoding_Error("Invalid Unicode character");
+
+   }
+
+}
+
+std::string ucs2_to_utf8(const uint8_t ucs2[], size_t len)
+   {
+   if(len % 2 != 0)
+      throw Decoding_Error("Invalid length for UCS-2 string");
+
+   const size_t chars = len / 2;
+
+   std::string s;
+   for(size_t i = 0; i != chars; ++i)
+      {
+      const uint16_t c = load_be<uint16_t>(ucs2, i);
+      append_utf8_for(s, c);
+      }
+
+   return s;
+   }
+
+std::string ucs4_to_utf8(const uint8_t ucs4[], size_t len)
+   {
+   if(len % 4 != 0)
+      throw Decoding_Error("Invalid length for UCS-4 string");
+
+   const size_t chars = len / 4;
+
+   std::string s;
+   for(size_t i = 0; i != chars; ++i)
+      {
+      const uint32_t c = load_be<uint32_t>(ucs4, i);
+      append_utf8_for(s, c);
+      }
+
+   return s;
+   }
+
+/*
+* Convert from UTF-8 to ISO 8859-1
+*/
+std::string utf8_to_latin1(const std::string& utf8)
+   {
+   std::string iso8859;
+
+   size_t position = 0;
+   while(position != utf8.size())
+      {
+      const uint8_t c1 = static_cast<uint8_t>(utf8[position++]);
+
+      if(c1 <= 0x7F)
+         {
+         iso8859 += static_cast<char>(c1);
+         }
+      else if(c1 >= 0xC0 && c1 <= 0xC7)
+         {
+         if(position == utf8.size())
+            throw Decoding_Error("UTF-8: sequence truncated");
+
+         const uint8_t c2 = static_cast<uint8_t>(utf8[position++]);
+         const uint8_t iso_char = ((c1 & 0x07) << 6) | (c2 & 0x3F);
+
+         if(iso_char <= 0x7F)
+            throw Decoding_Error("UTF-8: sequence longer than needed");
+
+         iso8859 += static_cast<char>(iso_char);
+         }
+      else
+         throw Decoding_Error("UTF-8: Unicode chars not in Latin1 used");
+      }
+
+   return iso8859;
+   }
 
 namespace Charset {
 
@@ -28,8 +144,8 @@ std::string ucs2_to_latin1(const std::string& ucs2)
 
    for(size_t i = 0; i != ucs2.size(); i += 2)
       {
-      const byte c1 = ucs2[i];
-      const byte c2 = ucs2[i+1];
+      const uint8_t c1 = ucs2[i];
+      const uint8_t c2 = ucs2[i+1];
 
       if(c1 != 0)
          throw Decoding_Error("UCS-2 has non-Latin1 characters");
@@ -41,40 +157,6 @@ std::string ucs2_to_latin1(const std::string& ucs2)
    }
 
 /*
-* Convert from UTF-8 to ISO 8859-1
-*/
-std::string utf8_to_latin1(const std::string& utf8)
-   {
-   std::string iso8859;
-
-   size_t position = 0;
-   while(position != utf8.size())
-      {
-      const byte c1 = static_cast<byte>(utf8[position++]);
-
-      if(c1 <= 0x7F)
-         iso8859 += static_cast<char>(c1);
-      else if(c1 >= 0xC0 && c1 <= 0xC7)
-         {
-         if(position == utf8.size())
-            throw Decoding_Error("UTF-8: sequence truncated");
-
-         const byte c2 = static_cast<byte>(utf8[position++]);
-         const byte iso_char = ((c1 & 0x07) << 6) | (c2 & 0x3F);
-
-         if(iso_char <= 0x7F)
-            throw Decoding_Error("UTF-8: sequence longer than needed");
-
-         iso8859 += static_cast<char>(iso_char);
-         }
-      else
-         throw Decoding_Error("UTF-8: Unicode chars not in Latin1 used");
-      }
-
-   return iso8859;
-   }
-
-/*
 * Convert from ISO 8859-1 to UTF-8
 */
 std::string latin1_to_utf8(const std::string& iso8859)
@@ -82,7 +164,7 @@ std::string latin1_to_utf8(const std::string& iso8859)
    std::string utf8;
    for(size_t i = 0; i != iso8859.size(); ++i)
       {
-      const byte c = static_cast<byte>(iso8859[i]);
+      const uint8_t c = static_cast<uint8_t>(iso8859[i]);
 
       if(c <= 0x7F)
          utf8 += static_cast<char>(c);
@@ -146,7 +228,7 @@ bool is_space(char c)
 /*
 * Convert a character to a digit
 */
-byte char2digit(char c)
+uint8_t char2digit(char c)
    {
    switch(c)
       {
@@ -168,7 +250,7 @@ byte char2digit(char c)
 /*
 * Convert a digit to a character
 */
-char digit2char(byte b)
+char digit2char(uint8_t b)
    {
    switch(b)
       {

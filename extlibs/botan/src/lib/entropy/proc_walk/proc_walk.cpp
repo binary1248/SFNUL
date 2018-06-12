@@ -4,12 +4,13 @@
 *
 * (C) 1999-2008,2012 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/internal/proc_walk.h>
-#include <botan/secmem.h>
-#include <cstring>
+
+#if defined(BOTAN_HAS_ENTROPY_SRC_PROC_WALKER)
+
 #include <deque>
 
 #ifndef _POSIX_C_SOURCE
@@ -26,10 +27,10 @@ namespace Botan {
 
 namespace {
 
-class Directory_Walker : public File_Descriptor_Source
+class Directory_Walker final : public File_Descriptor_Source
    {
    public:
-      Directory_Walker(const std::string& root) :
+      explicit Directory_Walker(const std::string& root) :
          m_cur_dir(std::make_pair<DIR*, std::string>(nullptr, ""))
          {
          if(DIR* root_dir = ::opendir(root.c_str()))
@@ -42,13 +43,8 @@ class Directory_Walker : public File_Descriptor_Source
             ::closedir(m_cur_dir.first);
          }
 
-      int next_fd();
+      int next_fd() override;
    private:
-      void add_directory(const std::string& dirname)
-         {
-         m_dirlist.push_back(dirname);
-         }
-
       std::pair<struct dirent*, std::string> get_next_dirent();
 
       std::pair<DIR*, std::string> m_cur_dir;
@@ -92,7 +88,7 @@ int Directory_Walker::next_fd()
       if(filename == "." || filename == "..")
          continue;
 
-      const std::string full_path = entry.second + '/' + filename;
+      const std::string full_path = entry.second + "/" + filename;
 
       struct stat stat_buf;
       if(::lstat(full_path.c_str(), &stat_buf) == -1)
@@ -100,13 +96,13 @@ int Directory_Walker::next_fd()
 
       if(S_ISDIR(stat_buf.st_mode))
          {
-         add_directory(full_path);
+         m_dirlist.push_back(full_path);
          }
       else if(S_ISREG(stat_buf.st_mode) && (stat_buf.st_mode & S_IROTH))
          {
          int fd = ::open(full_path.c_str(), O_RDONLY | O_NOCTTY);
 
-         if(fd > 0)
+         if(fd >= 0)
             return fd;
          }
       }
@@ -116,15 +112,18 @@ int Directory_Walker::next_fd()
 
 }
 
-void ProcWalking_EntropySource::poll(Entropy_Accumulator& accum)
+size_t ProcWalking_EntropySource::poll(RandomNumberGenerator& rng)
    {
    const size_t MAX_FILES_READ_PER_POLL = 2048;
-   const double ENTROPY_ESTIMATE = 1.0 / (8*1024);
+
+   lock_guard_type<mutex_type> lock(m_mutex);
 
    if(!m_dir)
       m_dir.reset(new Directory_Walker(m_path));
 
-   secure_vector<byte>& io_buffer = accum.get_io_buffer(4096);
+   m_buf.resize(4096);
+
+   size_t bits = 0;
 
    for(size_t i = 0; i != MAX_FILES_READ_PER_POLL; ++i)
       {
@@ -137,15 +136,24 @@ void ProcWalking_EntropySource::poll(Entropy_Accumulator& accum)
          break;
          }
 
-      ssize_t got = ::read(fd, &io_buffer[0], io_buffer.size());
+      ssize_t got = ::read(fd, m_buf.data(), m_buf.size());
       ::close(fd);
 
       if(got > 0)
-         accum.add(&io_buffer[0], got, ENTROPY_ESTIMATE);
+         {
+         rng.add_entropy(m_buf.data(), static_cast<size_t>(got));
 
-      if(accum.polling_goal_achieved())
+         // Conservative estimate of 4 bits per file
+         bits += 4;
+         }
+
+      if(bits > 128)
          break;
       }
+
+   return bits;
    }
 
 }
+
+#endif

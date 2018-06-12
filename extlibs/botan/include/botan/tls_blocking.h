@@ -1,40 +1,44 @@
 /*
 * TLS Blocking API
 * (C) 2013 Jack Lloyd
+*     2016 Matthias Gierlings
 *
-* Released under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_TLS_BLOCKING_CHANNELS_H__
-#define BOTAN_TLS_BLOCKING_CHANNELS_H__
+#ifndef BOTAN_TLS_BLOCKING_CHANNELS_H_
+#define BOTAN_TLS_BLOCKING_CHANNELS_H_
 
 #include <botan/tls_client.h>
-#include <botan/tls_server.h>
-#include <deque>
 
 namespace Botan {
-
-template<typename T> using secure_deque = std::vector<T, secure_allocator<T>>;
 
 namespace TLS {
 
 /**
 * Blocking TLS Client
+* Can be used directly, or subclass to get handshake and alert notifications
 */
-class BOTAN_DLL Blocking_Client
+class BOTAN_PUBLIC_API(2,0) Blocking_Client
    {
    public:
+      /*
+      * These functions are expected to block until completing entirely, or
+      * fail by throwing an exception.
+      */
+      typedef std::function<size_t (uint8_t[], size_t)> read_fn;
+      typedef std::function<void (const uint8_t[], size_t)> write_fn;
 
-      Blocking_Client(std::function<size_t (byte[], size_t)> read_fn,
-                      std::function<void (const byte[], size_t)> write_fn,
+      BOTAN_DEPRECATED("Use the regular TLS::Client interface")
+      Blocking_Client(read_fn reader,
+                      write_fn writer,
                       Session_Manager& session_manager,
                       Credentials_Manager& creds,
                       const Policy& policy,
                       RandomNumberGenerator& rng,
                       const Server_Information& server_info = Server_Information(),
-                      const Protocol_Version offer_version = Protocol_Version::latest_tls_version(),
-                      std::function<std::string (std::vector<std::string>)> next_protocol =
-                        std::function<std::string (std::vector<std::string>)>());
+                      const Protocol_Version& offer_version = Protocol_Version::latest_tls_version(),
+                      const std::vector<std::string>& next_protos = {});
 
       /**
       * Completes full handshake then returns
@@ -48,11 +52,12 @@ class BOTAN_DLL Blocking_Client
       size_t pending() const { return m_plaintext.size(); }
 
       /**
-      * Blocking read, will return at least 1 byte or 0 on connection close
+      * Blocking read, will return at least 1 byte (eventually) or else 0 if the connection
+      * is closed.
       */
-      size_t read(byte buf[], size_t buf_len);
+      size_t read(uint8_t buf[], size_t buf_len);
 
-      void write(const byte buf[], size_t buf_len) { m_channel.send(buf, buf_len); }
+      void write(const uint8_t buf[], size_t buf_len) { m_channel.send(buf, buf_len); }
 
       const TLS::Channel& underlying_channel() const { return m_channel; }
       TLS::Channel& underlying_channel() { return m_channel; }
@@ -64,16 +69,16 @@ class BOTAN_DLL Blocking_Client
       std::vector<X509_Certificate> peer_cert_chain() const
          { return m_channel.peer_cert_chain(); }
 
-      virtual ~Blocking_Client() {}
+      virtual ~Blocking_Client() = default;
 
    protected:
       /**
-      * Can override to get the handshake complete notification
+      * Application can override to get the handshake complete notification
       */
       virtual bool handshake_complete(const Session&) { return true; }
 
       /**
-      * Can override to get notification of alerts
+      * Application can override to get notification of alerts
       */
       virtual void alert_notification(const Alert&) {}
 
@@ -81,13 +86,14 @@ class BOTAN_DLL Blocking_Client
 
       bool handshake_cb(const Session&);
 
-      void data_cb(const byte data[], size_t data_len);
+      void data_cb(const uint8_t data[], size_t data_len);
 
-      void alert_cb(const Alert alert, const byte data[], size_t data_len);
+      void alert_cb(const Alert& alert);
 
-      std::function<size_t (byte[], size_t)> m_read_fn;
+      read_fn m_read;
+      std::unique_ptr<Compat_Callbacks> m_callbacks;
       TLS::Client m_channel;
-      secure_deque<byte> m_plaintext;
+      secure_vector<uint8_t> m_plaintext;
    };
 
 }

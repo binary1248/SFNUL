@@ -2,7 +2,7 @@
 * Runtime assertion checking
 * (C) 2010,2012 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/exceptn.h>
@@ -30,7 +30,7 @@ void assertion_failure(const char* expr_str,
 
    format << "@" << file << ":" << line;
 
-   throw std::runtime_error(format.str());
+   throw Exception(format.str());
    }
 
 }

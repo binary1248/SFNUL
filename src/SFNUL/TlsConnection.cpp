@@ -8,6 +8,7 @@
 #include <SFNUL/MakeUnique.hpp>
 #include <botan/tls_client.h>
 #include <botan/tls_server.h>
+#include <botan/data_src.h>
 #include <botan/pkcs8.h>
 #include <botan/auto_rng.h>
 #include <botan/init.h>
@@ -27,7 +28,6 @@ namespace sfn {
 
 class TlsResource::LibraryImpl {
 public:
-	Botan::LibraryInitializer initializer;
 	Botan::AutoSeeded_RNG rng;
 	TlsPolicy tls_policy;
 
@@ -63,7 +63,7 @@ TlsCertificate::Ptr TlsCertificate::Create( const std::string& certificate ) {
 
 void TlsCertificate::LoadCertificate( const std::string& certificate ) {
 	Botan::DataSource_Memory data_source{ certificate };
-	m_impl = make_unique<TlsCertificateImpl>( data_source );
+	m_impl = make_unique<TlsCertificateImpl>( Botan::X509_Certificate( data_source ) );
 }
 
 class TlsKey::TlsKeyImpl {
@@ -89,7 +89,7 @@ void TlsKey::LoadKey( const std::string& key, const std::string& password ) {
 	m_impl->key = Botan::PKCS8::load_key( data_source, m_library->rng, password );
 }
 
-class TlsConnectionBase::TlsConnectionBaseImpl : public Botan::Credentials_Manager {
+class TlsConnectionBase::TlsConnectionBaseImpl : public Botan::Credentials_Manager, public Botan::TLS::Callbacks {
 public:
 	TlsConnectionBaseImpl( Botan::RandomNumberGenerator& the_rng ) : session_manager{ the_rng }, rng{ &the_rng } {}
 
@@ -106,24 +106,6 @@ public:
 		}
 
 		return trusted_cas;
-	}
-
-	void verify_certificate_chain( const std::string& type, const std::string& hostname, const std::vector<Botan::X509_Certificate>& certificate_chain ) override {
-		if( certificate_stores.empty() ) {
-			WarningMessage() << "Certificate verification failed: Certificate store empty.\n";
-			return;
-		}
-
-		last_verification_result = TlsVerificationResult::Passed;
-
-		try {
-			Botan::Credentials_Manager::verify_certificate_chain( type, hostname, certificate_chain );
-		}
-		catch( std::exception& e ) {
-			WarningMessage() << "Certificate verification failed: " << e.what() << "\n";
-
-			last_verification_result = TlsVerificationResult::NotTrusted;
-		}
 	}
 
 	std::vector<Botan::X509_Certificate> cert_chain( const std::vector<std::string>& cert_key_types, const std::string& /*type*/, const std::string& /*context*/ ) override {
@@ -194,6 +176,55 @@ public:
 		// TODO
 	}
 
+	void tls_emit_data( const uint8_t data[], size_t size ) override {
+		if( output_callback ) {
+			output_callback( data, size );
+		}
+	}
+
+	void tls_record_received( uint64_t, const uint8_t data[], size_t size ) override {
+		if( data_callback ) {
+			data_callback( data, size );
+		}
+	}
+
+	void tls_alert( Botan::TLS::Alert alert ) override {
+		if( alert_callback ) {
+			alert_callback(&alert, nullptr, 0);
+		}
+	}
+
+	bool tls_session_established( const Botan::TLS::Session& session ) override {
+		if( handshake_callback ) {
+			return handshake_callback(&session);
+		}
+
+		return false;
+	}
+
+	void tls_verify_cert_chain( const std::vector<Botan::X509_Certificate>& cert_chain, const std::vector<std::shared_ptr<const Botan::OCSP::Response>>& ocsp_responses, const std::vector<Botan::Certificate_Store*>& trusted_roots, Botan::Usage_Type usage, const std::string& hostname, const Botan::TLS::Policy& policy ) override {
+		if( certificate_stores.empty() ) {
+			WarningMessage() << "Certificate verification failed: Certificate store empty.\n";
+			return;
+		}
+
+		last_verification_result = TlsVerificationResult::Passed;
+
+		try {
+			Botan::TLS::Callbacks::tls_verify_cert_chain( cert_chain, ocsp_responses, trusted_roots, usage, hostname, policy );
+		}
+		catch( std::exception& e ) {
+			WarningMessage() << "Certificate verification failed: " << e.what() << "\n";
+
+			last_verification_result = TlsVerificationResult::NotTrusted;
+		}
+	}
+
+	OutputFunction output_callback;
+	DataFunction data_callback;
+	AlertFunction alert_callback;
+	HandshakeFunction handshake_callback;
+
 	std::vector<std::unique_ptr<Botan::Certificate_Store_In_Memory>> certificate_stores;
 
 	TlsVerificationResult last_verification_result{ TlsVerificationResult::NotTrusted };
@@ -255,16 +286,14 @@ TlsVerificationResult TlsConnectionBase::GetVerificationResult() const {
 
 /// @cond
 void TlsConnectionBase::SetEndpoint( TlsEndpointType type, OutputFunction output_callback, DataFunction data_callback, AlertFunction alert_callback, HandshakeFunction handshake_callback ) {
+	m_impl->output_callback = output_callback;
+	m_impl->data_callback = data_callback;
+	m_impl->alert_callback = alert_callback;
+	m_impl->handshake_callback = handshake_callback;
+
 	if( type == TlsEndpointType::Client ) {
 		m_impl->endpoint = make_unique<Botan::TLS::Client>(
-			output_callback,
-			data_callback,
-			[alert_callback]( Botan::TLS::Alert alert, const std::uint8_t* data, std::size_t size ) {
-				alert_callback( &alert, data, size );
-			},
-			[handshake_callback]( const Botan::TLS::Session& session ) -> bool {
-				return handshake_callback( &session );
-			},
+			*m_impl,
 			m_impl->session_manager,
 			*m_impl,
 			m_library->tls_policy,
@@ -275,14 +304,7 @@ void TlsConnectionBase::SetEndpoint( TlsEndpointType type, OutputFunction output
 	}
 	else if( type == TlsEndpointType::Server ) {
 		m_impl->endpoint = make_unique<Botan::TLS::Server>(
-			output_callback,
-			data_callback,
-			[alert_callback]( Botan::TLS::Alert alert, const std::uint8_t* data, std::size_t size ) {
-				alert_callback( &alert, data, size );
-			},
-			[handshake_callback]( const Botan::TLS::Session& session ) -> bool {
-				return handshake_callback( &session );
-			},
+			*m_impl,
 			m_impl->session_manager,
 			*m_impl,
 			m_library->tls_policy,

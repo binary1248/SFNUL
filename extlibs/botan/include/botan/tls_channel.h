@@ -1,18 +1,20 @@
 /*
 * TLS Channel
-* (C) 2011,2012 Jack Lloyd
+* (C) 2011,2012,2014,2015 Jack Lloyd
+*     2016 Matthias Gierlings
 *
-* Released under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_TLS_CHANNEL_H__
-#define BOTAN_TLS_CHANNEL_H__
+#ifndef BOTAN_TLS_CHANNEL_H_
+#define BOTAN_TLS_CHANNEL_H_
 
-#include <botan/tls_policy.h>
 #include <botan/tls_session.h>
 #include <botan/tls_alert.h>
 #include <botan/tls_session_manager.h>
+#include <botan/tls_callbacks.h>
 #include <botan/x509cert.h>
+#include <functional>
 #include <vector>
 #include <string>
 #include <map>
@@ -24,44 +26,106 @@ namespace TLS {
 class Connection_Cipher_State;
 class Connection_Sequence_Numbers;
 class Handshake_State;
+class Handshake_Message;
+class Client_Hello;
+class Server_Hello;
+class Policy;
 
 /**
 * Generic interface for TLS endpoint
 */
-class BOTAN_DLL Channel
+class BOTAN_PUBLIC_API(2,0) Channel
    {
    public:
+      typedef std::function<void (const uint8_t[], size_t)> output_fn;
+      typedef std::function<void (const uint8_t[], size_t)> data_cb;
+      typedef std::function<void (Alert, const uint8_t[], size_t)> alert_cb;
+      typedef std::function<bool (const Session&)> handshake_cb;
+      typedef std::function<void (const Handshake_Message&)> handshake_msg_cb;
+      static size_t IO_BUF_DEFAULT_SIZE;
+
       /**
-      * Inject TLS traffic received from counterparty
-      * @return a hint as the how many more bytes we need to process the
-      *         current record (this may be 0 if on a record boundary)
+      * Set up a new TLS session
+      *
+      * @param callbacks contains a set of callback function references
+      *        required by the TLS endpoint.
+      *
+      * @param session_manager manages session state
+      *
+      * @param rng a random number generator
+      *
+      * @param policy specifies other connection policy information
+      *
+      * @param is_datagram whether this is a DTLS session
+      *
+      * @param io_buf_sz This many bytes of memory will
+      *        be preallocated for the read and write buffers. Smaller
+      *        values just mean reallocations and copies are more likely.
       */
-      size_t received_data(const byte buf[], size_t buf_size);
+      Channel(Callbacks& callbacks,
+              Session_Manager& session_manager,
+              RandomNumberGenerator& rng,
+              const Policy& policy,
+              bool is_datagram,
+              size_t io_buf_sz = IO_BUF_DEFAULT_SIZE);
+
+      /**
+       * DEPRECATED. This constructor is only provided for backward
+       * compatibility and should not be used in new implementations.
+       * (Not marked deprecated since it is only called internally, by
+       * other deprecated constructors)
+       */
+      Channel(output_fn out,
+              data_cb app_data_cb,
+              alert_cb alert_cb,
+              handshake_cb hs_cb,
+              handshake_msg_cb hs_msg_cb,
+              Session_Manager& session_manager,
+              RandomNumberGenerator& rng,
+              const Policy& policy,
+              bool is_datagram,
+              size_t io_buf_sz = IO_BUF_DEFAULT_SIZE);
+
+      Channel(const Channel&) = delete;
+
+      Channel& operator=(const Channel&) = delete;
+
+      virtual ~Channel();
 
       /**
       * Inject TLS traffic received from counterparty
       * @return a hint as the how many more bytes we need to process the
       *         current record (this may be 0 if on a record boundary)
       */
-      size_t received_data(const std::vector<byte>& buf);
+      size_t received_data(const uint8_t buf[], size_t buf_size);
 
       /**
-      * Inject plaintext intended for counterparty
+      * Inject TLS traffic received from counterparty
+      * @return a hint as the how many more bytes we need to process the
+      *         current record (this may be 0 if on a record boundary)
       */
-      void send(const byte buf[], size_t buf_size);
+      size_t received_data(const std::vector<uint8_t>& buf);
 
       /**
       * Inject plaintext intended for counterparty
+      * Throws an exception if is_active() is false
+      */
+      void send(const uint8_t buf[], size_t buf_size);
+
+      /**
+      * Inject plaintext intended for counterparty
+      * Throws an exception if is_active() is false
       */
       void send(const std::string& val);
 
       /**
       * Inject plaintext intended for counterparty
+      * Throws an exception if is_active() is false
       */
       template<typename Alloc>
          void send(const std::vector<unsigned char, Alloc>& val)
          {
-         send(&val[0], val.size());
+         send(val.data(), val.size());
          }
 
       /**
@@ -96,40 +160,6 @@ class BOTAN_DLL Channel
       */
       bool is_closed() const;
 
-      /**
-      * Attempt to renegotiate the session
-      * @param force_full_renegotiation if true, require a full renegotiation,
-      *                                 otherwise allow session resumption
-      */
-      void renegotiate(bool force_full_renegotiation = false);
-
-      /**
-      * @return true iff the peer supports heartbeat messages
-      */
-      bool peer_supports_heartbeats() const;
-
-      /**
-      * @return true iff we are allowed to send heartbeat messages
-      */
-      bool heartbeat_sending_allowed() const;
-
-      /**
-      * @return true iff the counterparty supports the secure
-      * renegotiation extensions.
-      */
-      bool secure_renegotiation_supported() const;
-
-      /**
-      * Attempt to send a heartbeat message (if negotiated with counterparty)
-      * @param payload will be echoed back
-      * @param payload_size size of payload in bytes
-      */
-      void heartbeat(const byte payload[], size_t payload_size);
-
-      /**
-      * Attempt to send a heartbeat message (if negotiated with counterparty)
-      */
-      void heartbeat() { heartbeat(nullptr, 0); }
 
       /**
       * @return certificate chain of the peer (may be empty)
@@ -147,25 +177,33 @@ class BOTAN_DLL Channel
                                        const std::string& context,
                                        size_t length) const;
 
-      Channel(std::function<void (const byte[], size_t)> socket_output_fn,
-              std::function<void (const byte[], size_t)> data_cb,
-              std::function<void (Alert, const byte[], size_t)> alert_cb,
-              std::function<bool (const Session&)> handshake_cb,
-              Session_Manager& session_manager,
-              RandomNumberGenerator& rng,
-              size_t reserved_io_buffer_size);
+      /**
+      * Attempt to renegotiate the session
+      * @param force_full_renegotiation if true, require a full renegotiation,
+      * otherwise allow session resumption
+      */
+      void renegotiate(bool force_full_renegotiation = false);
 
-      Channel(const Channel&) = delete;
+      /**
+      * @return true iff the counterparty supports the secure
+      * renegotiation extensions.
+      */
+      bool secure_renegotiation_supported() const;
 
-      Channel& operator=(const Channel&) = delete;
+      /**
+      * Perform a handshake timeout check. This does nothing unless
+      * this is a DTLS channel with a pending handshake state, in
+      * which case we check for timeout and potentially retransmit
+      * handshake packets.
+      */
+      bool timeout_check();
 
-      virtual ~Channel();
    protected:
 
       virtual void process_handshake_msg(const Handshake_State* active_state,
                                          Handshake_State& pending_state,
                                          Handshake_Type type,
-                                         const std::vector<byte>& contents) = 0;
+                                         const std::vector<uint8_t>& contents) = 0;
 
       virtual void initiate_handshake(Handshake_State& state,
                                       bool force_full_renegotiation) = 0;
@@ -177,6 +215,8 @@ class BOTAN_DLL Channel
 
       Handshake_State& create_handshake_state(Protocol_Version version);
 
+      void inspect_handshake_message(const Handshake_Message& msg);
+
       void activate_session();
 
       void change_cipher_spec_reader(Connection_Side side);
@@ -185,37 +225,40 @@ class BOTAN_DLL Channel
 
       /* secure renegotiation handling */
 
-      void secure_renegotiation_check(const class Client_Hello* client_hello);
-      void secure_renegotiation_check(const class Server_Hello* server_hello);
+      void secure_renegotiation_check(const Client_Hello* client_hello);
+      void secure_renegotiation_check(const Server_Hello* server_hello);
 
-      std::vector<byte> secure_renegotiation_data_for_client_hello() const;
-      std::vector<byte> secure_renegotiation_data_for_server_hello() const;
+      std::vector<uint8_t> secure_renegotiation_data_for_client_hello() const;
+      std::vector<uint8_t> secure_renegotiation_data_for_server_hello() const;
 
       RandomNumberGenerator& rng() { return m_rng; }
 
       Session_Manager& session_manager() { return m_session_manager; }
 
-      bool save_session(const Session& session) const { return m_handshake_cb(session); }
+      const Policy& policy() const { return m_policy; }
 
+      bool save_session(const Session& session);
+
+      Callbacks& callbacks() const { return m_callbacks; }
    private:
-      size_t maximum_fragment_size() const;
+      void init(size_t io_buf_sze);
 
-      void send_record(byte record_type, const std::vector<byte>& record);
+      void send_record(uint8_t record_type, const std::vector<uint8_t>& record);
 
-      void send_record_under_epoch(u16bit epoch, byte record_type,
-                                   const std::vector<byte>& record);
+      void send_record_under_epoch(uint16_t epoch, uint8_t record_type,
+                                   const std::vector<uint8_t>& record);
 
-      void send_record_array(u16bit epoch, byte record_type,
-                             const byte input[], size_t length);
+      void send_record_array(uint16_t epoch, uint8_t record_type,
+                             const uint8_t input[], size_t length);
 
       void write_record(Connection_Cipher_State* cipher_state,
-                        byte type, const byte input[], size_t length);
+                        uint16_t epoch, uint8_t type, const uint8_t input[], size_t length);
 
       Connection_Sequence_Numbers& sequence_numbers() const;
 
-      std::shared_ptr<Connection_Cipher_State> read_cipher_state_epoch(u16bit epoch) const;
+      std::shared_ptr<Connection_Cipher_State> read_cipher_state_epoch(uint16_t epoch) const;
 
-      std::shared_ptr<Connection_Cipher_State> write_cipher_state_epoch(u16bit epoch) const;
+      std::shared_ptr<Connection_Cipher_State> write_cipher_state_epoch(uint16_t epoch) const;
 
       void reset_state();
 
@@ -223,15 +266,26 @@ class BOTAN_DLL Channel
 
       const Handshake_State* pending_state() const { return m_pending_state.get(); }
 
+      /* methods to handle incoming traffic through Channel::receive_data. */
+      void process_handshake_ccs(const secure_vector<uint8_t>& record,
+                                 uint64_t record_sequence,
+                                 Record_Type record_type,
+                                 Protocol_Version record_version);
+
+      void process_application_data(uint64_t req_no, const secure_vector<uint8_t>& record);
+
+      void process_alert(const secure_vector<uint8_t>& record);
+
+      bool m_is_datagram;
+
       /* callbacks */
-      std::function<bool (const Session&)> m_handshake_cb;
-      std::function<void (const byte[], size_t)> m_data_cb;
-      std::function<void (Alert, const byte[], size_t)> m_alert_cb;
-      std::function<void (const byte[], size_t)> m_output_fn;
+      std::unique_ptr<Compat_Callbacks> m_compat_callbacks;
+      Callbacks& m_callbacks;
 
       /* external state */
-      RandomNumberGenerator& m_rng;
       Session_Manager& m_session_manager;
+      const Policy& m_policy;
+      RandomNumberGenerator& m_rng;
 
       /* sequence number state */
       std::unique_ptr<Connection_Sequence_Numbers> m_sequence_numbers;
@@ -240,13 +294,13 @@ class BOTAN_DLL Channel
       std::unique_ptr<Handshake_State> m_active_state;
       std::unique_ptr<Handshake_State> m_pending_state;
 
-      /* cipher states for each epoch - epoch 0 is plaintext, thus null cipher state */
-      std::map<u16bit, std::shared_ptr<Connection_Cipher_State>> m_write_cipher_states;
-      std::map<u16bit, std::shared_ptr<Connection_Cipher_State>> m_read_cipher_states;
+      /* cipher states for each epoch */
+      std::map<uint16_t, std::shared_ptr<Connection_Cipher_State>> m_write_cipher_states;
+      std::map<uint16_t, std::shared_ptr<Connection_Cipher_State>> m_read_cipher_states;
 
       /* I/O buffers */
-      secure_vector<byte> m_writebuf;
-      secure_vector<byte> m_readbuf;
+      secure_vector<uint8_t> m_writebuf;
+      secure_vector<uint8_t> m_readbuf;
    };
 
 }

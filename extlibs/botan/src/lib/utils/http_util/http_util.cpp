@@ -1,52 +1,74 @@
 /*
 * Sketchy HTTP client
-* (C) 2013 Jack Lloyd
+* (C) 2013,2016 Jack Lloyd
+*     2017 René Korthaus, Rohde & Schwarz Cybersecurity
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/http_util.h>
 #include <botan/parsing.h>
 #include <botan/hex.h>
+#include <botan/internal/os_utils.h>
+#include <botan/internal/socket.h>
+#include <botan/internal/stl_util.h>
 #include <sstream>
-
-#if defined(BOTAN_HAS_BOOST_ASIO)
-#include <boost/asio.hpp>
-#endif
 
 namespace Botan {
 
 namespace HTTP {
 
-#if defined(BOTAN_HAS_BOOST_ASIO)
-std::string http_transact_asio(const std::string& hostname,
-                               const std::string& message)
+namespace {
+
+/*
+* Connect to a host, write some bytes, then read until the server
+* closes the socket.
+*/
+std::string http_transact(const std::string& hostname,
+                          const std::string& message,
+                          std::chrono::milliseconds timeout)
    {
-   using namespace boost::asio::ip;
+   std::unique_ptr<OS::Socket> socket;
 
-   boost::asio::ip::tcp::iostream tcp;
+   const std::chrono::system_clock::time_point start_time = std::chrono::system_clock::now();
 
-   tcp.connect(hostname, "http");
+   try
+      {
+      socket = OS::open_socket(hostname, "http", timeout);
+      if(!socket)
+         throw Exception("No socket support enabled in build");
+      }
+   catch(std::exception& e)
+      {
+      throw HTTP_Error("HTTP connection to " + hostname + " failed: " + e.what());
+      }
 
-   if(!tcp)
-      throw std::runtime_error("HTTP connection to " + hostname + " failed");
+   // Blocks until entire message has been written
+   socket->write(cast_char_ptr_to_uint8(message.data()),
+                 message.size());
 
-   tcp << message;
-   tcp.flush();
+   if(std::chrono::system_clock::now() - start_time > timeout)
+      throw HTTP_Error("Timeout during writing message body");
 
    std::ostringstream oss;
-   oss << tcp.rdbuf();
+   std::vector<uint8_t> buf(BOTAN_DEFAULT_BUFFER_SIZE);
+   while(true)
+      {
+      const size_t got = socket->read(buf.data(), buf.size());
+      if(got == 0) // EOF
+         break;
+
+      if(std::chrono::system_clock::now() - start_time > timeout)
+         throw HTTP_Error("Timeout while reading message body");
+
+      oss.write(cast_uint8_ptr_to_char(buf.data()),
+                static_cast<std::streamsize>(got));
+      }
 
    return oss.str();
    }
-#endif
 
-std::string http_transact_fail(const std::string& hostname,
-                               const std::string&)
-   {
-   throw std::runtime_error("Cannot connect to " + hostname +
-                            ": network code disabled in build");
-   }
+}
 
 std::string url_encode(const std::string& in)
    {
@@ -63,7 +85,7 @@ std::string url_encode(const std::string& in)
       else if(c == '-' || c == '_' || c == '.' || c == '~')
          out << c;
       else
-         out << '%' << hex_encode(reinterpret_cast<byte*>(&c), 1);
+         out << '%' << hex_encode(cast_char_ptr_to_uint8(&c), 1);
       }
 
    return out.str();
@@ -75,7 +97,7 @@ std::ostream& operator<<(std::ostream& o, const Response& resp)
    for(auto h : resp.headers())
       o << "Header '" << h.first << "' = '" << h.second << "'\n";
    o << "Body " << std::to_string(resp.body().size()) << " bytes:\n";
-   o.write(reinterpret_cast<const char*>(&resp.body()[0]), resp.body().size());
+   o.write(cast_uint8_ptr_to_char(resp.body().data()), resp.body().size());
    return o;
    }
 
@@ -83,13 +105,15 @@ Response http_sync(http_exch_fn http_transact,
                    const std::string& verb,
                    const std::string& url,
                    const std::string& content_type,
-                   const std::vector<byte>& body,
+                   const std::vector<uint8_t>& body,
                    size_t allowable_redirects)
    {
+   if(url.empty())
+      throw HTTP_Error("URL empty");
+
    const auto protocol_host_sep = url.find("://");
    if(protocol_host_sep == std::string::npos)
-      throw std::runtime_error("Invalid URL " + url);
-   const std::string protocol = url.substr(0, protocol_host_sep);
+      throw HTTP_Error("Invalid URL '" + url + "'");
 
    const auto host_loc_sep = url.find('/', protocol_host_sep + 3);
 
@@ -119,17 +143,17 @@ Response http_sync(http_exch_fn http_transact,
    else if(verb == "POST")
       outbuf << "Content-Length: " << body.size() << "\r\n";
 
-   if(content_type != "")
+   if(!content_type.empty())
       outbuf << "Content-Type: " << content_type << "\r\n";
    outbuf << "Connection: close\r\n\r\n";
-   outbuf.write(reinterpret_cast<const char*>(&body[0]), body.size());
+   outbuf.write(cast_uint8_ptr_to_char(body.data()), body.size());
 
    std::istringstream io(http_transact(hostname, outbuf.str()));
 
    std::string line1;
    std::getline(io, line1);
    if(!io || line1.empty())
-      throw std::runtime_error("No response");
+      throw HTTP_Error("No response");
 
    std::stringstream response_stream(line1);
    std::string http_version;
@@ -141,7 +165,7 @@ Response http_sync(http_exch_fn http_transact,
    std::getline(response_stream, status_message);
 
    if(!response_stream || http_version.substr(0,5) != "HTTP/")
-      throw std::runtime_error("Not an HTTP response");
+      throw HTTP_Error("Not an HTTP response");
 
    std::map<std::string, std::string> headers;
    std::string header_line;
@@ -149,7 +173,7 @@ Response http_sync(http_exch_fn http_transact,
       {
       auto sep = header_line.find(": ");
       if(sep == std::string::npos || sep > header_line.size() - 2)
-         throw std::runtime_error("Invalid HTTP header " + header_line);
+         throw HTTP_Error("Invalid HTTP header " + header_line);
       const std::string key = header_line.substr(0, sep);
 
       if(sep + 2 < header_line.size() - 1)
@@ -162,17 +186,25 @@ Response http_sync(http_exch_fn http_transact,
    if(status_code == 301 && headers.count("Location"))
       {
       if(allowable_redirects == 0)
-         throw std::runtime_error("HTTP redirection count exceeded");
+         throw HTTP_Error("HTTP redirection count exceeded");
       return GET_sync(headers["Location"], allowable_redirects - 1);
       }
 
-   // Use Content-Length if set
-   std::vector<byte> resp_body;
-   std::vector<byte> buf(4096);
+   std::vector<uint8_t> resp_body;
+   std::vector<uint8_t> buf(4096);
    while(io.good())
       {
-      io.read(reinterpret_cast<char*>(&buf[0]), buf.size());
-      resp_body.insert(resp_body.end(), &buf[0], &buf[io.gcount()]);
+      io.read(cast_uint8_ptr_to_char(buf.data()), buf.size());
+      resp_body.insert(resp_body.end(), buf.data(), &buf[io.gcount()]);
+      }
+
+   const std::string header_size = search_map(headers, std::string("Content-Length"));
+
+   if(!header_size.empty())
+      {
+      if(resp_body.size() != to_u32bit(header_size))
+         throw HTTP_Error("Content-Length disagreement, header says " +
+                          header_size + " got " + std::to_string(resp_body.size()));
       }
 
    return Response(status_code, status_message, resp_body, headers);
@@ -181,15 +213,18 @@ Response http_sync(http_exch_fn http_transact,
 Response http_sync(const std::string& verb,
                    const std::string& url,
                    const std::string& content_type,
-                   const std::vector<byte>& body,
-                   size_t allowable_redirects)
+                   const std::vector<uint8_t>& body,
+                   size_t allowable_redirects,
+                   std::chrono::milliseconds timeout)
    {
+   auto transact_with_timeout =
+      [timeout](const std::string& hostname, const std::string& service)
+      {
+      return http_transact(hostname, service, timeout);
+      };
+
    return http_sync(
-#if defined(BOTAN_HAS_BOOST_ASIO)
-      http_transact_asio,
-#else
-      http_transact_fail,
-#endif
+      transact_with_timeout,
       verb,
       url,
       content_type,
@@ -197,22 +232,20 @@ Response http_sync(const std::string& verb,
       allowable_redirects);
    }
 
-Response GET_sync(const std::string& url, size_t allowable_redirects)
+Response GET_sync(const std::string& url,
+                  size_t allowable_redirects,
+                  std::chrono::milliseconds timeout)
    {
-   return http_sync("GET", url, "", std::vector<byte>(), allowable_redirects);
+   return http_sync("GET", url, "", std::vector<uint8_t>(), allowable_redirects, timeout);
    }
 
 Response POST_sync(const std::string& url,
                    const std::string& content_type,
-                   const std::vector<byte>& body,
-                   size_t allowable_redirects)
+                   const std::vector<uint8_t>& body,
+                   size_t allowable_redirects,
+                   std::chrono::milliseconds timeout)
    {
-   return http_sync("POST", url, content_type, body, allowable_redirects);
-   }
-
-std::future<Response> GET_async(const std::string& url, size_t allowable_redirects)
-   {
-   return std::async(std::launch::async, GET_sync, url, allowable_redirects);
+   return http_sync("POST", url, content_type, body, allowable_redirects, timeout);
    }
 
 }

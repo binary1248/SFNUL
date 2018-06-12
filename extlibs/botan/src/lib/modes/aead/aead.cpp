@@ -1,15 +1,24 @@
 /*
-* Interface for AEAD modes
-* (C) 2013 Jack Lloyd
+* (C) 2013,2015 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/aead.h>
-#include <botan/libstate.h>
+#include <botan/scan_name.h>
+#include <botan/parsing.h>
+#include <sstream>
+
+#if defined(BOTAN_HAS_BLOCK_CIPHER)
+  #include <botan/block_cipher.h>
+#endif
 
 #if defined(BOTAN_HAS_AEAD_CCM)
   #include <botan/ccm.h>
+#endif
+
+#if defined(BOTAN_HAS_AEAD_CHACHA20_POLY1305)
+  #include <botan/chacha20poly1305.h>
 #endif
 
 #if defined(BOTAN_HAS_AEAD_EAX)
@@ -20,103 +29,139 @@
   #include <botan/gcm.h>
 #endif
 
-#if defined(BOTAN_HAS_AEAD_SIV)
-  #include <botan/siv.h>
-#endif
-
 #if defined(BOTAN_HAS_AEAD_OCB)
   #include <botan/ocb.h>
 #endif
 
+#if defined(BOTAN_HAS_AEAD_SIV)
+  #include <botan/siv.h>
+#endif
+
 namespace Botan {
 
-AEAD_Mode* get_aead(const std::string& algo_spec, Cipher_Dir direction)
+std::unique_ptr<AEAD_Mode> AEAD_Mode::create_or_throw(const std::string& algo,
+                                                      Cipher_Dir dir,
+                                                      const std::string& provider)
    {
-   Algorithm_Factory& af = global_state().algorithm_factory();
+   if(auto aead = AEAD_Mode::create(algo, dir, provider))
+      return aead;
 
-   const std::vector<std::string> algo_parts = split_on(algo_spec, '/');
-   if(algo_parts.empty())
-      throw Invalid_Algorithm_Name(algo_spec);
+   throw Lookup_Error("AEAD", algo, provider);
+   }
 
-   if(algo_parts.size() < 2)
-      return nullptr;
+std::unique_ptr<AEAD_Mode> AEAD_Mode::create(const std::string& algo,
+                                             Cipher_Dir dir,
+                                             const std::string& provider)
+   {
+#if defined(BOTAN_HAS_AEAD_CHACHA20_POLY1305)
+   if(algo == "ChaCha20Poly1305")
+      {
+      if(dir == ENCRYPTION)
+         return std::unique_ptr<AEAD_Mode>(new ChaCha20Poly1305_Encryption);
+      else
+         return std::unique_ptr<AEAD_Mode>(new ChaCha20Poly1305_Decryption);
 
-   const std::string cipher_name = algo_parts[0];
-   const BlockCipher* cipher = af.prototype_block_cipher(cipher_name);
-   if(!cipher)
-      return nullptr;
+      }
+#endif
 
-   const std::vector<std::string> mode_info = parse_algorithm_name(algo_parts[1]);
+   if(algo.find('/') != std::string::npos)
+      {
+      const std::vector<std::string> algo_parts = split_on(algo, '/');
+      const std::string cipher_name = algo_parts[0];
+      const std::vector<std::string> mode_info = parse_algorithm_name(algo_parts[1]);
 
-   if(mode_info.empty())
-      return nullptr;
+      if(mode_info.empty())
+         return std::unique_ptr<AEAD_Mode>();
 
-   const std::string mode_name = mode_info[0];
+      std::ostringstream alg_args;
 
-   const size_t tag_size = (mode_info.size() > 1) ? to_u32bit(mode_info[1]) : cipher->block_size();
+      alg_args << '(' << cipher_name;
+      for(size_t i = 1; i < mode_info.size(); ++i)
+         alg_args << ',' << mode_info[i];
+      for(size_t i = 2; i < algo_parts.size(); ++i)
+         alg_args << ',' << algo_parts[i];
+      alg_args << ')';
+
+      const std::string mode_name = mode_info[0] + alg_args.str();
+      return AEAD_Mode::create(mode_name, dir);
+      }
+
+#if defined(BOTAN_HAS_BLOCK_CIPHER)
+
+   SCAN_Name req(algo);
+
+   if(req.arg_count() == 0)
+      {
+      return std::unique_ptr<AEAD_Mode>();
+      }
+
+   std::unique_ptr<BlockCipher> bc(BlockCipher::create(req.arg(0), provider));
+
+   if(!bc)
+      {
+      return std::unique_ptr<AEAD_Mode>();
+      }
 
 #if defined(BOTAN_HAS_AEAD_CCM)
-   if(mode_name == "CCM-8")
+   if(req.algo_name() == "CCM")
       {
-      if(direction == ENCRYPTION)
-         return new CCM_Encryption(cipher->clone(), 8, 3);
+      size_t tag_len = req.arg_as_integer(1, 16);
+      size_t L_len = req.arg_as_integer(2, 3);
+      if(dir == ENCRYPTION)
+         return std::unique_ptr<AEAD_Mode>(new CCM_Encryption(bc.release(), tag_len, L_len));
       else
-         return new CCM_Decryption(cipher->clone(), 8, 3);
-      }
-
-   if(mode_name == "CCM" || mode_name == "CCM-8")
-      {
-      const size_t L = (mode_info.size() > 2) ? to_u32bit(mode_info[2]) : 3;
-
-      if(direction == ENCRYPTION)
-         return new CCM_Encryption(cipher->clone(), tag_size, L);
-      else
-         return new CCM_Decryption(cipher->clone(), tag_size, L);
-      }
-#endif
-
-#if defined(BOTAN_HAS_AEAD_EAX)
-   if(mode_name == "EAX")
-      {
-      if(direction == ENCRYPTION)
-         return new EAX_Encryption(cipher->clone(), tag_size);
-      else
-         return new EAX_Decryption(cipher->clone(), tag_size);
-      }
-#endif
-
-#if defined(BOTAN_HAS_AEAD_SIV)
-   if(mode_name == "SIV")
-      {
-      BOTAN_ASSERT(tag_size == 16, "Valid tag size for SIV");
-      if(direction == ENCRYPTION)
-         return new SIV_Encryption(cipher->clone());
-      else
-         return new SIV_Decryption(cipher->clone());
+         return std::unique_ptr<AEAD_Mode>(new CCM_Decryption(bc.release(), tag_len, L_len));
       }
 #endif
 
 #if defined(BOTAN_HAS_AEAD_GCM)
-   if(mode_name == "GCM")
+   if(req.algo_name() == "GCM")
       {
-      if(direction == ENCRYPTION)
-         return new GCM_Encryption(cipher->clone(), tag_size);
+      size_t tag_len = req.arg_as_integer(1, 16);
+      if(dir == ENCRYPTION)
+         return std::unique_ptr<AEAD_Mode>(new GCM_Encryption(bc.release(), tag_len));
       else
-         return new GCM_Decryption(cipher->clone(), tag_size);
+         return std::unique_ptr<AEAD_Mode>(new GCM_Decryption(bc.release(), tag_len));
       }
 #endif
 
 #if defined(BOTAN_HAS_AEAD_OCB)
-   if(mode_name == "OCB")
+   if(req.algo_name() == "OCB")
       {
-      if(direction == ENCRYPTION)
-         return new OCB_Encryption(cipher->clone(), tag_size);
+      size_t tag_len = req.arg_as_integer(1, 16);
+      if(dir == ENCRYPTION)
+         return std::unique_ptr<AEAD_Mode>(new OCB_Encryption(bc.release(), tag_len));
       else
-         return new OCB_Decryption(cipher->clone(), tag_size);
+         return std::unique_ptr<AEAD_Mode>(new OCB_Decryption(bc.release(), tag_len));
       }
 #endif
 
-   return nullptr;
+#if defined(BOTAN_HAS_AEAD_EAX)
+   if(req.algo_name() == "EAX")
+      {
+      size_t tag_len = req.arg_as_integer(1, bc->block_size());
+      if(dir == ENCRYPTION)
+         return std::unique_ptr<AEAD_Mode>(new EAX_Encryption(bc.release(), tag_len));
+      else
+         return std::unique_ptr<AEAD_Mode>(new EAX_Decryption(bc.release(), tag_len));
+      }
+#endif
+
+#if defined(BOTAN_HAS_AEAD_SIV)
+   if(req.algo_name() == "SIV")
+      {
+      if(dir == ENCRYPTION)
+         return std::unique_ptr<AEAD_Mode>(new SIV_Encryption(bc.release()));
+      else
+         return std::unique_ptr<AEAD_Mode>(new SIV_Decryption(bc.release()));
+      }
+#endif
+
+#endif
+
+   return std::unique_ptr<AEAD_Mode>();
    }
+
+
 
 }

@@ -1,142 +1,19 @@
 /*
 * Number Theory Functions
-* (C) 1999-2011 Jack Lloyd
+* (C) 1999-2011,2016 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/numthry.h>
+#include <botan/pow_mod.h>
 #include <botan/reducer.h>
 #include <botan/internal/bit_ops.h>
 #include <botan/internal/mp_core.h>
+#include <botan/internal/ct_utils.h>
 #include <algorithm>
 
 namespace Botan {
-
-namespace {
-
-/*
-* Miller-Rabin Primality Tester
-*/
-class MillerRabin_Test
-   {
-   public:
-      bool is_witness(const BigInt& nonce);
-      MillerRabin_Test(const BigInt& num);
-   private:
-      BigInt n, r, n_minus_1;
-      size_t s;
-      Fixed_Exponent_Power_Mod pow_mod;
-      Modular_Reducer reducer;
-   };
-
-/*
-* Miller-Rabin Test, as described in Handbook of Applied Cryptography
-* section 4.24
-*/
-bool MillerRabin_Test::is_witness(const BigInt& a)
-   {
-   if(a < 2 || a >= n_minus_1)
-      throw Invalid_Argument("Bad size for nonce in Miller-Rabin test");
-
-   BigInt y = pow_mod(a);
-   if(y == 1 || y == n_minus_1)
-      return false;
-
-   for(size_t i = 1; i != s; ++i)
-      {
-      y = reducer.square(y);
-
-      if(y == 1) // found a non-trivial square root
-         return true;
-
-      if(y == n_minus_1) // -1, trivial square root, so give up
-         return false;
-      }
-
-   if(y != n_minus_1) // fails Fermat test
-      return true;
-
-   return false;
-   }
-
-/*
-* Miller-Rabin Constructor
-*/
-MillerRabin_Test::MillerRabin_Test(const BigInt& num)
-   {
-   if(num.is_even() || num < 3)
-      throw Invalid_Argument("MillerRabin_Test: Invalid number for testing");
-
-   n = num;
-   n_minus_1 = n - 1;
-   s = low_zero_bits(n_minus_1);
-   r = n_minus_1 >> s;
-
-   pow_mod = Fixed_Exponent_Power_Mod(r, n);
-   reducer = Modular_Reducer(n);
-   }
-
-/*
-* Miller-Rabin Iterations
-*/
-size_t miller_rabin_test_iterations(size_t bits, size_t level)
-   {
-   struct mapping { size_t bits; size_t verify_iter; size_t check_iter; };
-
-   const mapping tests[] = {
-      {   50, 55, 25 },
-      {  100, 38, 22 },
-      {  160, 32, 18 },
-      {  163, 31, 17 },
-      {  168, 30, 16 },
-      {  177, 29, 16 },
-      {  181, 28, 15 },
-      {  185, 27, 15 },
-      {  190, 26, 15 },
-      {  195, 25, 14 },
-      {  201, 24, 14 },
-      {  208, 23, 14 },
-      {  215, 22, 13 },
-      {  222, 21, 13 },
-      {  231, 20, 13 },
-      {  241, 19, 12 },
-      {  252, 18, 12 },
-      {  264, 17, 12 },
-      {  278, 16, 11 },
-      {  294, 15, 10 },
-      {  313, 14,  9 },
-      {  334, 13,  8 },
-      {  360, 12,  8 },
-      {  392, 11,  7 },
-      {  430, 10,  7 },
-      {  479,  9,  6 },
-      {  542,  8,  6 },
-      {  626,  7,  5 },
-      {  746,  6,  4 },
-      {  926,  5,  3 },
-      { 1232,  4,  2 },
-      { 1853,  3,  2 },
-      {    0,  0,  0 }
-   };
-
-   for(size_t i = 0; tests[i].bits; ++i)
-      {
-      if(bits <= tests[i].bits)
-         {
-         if(level >= 2)
-            return tests[i].verify_iter;
-         else if(level == 1)
-            return tests[i].check_iter;
-         else if(level == 0)
-            return std::max<size_t>(tests[i].check_iter / 4, 1);
-         }
-      }
-
-   return level > 0 ? 2 : 1; // for large inputs
-   }
-
-}
 
 /*
 * Return the number of 0 bits at the end of n
@@ -199,53 +76,202 @@ BigInt lcm(const BigInt& a, const BigInt& b)
    return ((a * b) / gcd(a, b));
    }
 
-namespace {
-
 /*
-* If the modulus is odd, then we can avoid computing A and C. This is
-* a critical path algorithm in some instances and an odd modulus is
-* the common case for crypto, so worth special casing. See note 14.64
-* in Handbook of Applied Cryptography for more details.
+Sets result to a^-1 * 2^k mod a
+with n <= k <= 2n
+Returns k
+
+"The Montgomery Modular Inverse - Revisited" Çetin Koç, E. Savas
+https://citeseerx.ist.psu.edu/viewdoc/citations?doi=10.1.1.75.8377
+
+A const time implementation of this algorithm is described in
+"Constant Time Modular Inversion" Joppe W. Bos
+http://www.joppebos.com/files/CTInversion.pdf
 */
-BigInt inverse_mod_odd_modulus(const BigInt& n, const BigInt& mod)
+size_t almost_montgomery_inverse(BigInt& result,
+                                 const BigInt& a,
+                                 const BigInt& p)
    {
-   BigInt u = mod, v = n;
-   BigInt B = 0, D = 1;
+   size_t k = 0;
 
-   while(u.is_nonzero())
+   BigInt u = p, v = a, r = 0, s = 1;
+
+   while(v > 0)
       {
-      const size_t u_zero_bits = low_zero_bits(u);
-      u >>= u_zero_bits;
-      for(size_t i = 0; i != u_zero_bits; ++i)
+      if(u.is_even())
          {
-         if(B.is_odd())
-            { B -= mod; }
-         B >>= 1;
+         u >>= 1;
+         s <<= 1;
+         }
+      else if(v.is_even())
+         {
+         v >>= 1;
+         r <<= 1;
+         }
+      else if(u > v)
+         {
+         u -= v;
+         u >>= 1;
+         r += s;
+         s <<= 1;
+         }
+      else
+         {
+         v -= u;
+         v >>= 1;
+         s += r;
+         r <<= 1;
          }
 
-      const size_t v_zero_bits = low_zero_bits(v);
-      v >>= v_zero_bits;
-      for(size_t i = 0; i != v_zero_bits; ++i)
-         {
-         if(D.is_odd())
-            { D -= mod; }
-         D >>= 1;
-         }
-
-      if(u >= v) { u -= v; B -= D; }
-      else       { v -= u; D -= B; }
+      ++k;
       }
 
-   if(v != 1)
-      return 0; // no modular inverse
+   if(r >= p)
+      {
+      r -= p;
+      }
 
-   while(D.is_negative()) D += mod;
-   while(D >= mod) D -= mod;
+   result = p - r;
 
-   return D;
+   return k;
    }
 
-}
+BigInt normalized_montgomery_inverse(const BigInt& a, const BigInt& p)
+   {
+   BigInt r;
+   size_t k = almost_montgomery_inverse(r, a, p);
+
+   for(size_t i = 0; i != k; ++i)
+      {
+      if(r.is_odd())
+         r += p;
+      r >>= 1;
+      }
+
+   return r;
+   }
+
+BigInt ct_inverse_mod_odd_modulus(const BigInt& n, const BigInt& mod)
+   {
+   if(n.is_negative() || mod.is_negative())
+      throw Invalid_Argument("ct_inverse_mod_odd_modulus: arguments must be non-negative");
+   if(mod < 3 || mod.is_even())
+      throw Invalid_Argument("Bad modulus to ct_inverse_mod_odd_modulus");
+   if(n >= mod)
+      throw Invalid_Argument("ct_inverse_mod_odd_modulus n >= mod not supported");
+
+   /*
+   This uses a modular inversion algorithm designed by Niels Möller
+   and implemented in Nettle. The same algorithm was later also
+   adapted to GMP in mpn_sec_invert.
+
+   It can be easily implemented in a way that does not depend on
+   secret branches or memory lookups, providing resistance against
+   some forms of side channel attack.
+
+   There is also a description of the algorithm in Appendix 5 of "Fast
+   Software Polynomial Multiplication on ARM Processors using the NEON Engine"
+   by Danilo Câmara, Conrado P. L. Gouvêa, Julio López, and Ricardo
+   Dahab in LNCS 8182
+      https://conradoplg.cryptoland.net/files/2010/12/mocrysen13.pdf
+
+   Thanks to Niels for creating the algorithm, explaining some things
+   about it, and the reference to the paper.
+   */
+
+   // todo allow this to be pre-calculated and passed in as arg
+   BigInt mp1o2 = (mod + 1) >> 1;
+
+   const size_t mod_words = mod.sig_words();
+   BOTAN_ASSERT(mod_words > 0, "Not empty");
+
+   BigInt a = n;
+   BigInt b = mod;
+   BigInt u = 1, v = 0;
+
+   a.grow_to(mod_words);
+   u.grow_to(mod_words);
+   v.grow_to(mod_words);
+   mp1o2.grow_to(mod_words);
+
+   secure_vector<word>& a_w = a.get_word_vector();
+   secure_vector<word>& b_w = b.get_word_vector();
+   secure_vector<word>& u_w = u.get_word_vector();
+   secure_vector<word>& v_w = v.get_word_vector();
+
+   CT::poison(a_w.data(), a_w.size());
+   CT::poison(b_w.data(), b_w.size());
+   CT::poison(u_w.data(), u_w.size());
+   CT::poison(v_w.data(), v_w.size());
+
+   // Only n.bits() + mod.bits() iterations are required, but avoid leaking the size of n
+   size_t bits = 2 * mod.bits();
+
+   while(bits--)
+      {
+      /*
+      const word odd = a.is_odd();
+      a -= odd * b;
+      const word underflow = a.is_negative();
+      b += a * underflow;
+      a.set_sign(BigInt::Positive);
+
+      a >>= 1;
+
+      if(underflow)
+         {
+         std::swap(u, v);
+         }
+
+      u -= odd * v;
+      u += u.is_negative() * mod;
+
+      const word odd_u = u.is_odd();
+
+      u >>= 1;
+      u += mp1o2 * odd_u;
+      */
+
+      const word odd_a = a_w[0] & 1;
+
+      //if(odd_a) a -= b
+      word underflow = bigint_cnd_sub(odd_a, a_w.data(), b_w.data(), mod_words);
+
+      //if(underflow) { b -= a; a = abs(a); swap(u, v); }
+      bigint_cnd_add(underflow, b_w.data(), a_w.data(), mod_words);
+      bigint_cnd_abs(underflow, a_w.data(), mod_words);
+      bigint_cnd_swap(underflow, u_w.data(), v_w.data(), mod_words);
+
+      // a >>= 1
+      bigint_shr1(a_w.data(), mod_words, 0, 1);
+
+      //if(odd_a) u -= v;
+      word borrow = bigint_cnd_sub(odd_a, u_w.data(), v_w.data(), mod_words);
+
+      // if(borrow) u += p
+      bigint_cnd_add(borrow, u_w.data(), mod.data(), mod_words);
+
+      const word odd_u = u_w[0] & 1;
+
+      // u >>= 1
+      bigint_shr1(u_w.data(), mod_words, 0, 1);
+
+      //if(odd_u) u += mp1o2;
+      bigint_cnd_add(odd_u, u_w.data(), mp1o2.data(), mod_words);
+      }
+
+   CT::unpoison(a_w.data(), a_w.size());
+   CT::unpoison(b_w.data(), b_w.size());
+   CT::unpoison(u_w.data(), u_w.size());
+   CT::unpoison(v_w.data(), v_w.size());
+
+   BOTAN_ASSERT(a.is_zero(), "A is zero");
+
+   if(b != 1)
+      return 0;
+
+   return v;
+   }
 
 /*
 * Find the Modular Inverse
@@ -260,8 +286,21 @@ BigInt inverse_mod(const BigInt& n, const BigInt& mod)
    if(n.is_zero() || (n.is_even() && mod.is_even()))
       return 0; // fast fail checks
 
-   if(mod.is_odd())
-      return inverse_mod_odd_modulus(n, mod);
+   if(mod.is_odd() && n < mod)
+      return ct_inverse_mod_odd_modulus(n, mod);
+
+   return inverse_euclid(n, mod);
+   }
+
+BigInt inverse_euclid(const BigInt& n, const BigInt& mod)
+   {
+   if(mod.is_zero())
+      throw BigInt::DivideByZero();
+   if(mod.is_negative() || n.is_negative())
+      throw Invalid_Argument("inverse_mod: arguments must be non-negative");
+
+   if(n.is_zero() || (n.is_even() && mod.is_even()))
+      return 0; // fast fail checks
 
    BigInt u = mod, v = n;
    BigInt A = 1, B = 0, C = 0, D = 1;
@@ -301,6 +340,9 @@ BigInt inverse_mod(const BigInt& n, const BigInt& mod)
 
 word monty_inverse(word input)
    {
+   if(input == 0)
+      throw Exception("monty_inverse: divide by zero");
+
    word b = input;
    word x2 = 1, x1 = 0, y2 = 0, y1 = 1;
 
@@ -332,6 +374,9 @@ word monty_inverse(word input)
       y1 = y;
       }
 
+   const word check = y2 * input;
+   BOTAN_ASSERT_EQUAL(check, 1, "monty_inverse result is inverse of input");
+
    // Now invert in addition space
    y2 = (MP_WORD_MAX - y2) + 1;
 
@@ -343,6 +388,18 @@ word monty_inverse(word input)
 */
 BigInt power_mod(const BigInt& base, const BigInt& exp, const BigInt& mod)
    {
+   if(mod.is_negative() || mod == 1)
+      {
+      return 0;
+      }
+
+   if(base.is_zero() || mod.is_zero())
+      {
+      if(exp.is_zero())
+         return 1;
+      return 0;
+      }
+
    Power_Mod pow_mod(mod);
 
    /*
@@ -350,17 +407,80 @@ BigInt power_mod(const BigInt& base, const BigInt& exp, const BigInt& mod)
    * minimal window. This makes sense given that here we know that any
    * precomputation is wasted.
    */
-   pow_mod.set_base(base);
-   pow_mod.set_exponent(exp);
-   return pow_mod.execute();
+
+   if(base.is_negative())
+      {
+      pow_mod.set_base(-base);
+      pow_mod.set_exponent(exp);
+      if(exp.is_even())
+         return pow_mod.execute();
+      else
+         return (mod - pow_mod.execute());
+      }
+   else
+      {
+      pow_mod.set_base(base);
+      pow_mod.set_exponent(exp);
+      return pow_mod.execute();
+      }
    }
+
+namespace {
+
+bool mr_witness(BigInt&& y,
+                const Modular_Reducer& reducer_n,
+                const BigInt& n_minus_1, size_t s)
+   {
+   if(y == 1 || y == n_minus_1)
+      return false;
+
+   for(size_t i = 1; i != s; ++i)
+      {
+      y = reducer_n.square(y);
+
+      if(y == 1) // found a non-trivial square root
+         return true;
+
+      if(y == n_minus_1) // -1, trivial square root, so give up
+         return false;
+      }
+
+   return true; // fails Fermat test
+   }
+
+size_t mr_test_iterations(size_t n_bits, size_t prob, bool random)
+   {
+   const size_t base = (prob + 2) / 2; // worst case 4^-t error rate
+
+   /*
+   * For randomly chosen numbers we can use the estimates from
+   * http://www.math.dartmouth.edu/~carlp/PDF/paper88.pdf
+   *
+   * These values are derived from the inequality for p(k,t) given on
+   * the second page.
+   */
+   if(random && prob <= 80)
+      {
+      if(n_bits >= 1536)
+         return 2; // < 2^-89
+      if(n_bits >= 1024)
+         return 4; // < 2^-89
+      if(n_bits >= 512)
+         return 5; // < 2^-80
+      if(n_bits >= 256)
+         return 11; // < 2^-80
+      }
+
+   return base;
+   }
+
+}
 
 /*
 * Test for primaility using Miller-Rabin
 */
-bool primality_test(const BigInt& n,
-                    RandomNumberGenerator& rng,
-                    size_t level)
+bool is_prime(const BigInt& n, RandomNumberGenerator& rng,
+              size_t prob, bool is_random)
    {
    if(n == 2)
       return true;
@@ -370,39 +490,28 @@ bool primality_test(const BigInt& n,
    // Fast path testing for small numbers (<= 65521)
    if(n <= PRIMES[PRIME_TABLE_SIZE-1])
       {
-      const word num = n.word_at(0);
+      const uint16_t num = static_cast<uint16_t>(n.word_at(0));
 
-      for(size_t i = 0; PRIMES[i]; ++i)
-         {
-         if(num == PRIMES[i])
-            return true;
-         if(num < PRIMES[i])
-            return false;
-         }
-
-      return false;
+      return std::binary_search(PRIMES, PRIMES + PRIME_TABLE_SIZE, num);
       }
 
-   if(level > 2)
-      level = 2;
+   const size_t test_iterations = mr_test_iterations(n.bits(), prob, is_random);
 
-   const size_t PREF_NONCE_BITS = 192;
+   const BigInt n_minus_1 = n - 1;
+   const size_t s = low_zero_bits(n_minus_1);
 
-   const size_t NONCE_BITS = std::min(n.bits() - 2, PREF_NONCE_BITS);
+   const Modular_Reducer mod_n(n);
+   const Fixed_Exponent_Power_Mod pow_mod(n_minus_1 >> s, n);
 
-   MillerRabin_Test mr(n);
-
-   const size_t tests = miller_rabin_test_iterations(n.bits(), level);
-
-   BigInt nonce;
-   for(size_t i = 0; i != tests; ++i)
+   for(size_t i = 0; i != test_iterations; ++i)
       {
-      while(nonce < 2 || nonce >= (n-1))
-         nonce.randomize(rng, NONCE_BITS);
+      const BigInt a = BigInt::random_integer(rng, 2, n_minus_1);
+      BigInt y = pow_mod(a);
 
-      if(mr.is_witness(nonce))
+      if(mr_witness(std::move(y), mod_n, n_minus_1, s))
          return false;
       }
+
    return true;
    }
 

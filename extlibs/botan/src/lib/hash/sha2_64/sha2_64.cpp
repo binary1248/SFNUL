@@ -1,36 +1,30 @@
 /*
 * SHA-{384,512}
-* (C) 1999-2011 Jack Lloyd
+* (C) 1999-2011,2015 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/sha2_64.h>
-#include <botan/loadstor.h>
-#include <botan/rotate.h>
 
 namespace Botan {
 
+std::unique_ptr<HashFunction> SHA_384::copy_state() const
+   {
+   return std::unique_ptr<HashFunction>(new SHA_384(*this));
+   }
+
+std::unique_ptr<HashFunction> SHA_512::copy_state() const
+   {
+   return std::unique_ptr<HashFunction>(new SHA_512(*this));
+   }
+
+std::unique_ptr<HashFunction> SHA_512_256::copy_state() const
+   {
+   return std::unique_ptr<HashFunction>(new SHA_512_256(*this));
+   }
+
 namespace {
-
-namespace SHA2_64 {
-
-/*
-* SHA-{384,512} Rho Function
-*/
-inline u64bit rho(u64bit X, u32bit rot1, u32bit rot2, u32bit rot3)
-   {
-   return (rotate_right(X, rot1) ^ rotate_right(X, rot2) ^
-           rotate_right(X, rot3));
-   }
-
-/*
-* SHA-{384,512} Sigma Function
-*/
-inline u64bit sigma(u64bit X, u32bit rot1, u32bit rot2, u32bit shift)
-   {
-   return (rotate_right(X, rot1) ^ rotate_right(X, rot2) ^ (X >> shift));
-   }
 
 /*
 * SHA-512 F1 Function
@@ -38,42 +32,46 @@ inline u64bit sigma(u64bit X, u32bit rot1, u32bit rot2, u32bit shift)
 * Use a macro as many compilers won't inline a function this big,
 * even though it is much faster if inlined.
 */
-#define SHA2_64_F(A, B, C, D, E, F, G, H, M1, M2, M3, M4, magic)   \
-   do {                                                            \
-      H += magic + rho(E, 14, 18, 41) + ((E & F) ^ (~E & G)) + M1; \
-      D += H;                                                      \
-      H += rho(A, 28, 34, 39) + ((A & B) | ((A | B) & C));         \
-      M1 += sigma(M2, 19, 61, 6) + M3 + sigma(M4, 1, 8, 7);        \
+#define SHA2_64_F(A, B, C, D, E, F, G, H, M1, M2, M3, M4, magic)         \
+   do {                                                                  \
+      const uint64_t E_rho = rotr<14>(E) ^ rotr<18>(E) ^ rotr<41>(E);    \
+      const uint64_t A_rho = rotr<28>(A) ^ rotr<34>(A) ^ rotr<39>(A);    \
+      const uint64_t M2_sigma = rotr<19>(M2) ^ rotr<61>(M2) ^ (M2 >> 6); \
+      const uint64_t M4_sigma = rotr<1>(M4) ^ rotr<8>(M4) ^ (M4 >> 7);   \
+      H += magic + E_rho + ((E & F) ^ (~E & G)) + M1;                    \
+      D += H;                                                            \
+      H += A_rho + ((A & B) | ((A | B) & C));                            \
+      M1 += M2_sigma + M3 + M4_sigma;                                    \
    } while(0);
 
 /*
 * SHA-{384,512} Compression Function
 */
-void compress(secure_vector<u64bit>& digest,
-              const byte input[], size_t blocks)
+void SHA64_compress(secure_vector<uint64_t>& digest,
+                    const uint8_t input[], size_t blocks)
    {
-   u64bit A = digest[0], B = digest[1], C = digest[2],
+   uint64_t A = digest[0], B = digest[1], C = digest[2],
           D = digest[3], E = digest[4], F = digest[5],
           G = digest[6], H = digest[7];
 
    for(size_t i = 0; i != blocks; ++i)
       {
-      u64bit W00 = load_be<u64bit>(input,  0);
-      u64bit W01 = load_be<u64bit>(input,  1);
-      u64bit W02 = load_be<u64bit>(input,  2);
-      u64bit W03 = load_be<u64bit>(input,  3);
-      u64bit W04 = load_be<u64bit>(input,  4);
-      u64bit W05 = load_be<u64bit>(input,  5);
-      u64bit W06 = load_be<u64bit>(input,  6);
-      u64bit W07 = load_be<u64bit>(input,  7);
-      u64bit W08 = load_be<u64bit>(input,  8);
-      u64bit W09 = load_be<u64bit>(input,  9);
-      u64bit W10 = load_be<u64bit>(input, 10);
-      u64bit W11 = load_be<u64bit>(input, 11);
-      u64bit W12 = load_be<u64bit>(input, 12);
-      u64bit W13 = load_be<u64bit>(input, 13);
-      u64bit W14 = load_be<u64bit>(input, 14);
-      u64bit W15 = load_be<u64bit>(input, 15);
+      uint64_t W00 = load_be<uint64_t>(input,  0);
+      uint64_t W01 = load_be<uint64_t>(input,  1);
+      uint64_t W02 = load_be<uint64_t>(input,  2);
+      uint64_t W03 = load_be<uint64_t>(input,  3);
+      uint64_t W04 = load_be<uint64_t>(input,  4);
+      uint64_t W05 = load_be<uint64_t>(input,  5);
+      uint64_t W06 = load_be<uint64_t>(input,  6);
+      uint64_t W07 = load_be<uint64_t>(input,  7);
+      uint64_t W08 = load_be<uint64_t>(input,  8);
+      uint64_t W09 = load_be<uint64_t>(input,  9);
+      uint64_t W10 = load_be<uint64_t>(input, 10);
+      uint64_t W11 = load_be<uint64_t>(input, 11);
+      uint64_t W12 = load_be<uint64_t>(input, 12);
+      uint64_t W13 = load_be<uint64_t>(input, 13);
+      uint64_t W14 = load_be<uint64_t>(input, 14);
+      uint64_t W15 = load_be<uint64_t>(input, 15);
 
       SHA2_64_F(A, B, C, D, E, F, G, H, W00, W14, W09, W01, 0x428A2F98D728AE22);
       SHA2_64_F(H, A, B, C, D, E, F, G, W01, W15, W10, W02, 0x7137449123EF65CD);
@@ -171,72 +169,73 @@ void compress(secure_vector<u64bit>& digest,
 
 }
 
-}
-
-/*
-* SHA-384 compression function
-*/
-void SHA_384::compress_n(const byte input[], size_t blocks)
+void SHA_512_256::compress_n(const uint8_t input[], size_t blocks)
    {
-   SHA2_64::compress(digest, input, blocks);
+   SHA64_compress(m_digest, input, blocks);
    }
 
-/*
-* Copy out the digest
-*/
-void SHA_384::copy_out(byte output[])
+void SHA_384::compress_n(const uint8_t input[], size_t blocks)
    {
-   for(size_t i = 0; i != output_length(); i += 8)
-      store_be(digest[i/8], output + i);
+   SHA64_compress(m_digest, input, blocks);
    }
 
-/*
-* Clear memory of sensitive data
-*/
+void SHA_512::compress_n(const uint8_t input[], size_t blocks)
+   {
+   SHA64_compress(m_digest, input, blocks);
+   }
+
+void SHA_512_256::copy_out(uint8_t output[])
+   {
+   copy_out_vec_be(output, output_length(), m_digest);
+   }
+
+void SHA_384::copy_out(uint8_t output[])
+   {
+   copy_out_vec_be(output, output_length(), m_digest);
+   }
+
+void SHA_512::copy_out(uint8_t output[])
+   {
+   copy_out_vec_be(output, output_length(), m_digest);
+   }
+
+void SHA_512_256::clear()
+   {
+   MDx_HashFunction::clear();
+   m_digest[0] = 0x22312194FC2BF72C;
+   m_digest[1] = 0x9F555FA3C84C64C2;
+   m_digest[2] = 0x2393B86B6F53B151;
+   m_digest[3] = 0x963877195940EABD;
+   m_digest[4] = 0x96283EE2A88EFFE3;
+   m_digest[5] = 0xBE5E1E2553863992;
+   m_digest[6] = 0x2B0199FC2C85B8AA;
+   m_digest[7] = 0x0EB72DDC81C52CA2;
+   }
+
 void SHA_384::clear()
    {
    MDx_HashFunction::clear();
-   digest[0] = 0xCBBB9D5DC1059ED8;
-   digest[1] = 0x629A292A367CD507;
-   digest[2] = 0x9159015A3070DD17;
-   digest[3] = 0x152FECD8F70E5939;
-   digest[4] = 0x67332667FFC00B31;
-   digest[5] = 0x8EB44A8768581511;
-   digest[6] = 0xDB0C2E0D64F98FA7;
-   digest[7] = 0x47B5481DBEFA4FA4;
+   m_digest[0] = 0xCBBB9D5DC1059ED8;
+   m_digest[1] = 0x629A292A367CD507;
+   m_digest[2] = 0x9159015A3070DD17;
+   m_digest[3] = 0x152FECD8F70E5939;
+   m_digest[4] = 0x67332667FFC00B31;
+   m_digest[5] = 0x8EB44A8768581511;
+   m_digest[6] = 0xDB0C2E0D64F98FA7;
+   m_digest[7] = 0x47B5481DBEFA4FA4;
    }
 
-/*
-* SHA-512 compression function
-*/
-void SHA_512::compress_n(const byte input[], size_t blocks)
-   {
-   SHA2_64::compress(digest, input, blocks);
-   }
-
-/*
-* Copy out the digest
-*/
-void SHA_512::copy_out(byte output[])
-   {
-   for(size_t i = 0; i != output_length(); i += 8)
-      store_be(digest[i/8], output + i);
-   }
-
-/*
-* Clear memory of sensitive data
-*/
 void SHA_512::clear()
    {
    MDx_HashFunction::clear();
-   digest[0] = 0x6A09E667F3BCC908;
-   digest[1] = 0xBB67AE8584CAA73B;
-   digest[2] = 0x3C6EF372FE94F82B;
-   digest[3] = 0xA54FF53A5F1D36F1;
-   digest[4] = 0x510E527FADE682D1;
-   digest[5] = 0x9B05688C2B3E6C1F;
-   digest[6] = 0x1F83D9ABFB41BD6B;
-   digest[7] = 0x5BE0CD19137E2179;
+   m_digest[0] = 0x6A09E667F3BCC908;
+   m_digest[1] = 0xBB67AE8584CAA73B;
+   m_digest[2] = 0x3C6EF372FE94F82B;
+   m_digest[3] = 0xA54FF53A5F1D36F1;
+   m_digest[4] = 0x510E527FADE682D1;
+   m_digest[5] = 0x9B05688C2B3E6C1F;
+   m_digest[6] = 0x1F83D9ABFB41BD6B;
+   m_digest[7] = 0x5BE0CD19137E2179;
    }
 
 }

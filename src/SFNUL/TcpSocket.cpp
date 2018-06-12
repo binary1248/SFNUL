@@ -27,7 +27,7 @@ class TcpSocket::TcpSocketImpl {
 public:
 	TcpSocketImpl( TcpSocket* owner ) :
 		tcp_socket{ owner },
-		asio_socket{ *static_cast<asio::io_service*>( owner->GetIOService() ) }
+		asio_socket{ *static_cast<asio::io_context*>( owner->GetIOService() ) }
 	{
 	}
 
@@ -79,7 +79,7 @@ public:
 					sending = true;
 
 					asio_socket.async_send( asio::buffer( send_memory, send_size ),
-						static_cast<asio::strand*>( tcp_socket->GetStrand() )->wrap(
+						static_cast<asio::io_context::strand*>( tcp_socket->GetStrand() )->wrap(
 							std::bind(
 								[]( std::weak_ptr<TcpSocket> socket, const asio::error_code& handler_error, std::size_t handler_bytes_sent ) {
 									auto shared_socket = socket.lock();
@@ -141,7 +141,7 @@ public:
 				receiving = true;
 
 				asio_socket.async_receive( asio::buffer( receive_memory ),
-					static_cast<asio::strand*>( tcp_socket->GetStrand() )->wrap(
+					static_cast<asio::io_context::strand*>( tcp_socket->GetStrand() )->wrap(
 						std::bind(
 							[]( std::weak_ptr<TcpSocket> socket, const asio::error_code& handler_error, std::size_t handler_bytes_received ) {
 								auto shared_socket = socket.lock();
@@ -213,7 +213,7 @@ void TcpSocket::Connect( const Endpoint& endpoint ) {
 
 	m_impl->asio_socket.async_connect(
 		asio_endpoint,
-		static_cast<asio::strand*>( GetStrand() )->wrap(
+		static_cast<asio::io_context::strand*>( GetStrand() )->wrap(
 			std::bind(
 				[&]( std::weak_ptr<TcpSocket> socket, const asio::error_code& error ) {
 					auto shared_socket = socket.lock();

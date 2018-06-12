@@ -2,7 +2,7 @@
 * Division Algorithm
 * (C) 1999-2007,2012 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/divide.h>
@@ -69,7 +69,7 @@ void divide(const BigInt& x, const BigInt& y_arg, BigInt& q, BigInt& r)
    r.set_sign(BigInt::Positive);
    y.set_sign(BigInt::Positive);
 
-   s32bit compare = r.cmp(y);
+   int32_t compare = r.cmp(y);
 
    if(compare == 0)
       {
@@ -101,7 +101,7 @@ void divide(const BigInt& x, const BigInt& y_arg, BigInt& q, BigInt& r)
          return;
          }
 
-      BigInt temp = y << (MP_WORD_BITS * (n-t));
+      BigInt temp = y << (BOTAN_MP_WORD_BITS * (n-t));
 
       while(r >= temp) { r -= temp; q_words[n-t] += 1; }
 
@@ -123,11 +123,11 @@ void divide(const BigInt& x, const BigInt& y_arg, BigInt& q, BigInt& r)
             q_words[j-t-1] -= 1;
             }
 
-         r -= (q_words[j-t-1] * y) << (MP_WORD_BITS * (j-t-1));
+         r -= (q_words[j-t-1] * y) << (BOTAN_MP_WORD_BITS * (j-t-1));
 
          if(r.is_negative())
             {
-            r += y << (MP_WORD_BITS * (j-t-1));
+            r += y << (BOTAN_MP_WORD_BITS * (j-t-1));
             q_words[j-t-1] -= 1;
             }
          }

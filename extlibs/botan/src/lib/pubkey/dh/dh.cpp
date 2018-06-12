@@ -1,13 +1,14 @@
 /*
 * Diffie-Hellman
-* (C) 1999-2007 Jack Lloyd
+* (C) 1999-2007,2016 Jack Lloyd
 *
-* Distributed under the terms of the Botan license
+* Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include <botan/dh.h>
-#include <botan/numthry.h>
-#include <botan/workfactor.h>
+#include <botan/internal/pk_ops_impl.h>
+#include <botan/pow_mod.h>
+#include <botan/blinding.h>
 
 namespace Botan {
 
@@ -16,16 +17,16 @@ namespace Botan {
 */
 DH_PublicKey::DH_PublicKey(const DL_Group& grp, const BigInt& y1)
    {
-   group = grp;
-   y = y1;
+   m_group = grp;
+   m_y = y1;
    }
 
 /*
 * Return the public value for key agreement
 */
-std::vector<byte> DH_PublicKey::public_value() const
+std::vector<uint8_t> DH_PublicKey::public_value() const
    {
-   return unlock(BigInt::encode_1363(y, group_p().bytes()));
+   return unlock(BigInt::encode_1363(m_y, group_p().bytes()));
    }
 
 /*
@@ -35,64 +36,95 @@ DH_PrivateKey::DH_PrivateKey(RandomNumberGenerator& rng,
                              const DL_Group& grp,
                              const BigInt& x_arg)
    {
-   group = grp;
-   x = x_arg;
+   m_group = grp;
 
-   if(x == 0)
+   if(x_arg == 0)
       {
-      const BigInt& p = group_p();
-      x.randomize(rng, 2 * dl_work_factor(p.bits()));
+      m_x.randomize(rng, grp.exponent_bits());
+      }
+   else
+      {
+      m_x = x_arg;
       }
 
-   if(y == 0)
-      y = power_mod(group_g(), x, group_p());
-
-   if(x == 0)
-      gen_check(rng);
-   else
-      load_check(rng);
+   if(m_y.is_zero())
+      {
+      m_y = m_group.power_g_p(m_x);
+      }
    }
 
 /*
 * Load a DH private key
 */
 DH_PrivateKey::DH_PrivateKey(const AlgorithmIdentifier& alg_id,
-                             const secure_vector<byte>& key_bits,
-                             RandomNumberGenerator& rng) :
+                             const secure_vector<uint8_t>& key_bits) :
    DL_Scheme_PrivateKey(alg_id, key_bits, DL_Group::ANSI_X9_42)
    {
-   if(y == 0)
-      y = power_mod(group_g(), x, group_p());
-
-   load_check(rng);
+   if(m_y.is_zero())
+      {
+      m_y = m_group.power_g_p(m_x);
+      }
    }
 
 /*
 * Return the public value for key agreement
 */
-std::vector<byte> DH_PrivateKey::public_value() const
+std::vector<uint8_t> DH_PrivateKey::public_value() const
    {
    return DH_PublicKey::public_value();
    }
 
-DH_KA_Operation::DH_KA_Operation(const DH_PrivateKey& dh,
-                                 RandomNumberGenerator& rng) :
-   p(dh.group_p()), powermod_x_p(dh.get_x(), p)
-   {
-   BigInt k(rng, p.bits() - 1);
-   blinder = Blinder(k, powermod_x_p(inverse_mod(k, p)), p);
-   }
+namespace {
 
-secure_vector<byte> DH_KA_Operation::agree(const byte w[], size_t w_len)
+/**
+* DH operation
+*/
+class DH_KA_Operation final : public PK_Ops::Key_Agreement_with_KDF
    {
-   BigInt input = BigInt::decode(w, w_len);
+   public:
 
-   if(input <= 1 || input >= p - 1)
+      DH_KA_Operation(const DH_PrivateKey& key, const std::string& kdf, RandomNumberGenerator& rng) :
+         PK_Ops::Key_Agreement_with_KDF(kdf),
+         m_p(key.group_p()),
+         m_powermod_x_p(key.get_x(), m_p),
+         m_blinder(m_p,
+                   rng,
+                   [](const BigInt& k) { return k; },
+                   [this](const BigInt& k) { return m_powermod_x_p(inverse_mod(k, m_p)); })
+         {}
+
+      secure_vector<uint8_t> raw_agree(const uint8_t w[], size_t w_len) override;
+   private:
+      const BigInt& m_p;
+
+      Fixed_Exponent_Power_Mod m_powermod_x_p;
+      Blinder m_blinder;
+   };
+
+secure_vector<uint8_t> DH_KA_Operation::raw_agree(const uint8_t w[], size_t w_len)
+   {
+   BigInt x = BigInt::decode(w, w_len);
+
+   if(x <= 1 || x >= m_p - 1)
       throw Invalid_Argument("DH agreement - invalid key provided");
 
-   BigInt r = blinder.unblind(powermod_x_p(blinder.blind(input)));
+   x = m_blinder.blind(x);
+   x = m_powermod_x_p(x);
+   x = m_blinder.unblind(x);
 
-   return BigInt::encode_1363(r, p.bytes());
+   return BigInt::encode_1363(x, m_p.bytes());
+   }
+
+}
+
+std::unique_ptr<PK_Ops::Key_Agreement>
+DH_PrivateKey::create_key_agreement_op(RandomNumberGenerator& rng,
+                                       const std::string& params,
+                                       const std::string& provider) const
+   {
+   if(provider == "base" || provider.empty())
+      return std::unique_ptr<PK_Ops::Key_Agreement>(new DH_KA_Operation(*this, params, rng));
+   throw Provider_Not_Found(algo_name(), provider);
    }
 
 }

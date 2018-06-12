@@ -43,7 +43,7 @@ public:
 	/** Get the local endpoint this UDP socket is bound to.
 	 * @return Local endpoint this UDP socket is bound to.
 	 */
-	Endpoint GetLocalEndpoint() const;
+	Endpoint GetLocalEndpoint() const override;
 
 	/** Queue data for asynchronous sending to a remote endpoint over this UDP socket.
 	 * @param data Pointer to a block of memory containing the data to queue.
@@ -62,7 +62,7 @@ public:
 
 	/** Clear the send and receive queues of this socket.
 	 */
-	void ClearBuffers();
+	void ClearBuffers() override;
 
 	/** Get the number of bytes to be dequeued for a specific remote endpoint.
 	 * @param endpoint Remote endpoint.
